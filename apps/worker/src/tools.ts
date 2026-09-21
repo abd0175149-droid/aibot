@@ -1,4 +1,4 @@
-import { getDb, botTools, contacts, conversations, eq, and, sql } from '@aibot/db';
+import { getDb, botTools, contacts, conversations, channelIdentities, eq, and, sql } from '@aibot/db';
 import { open as decrypt } from '@aibot/crypto';
 import { execHttpTool, choicesMessage, type HttpToolSpec } from '@aibot/core';
 import type { ToolCall } from '@aibot/ai';
@@ -156,9 +156,29 @@ async function execCustom(ctx: ExecCtx): Promise<{
     ? JSON.parse(decrypt(tool.secretsEnc, tool.keyVersion))
     : {};
 
+  /**
+   * وسائط تحقنها المنصّة — لا النموذج.
+   *
+   * `__contact_phone` تحديداً هو ما يجعل أدواتٍ مثل «رصيدي» و«فواتيري» آمنة:
+   * الهويّة تأتي من **المحادثة** لا ممّا يكتبه النموذج أو يمليه الزبون.
+   * فلا يستطيع أحدٌ أن يطلب رصيد رقمٍ غير رقمه، ولو أقنع النموذج بذلك.
+   */
+  const identity = await getDb()
+    .select({ ext: channelIdentities.externalId, contactId: conversations.contactId })
+    .from(conversations)
+    .innerJoin(channelIdentities, eq(channelIdentities.id, conversations.identityId))
+    .where(eq(conversations.id, ctx.conversationId))
+    .limit(1);
+
+  const args: Record<string, unknown> = {
+    ...ctx.call.args,
+    __contact_phone: identity[0]?.ext ?? '',
+    __conversation_id: ctx.conversationId,
+  };
+
   const res = await execHttpTool(
     tool.http as HttpToolSpec,
-    ctx.call.args,
+    args,
     secrets,
     (tool.responseMap ?? null) as Record<string, string> | null,
   );
