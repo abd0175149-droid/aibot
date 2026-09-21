@@ -43,7 +43,7 @@ export default function TenantsPage() {
             هذا الترتيب هو الشاشة كلّها.
           </p>
         </div>
-        <div className="sp"><button className="btn pri">+ عميل جديد</button></div>
+        <div className="sp"><button className="btn pri" disabled title="معالج التهيئة قيد البناء — يُنشأ العميل بسكربت حتّى ذلك">+ عميل جديد</button></div>
       </div>
 
       <div className="tiles">
@@ -60,7 +60,7 @@ export default function TenantsPage() {
         <Empty
           title="لا عملاء بعد"
           hint="أنشئ أوّل مستأجر — وابدأ ببوتك أنت: بياناتك، ومخاطرتك، وأصدق اختبارٍ ممكن."
-          action={<button className="btn pri">+ عميل جديد</button>}
+          action={<button className="btn pri" disabled title="معالج التهيئة قيد البناء — يُنشأ العميل بسكربت حتّى ذلك">+ عميل جديد</button>}
         />
       ) : (
         <div className="tw">

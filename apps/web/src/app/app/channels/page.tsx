@@ -1,8 +1,10 @@
 'use client';
 
-import { useApi, fmt } from '@/lib/useApi';
+import { useState } from 'react';
+import { useApi, useToast, fmt } from '@/lib/useApi';
 import { Loading, ErrorBox } from '@/components/Shell';
 import { useCan } from '@/lib/session';
+import { post, ApiError } from '@/lib/api';
 
 interface Channel {
   id: string;
@@ -25,9 +27,43 @@ const QUALITY: Record<string, { label: string; cls: string }> = {
   RED: { label: 'أحمر', cls: 'crit' },
 };
 
+interface TestReport {
+  level: 'ok' | 'degraded' | 'blocked' | 'unreachable';
+  tokenValid: boolean;
+  webhookSubscribed: boolean | null;
+  issues: string[];
+}
+
+const LEVEL: Record<string, { label: string; cls: string }> = {
+  ok: { label: 'سليمة', cls: 'ok' },
+  degraded: { label: 'تعمل بجودةٍ أقلّ', cls: 'warn' },
+  blocked: { label: 'محجوبة', cls: 'crit' },
+  unreachable: { label: 'لا تستجيب', cls: 'crit' },
+};
+
 export default function ChannelsPage() {
   const can = useCan();
   const { data, loading, error, reload } = useApi<{ items: Channel[] }>('/channel');
+  const [testing, setTesting] = useState(false);
+  const [report, setReport] = useState<TestReport | null>(null);
+  const { toast, node: toastNode } = useToast();
+
+  /* فحصٌ حقيقيٌّ عند ميتا لا قراءةُ صفٍّ عندنا — وأهمّ سطرٍ فيه اشتراك
+     الويبهوك، وهو السبب الأوّل لـ«البوت لا يردّ» بينما كلّ شيءٍ يبدو سليماً. */
+  async function runTest(channelId?: string) {
+    setTesting(true);
+    setReport(null);
+    try {
+      const r = await post<TestReport>('/channel/test', channelId ? { channelId } : {});
+      setReport(r);
+      toast(r.level === 'ok' ? 'القناة سليمة' : 'الفحص انتهى — اقرأ التفاصيل');
+      await reload();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'تعذّر الفحص');
+    } finally {
+      setTesting(false);
+    }
+  }
 
   if (loading) return <Loading rows={4} />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
@@ -37,6 +73,7 @@ export default function ChannelsPage() {
 
   return (
     <>
+      {toastNode}
       <div className="vh">
         <div>
           <h1>القنوات</h1>
@@ -86,9 +123,37 @@ export default function ChannelsPage() {
 
           {wa?.lastError && <div className="note c" style={{ marginBottom: 0 }}>{wa.lastError}</div>}
 
+          {report && (
+            <dl className="kv" style={{ marginTop: 10 }}>
+              <dt>نتيجة الفحص</dt>
+              <dd><span className={`pill ${LEVEL[report.level]?.cls ?? 'nt'}`}>{LEVEL[report.level]?.label ?? report.level}</span></dd>
+              <dt>التوكن</dt>
+              <dd>{report.tokenValid ? <span className="pill ok">صالح</span> : <span className="pill crit">منتهٍ أو مسحوب</span>}</dd>
+              <dt>اشتراك الويبهوك</dt>
+              <dd>
+                {report.webhookSubscribed === null ? <span className="pill nt">تعذّر التحقّق</span>
+                  : report.webhookSubscribed ? <span className="pill ok">مشترك</span>
+                    : <span className="pill crit">غير مشترك — لن تصل رسالة</span>}
+              </dd>
+              {report.issues.map((x) => (
+                <div key={x} style={{ display: 'contents' }}>
+                  <dt>ملاحظة</dt><dd>{x}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
           <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
-            <button className="btn sm" disabled={can.readOnly}>اختبر الاتّصال</button>
-            <button className="btn sm" disabled={can.readOnly}>
+            <button
+              className="btn sm"
+              disabled={can.readOnly || testing || wa?.status !== 'connected'}
+              onClick={() => runTest(wa?.id)}
+            >
+              {testing ? 'يفحص…' : 'اختبر الاتّصال'}
+            </button>
+            {/* الربط واستبدال التوكن ما زالا يدويَّين — والزرّ المعطَّل بسببٍ
+                مكتوبٍ أصدق من زرٍّ يبدو صالحاً ولا يفعل شيئاً. */}
+            <button className="btn sm" disabled title="الربط يجري معك على مكالمة حتّى نُنهي معالج التهيئة">
               {wa?.status === 'connected' ? 'استبدل التوكن' : 'ابدأ الربط'}
             </button>
           </div>
@@ -129,11 +194,13 @@ export default function ChannelsPage() {
           <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
             {ig?.status === 'connected' ? (
               <>
-                <button className="btn sm" disabled={can.readOnly}>أعِد المنح</button>
-                <button className="btn sm dgr" disabled={can.readOnly}>افصل الحساب</button>
+                <button className="btn sm" disabled title="تدفّق الموافقة قيد البناء">أعِد المنح</button>
+                <button className="btn sm dgr" disabled title="تدفّق الموافقة قيد البناء">افصل الحساب</button>
               </>
             ) : (
-              <button className="btn sm pri" disabled={can.readOnly}>اربط حساب إنستجرام</button>
+              <button className="btn sm pri" disabled title="تدفّق الموافقة قيد البناء — راسلنا لنربطه لك الآن">
+                اربط حساب إنستجرام
+              </button>
             )}
           </div>
         </div>

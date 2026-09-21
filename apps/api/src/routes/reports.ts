@@ -4,7 +4,8 @@ import {
   tenantChannels, contacts, channelIdentities, botConfigs, subscriptions, plans,
   eq, and, desc, isNull, sql,
 } from '@aibot/db';
-import { capabilitiesFor, type ChannelKind } from '@aibot/channels';
+import { capabilitiesFor, getAdapter, type ChannelKind } from '@aibot/channels';
+import { open as decrypt } from '@aibot/crypto';
 import { requireAuth, tenantOf } from '../auth.js';
 
 /** الشهر بتوقيت المستأجر — نافذةٌ تُفتح آخر الشهر تُفوتَر على شهر فتحها. */
@@ -201,4 +202,80 @@ export async function registerReports(app: FastifyInstance) {
       };
     });
   });
+
+  /**
+   * ★ اختبار اتّصالٍ **حقيقيّ** بميتا — لا فحصُ صفٍّ في قاعدتنا.
+   *
+   * وُجد لأنّ زرّ «اختبر الاتّصال» كان موجوداً في الشاشة بلا معالج. وزرٌّ لا
+   * يعمل يكسر الثقة أكثر من ميزةٍ غائبة: العميل يضغط فلا يحدث شيء، فيستنتج
+   * أنّ النظام معطوب — لا أنّ الميزة لم تُبنَ.
+   *
+   * وأهمّ ما يفحصه **اشتراك الويبهوك**، وهو السبب الأوّل لـ«البوت لا يردّ»
+   * بينما كلّ شيءٍ آخر يبدو سليماً: التوكن صالح، والرقم أخضر، ولا رسالة تصل.
+   *
+   * النتيجة تُحفظ في `last_checked_at` و`last_error` فتظهر في الشاشة بلا نداءٍ ثانٍ.
+   */
+  app.post<{ Body: { channelId?: string } }>(
+    '/channel/test',
+    { preHandler: requireAuth() },
+    async (req, reply) => {
+      const tenantId = tenantOf(req);
+
+      const ch = await withTenant(getDb(), tenantId, async (tx) => {
+        const rows = await tx.select().from(tenantChannels).where(
+          req.body?.channelId
+            ? and(eq(tenantChannels.tenantId, tenantId), eq(tenantChannels.id, req.body.channelId))
+            : eq(tenantChannels.tenantId, tenantId),
+        ).limit(1);
+        return rows[0];
+      });
+
+      if (!ch) return reply.code(404).send({ error: 'لا قناةٌ لهذا الحساب' });
+      if (!ch.tokenEnc) {
+        return reply.code(409).send({ error: 'القناة غير مربوطة بعد — لا توكن محفوظ' });
+      }
+
+      /* النداء الشبكيّ **خارج** أيّ معاملة: فحص ميتا يأخذ ثوانٍ، ومعاملةٌ
+         مفتوحة أثناءه تحتجز اتّصالاً من البِركة بلا داعٍ. */
+      const adapter = getAdapter(ch.kind as ChannelKind);
+      let report;
+      try {
+        report = await adapter.healthCheck({
+          channelId: ch.id,
+          tenantId,
+          kind: ch.kind as ChannelKind,
+          token: decrypt(ch.tokenEnc, ch.keyVersion),
+          externalAccountId: ch.externalAccountId ?? '',
+          config: (ch.config ?? {}) as Record<string, unknown>,
+        });
+      } catch (e) {
+        report = {
+          level: 'unreachable' as const,
+          tokenValid: false, webhookSubscribed: null,
+          qualityRating: null, messagingTier: null,
+          issues: [(e as Error).message],
+          detail: {},
+        };
+      }
+
+      await withTenant(getDb(), tenantId, (tx) => tx.update(tenantChannels).set({
+        lastCheckedAt: new Date(),
+        lastError: report.issues[0] ?? null,
+        qualityRating: report.qualityRating ?? ch.qualityRating,
+        messagingTier: report.messagingTier ?? ch.messagingTier,
+        // `error` فقط عند عطلٍ فعليّ: `degraded` تعني تعمل بجودةٍ أقلّ لا معطوبة
+        status: report.level === 'ok' || report.level === 'degraded' ? 'connected' : 'error',
+      }).where(eq(tenantChannels.id, ch.id)));
+
+      return {
+        level: report.level,
+        tokenValid: report.tokenValid,
+        webhookSubscribed: report.webhookSubscribed,
+        qualityRating: report.qualityRating,
+        messagingTier: report.messagingTier,
+        issues: report.issues,
+        checkedAt: new Date().toISOString(),
+      };
+    },
+  );
 }

@@ -52,6 +52,9 @@ export async function handleReply(job: { conversationId: string }): Promise<void
    * ولذلك قاعدةٌ صريحة: **لا نداءَ شبكةٍ داخل معاملة.** المعاملة تكتب
    * وتُسلّم خطّة إرسال، والإرسال يجري بعد الإيداع.
    */
+  /* نموذجٌ بلا صفّ سعرٍ يُفوتَر صفراً — فنجمعه هنا ونُبلّغ بعد المعاملة. */
+  let unpriced: { provider: string; model: string } | null = null;
+
   const plan = await withTenant(db, tenantId, async (tx): Promise<SendPlan | null> => {
     const conv = head[0]!.conv;
     const ch = head[0]!.ch;
@@ -264,6 +267,11 @@ export async function handleReply(job: { conversationId: string }): Promise<void
       eq(prices.provider, ver.provider), eq(prices.model, ver.model),
     )).orderBy(desc(prices.effectiveFrom)).limit(1))[0];
 
+    /* ★ لا صفّ سعرٍ = كلفةٌ صفريّة **صامتة**، أي هامشٌ غير مرئيّ.
+       والصفر هنا أخطر من الخطأ: التقارير تُظهر ربحاً كاملاً عن نموذجٍ يُكلّفك
+       فعلاً. فالغياب يُسجَّل في الشوط ويُرفَع حادثةً بدل أن يمرّ. */
+    if (!price) unpriced = { provider: ver.provider, model: ver.model };
+
     const cost = price
       ? computeCost(result.usage, {
           input: Number(price.input), output: Number(price.output),
@@ -278,7 +286,8 @@ export async function handleReply(job: { conversationId: string }): Promise<void
       thoughtsTokens: result.usage.thoughtsTokens, cachedTokens: result.usage.cachedTokens,
       totalTokens: result.usage.totalTokens,
       costUsd: String(cost), keyOwner, latencyMs: result.latencyMs,
-      tools: result.toolsUsed, flags: result.flags,
+      tools: result.toolsUsed,
+      flags: price ? result.flags : { ...result.flags, priceMissing: true },
       contextMeta: built.meta,
     }).returning({ id: aiRuns.id });
 
@@ -321,6 +330,17 @@ export async function handleReply(job: { conversationId: string }): Promise<void
         .map((message) => ({ source: 'bot' as const, message, aiRunId: run!.id })),
     };
   });
+
+  if (unpriced) {
+    const u = unpriced as { provider: string; model: string };
+    await raiseIncident({
+      tenantId, kind: 'price_missing', severity: 'warn',
+      title: `لا سعرَ مسجَّلٌ للنموذج ${u.model} — الكلفة تُحسب صفراً`,
+      detail: u,
+      // بصمةٌ بالنموذج: حادثةٌ واحدة لكلّ نموذجٍ لا واحدة لكلّ ردّ
+      causeKey: `${u.provider}:${u.model}`,
+    }).catch(() => undefined);
+  }
 
   if (!plan) return;
 

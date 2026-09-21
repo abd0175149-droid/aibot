@@ -28,6 +28,34 @@ export function fingerprintOf(i: IncidentInput): string {
 }
 
 export async function raiseIncident(i: IncidentInput): Promise<{ id: string; isNew: boolean }> {
+  const result = await recordIncident(i);
+
+  /* ★ الحرج يُنبّه **الآن**، والباقي ينتظر التجميعة كلّ ١٥ دقيقة.
+     كان هذا النداء غائباً تماماً: `notifyCritical` مكتوبةٌ ولا يناديها أحد،
+     و`flushDigest` يستثني `critical` صراحةً — فلم تكن الحوادث الحرجة تُنتج
+     إشعاراً واحداً، لا فوريّاً ولا مجمَّعاً. نظامُ مراقبةٍ لا يُنبّه هو نظام
+     تسجيلٍ لا مراقبة.
+
+     و`isNew` شرطٌ لا زينة: بصمةٌ مفتوحةٌ تتكرّر تُحدَّث ولا تُنبّه — وذاك ما
+     يمنع مئتَي إشعارٍ من عطلٍ واحد.
+
+     ⚠️ خارج المعاملة: النداء يدفع Web Push عبر الشبكة، ومعاملةٌ مفتوحة أثناء
+        ذلك تحتجز اتّصالاً لثوانٍ — وهو الدرس نفسه الذي جمّد عامل الردّ. */
+  if (result.isNew && i.severity === 'critical') {
+    const { notifyCritical } = await import('./notify.js');
+    await notifyCritical(result.id).catch((e) => {
+      // فشل التنبيه لا يُلغي تسجيل الحادثة — وإلّا خسرنا الاثنين معاً
+      console.error(JSON.stringify({
+        level: 'error', svc: 'worker', msg: 'فشل تنبيه حادثةٍ حرجة',
+        incidentId: result.id, err: String(e),
+      }));
+    });
+  }
+
+  return result;
+}
+
+async function recordIncident(i: IncidentInput): Promise<{ id: string; isNew: boolean }> {
   const db = getDb();
   const fingerprint = fingerprintOf(i);
 
