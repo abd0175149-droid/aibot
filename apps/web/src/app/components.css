@@ -314,3 +314,21 @@ td.n, th.n { white-space: nowrap; }
   .inbox.p-thread .c-thread { height: calc(100vh - 210px); min-height: 360px; }
   .inbox.p-list .c-list { max-height: none; }
 }
+
+/* ══════════════ سقف عرض المحتوى ══════════════ */
+/* ★ بلا سقف، تتمدّد خمس بطاقاتٍ صغيرة المحتوى على شاشةٍ بعرض 1900 بكسل فتصير
+   مساحاتٍ فارغة تُقرأ «غير مكتملة». والسقف يحفظ طول السطر مقروءاً أيضاً:
+   نصٌّ يمتدّ على 1800 بكسل لا يُقرأ، تُفقد العين بدايةَ السطر التالي. */
+.main > * { max-width: 1180px; }
+.main .vh { max-width: 1180px; }
+
+.g180 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+
+/* كثافةٌ أعلى في بطاقات الأرقام: المحتوى قليلٌ فلا يستحقّ هذا الحشو */
+.stat { padding: 11px 13px; gap: 2px; }
+.stat-v { font-size: 19px; }
+.stat.hero .stat-v { font-size: 24px; }
+
+/* حافةٌ أوضح بين البطاقة والأرضيّة في الداكن — كانتا متقاربتَين فذابت الحدود */
+:root:not([data-theme='light']) .stat,
+:root[data-theme='dark'] .stat { border-color: var(--rule); }

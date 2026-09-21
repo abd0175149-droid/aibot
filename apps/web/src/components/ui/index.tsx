@@ -37,7 +37,7 @@ export function Card({ title, actions, children, span }: {
 }
 
 /** شبكةٌ متجاوبة — `min` يقرّر متى تنكسر إلى عمود. */
-export function Grid({ min = 280, children }: { min?: 220 | 280 | 320 | 400; children: ReactNode }) {
+export function Grid({ min = 280, children }: { min?: 180 | 220 | 280 | 320 | 400; children: ReactNode }) {
   return <div className={`grid g${min}`}>{children}</div>;
 }
 
@@ -106,6 +106,10 @@ export function Meter({ pct, tone }: { pct: number; tone?: Tone }) {
   const p = Math.max(0, Math.min(1, pct));
   const auto: Tone = p >= 1 ? 'crit' : p >= 0.95 ? 'serious' : p >= 0.8 ? 'warn' : 'brand';
   const t = tone ?? auto;
+  /* ★ أرضيّةٌ مرئيّة: استهلاكٌ ضئيل (2 من 1500 = 0.13%) يُرسم شريطاً فارغاً
+     يُقرأ **معطوباً** لا منخفضاً. فأيّ استهلاكٍ > 0 يُظهر أثراً، والصفر وحده
+     يبقى فارغاً — فالفرق بين «لم تبدأ» و«بدأت بالكاد» معلومةٌ لا زينة. */
+  const width = p === 0 ? 0 : Math.max(p * 100, 2.5);
   return (
     <span
       className={`meter ${t}`}
@@ -115,7 +119,7 @@ export function Meter({ pct, tone }: { pct: number; tone?: Tone }) {
       aria-valuemax={100}
     >
       {/* style-ok: العرض نسبةٌ محسوبة — لا يُمثَّل بصنفٍ ثابت */}
-      <i style={{ width: `${p * 100}%` } as CSSProperties} />
+      <i style={{ width: `${width}%` } as CSSProperties} />
     </span>
   );
 }

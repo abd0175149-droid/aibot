@@ -467,14 +467,18 @@ export async function registerBot(app: FastifyInstance) {
       const rows = await tx.execute<{
         query: string; times: number; retrieved: number;
       }>(sql`
-        SELECT coalesce(r.query_text, '(بلا استعلام)') AS query,
-               count(*)::int                           AS times,
+        SELECT r.query_text                                   AS query,
+               count(*)::int                                  AS times,
                coalesce(max(array_length(r.chunk_ids, 1)), 0)::int AS retrieved
           FROM ai_runs a
-          LEFT JOIN kb_retrievals r ON r.ai_run_id = a.id
+          -- ★ INNER لا LEFT: بلا صفّ استرجاعٍ لا نعرف **ماذا** سأل الزبون،
+          --    فالبطاقة تعرض «(بلا استعلام)» وتشخيصاً مبنيّاً على لا شيء.
+          --    وصفرُ صفوفٍ هنا ليس عطلاً: يعني أنّ السجلّ لم يُكتب بعد.
+          INNER JOIN kb_retrievals r ON r.ai_run_id = a.id
          WHERE a.tenant_id = ${tenantId}
            AND (a.flags->>'unknown')::boolean IS TRUE
            AND a.created_at > now() - interval '30 days'
+           AND btrim(coalesce(r.query_text, '')) <> ''
          GROUP BY 1
          ORDER BY times DESC
          LIMIT 50

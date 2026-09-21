@@ -43,6 +43,14 @@ interface Gap {
 
 const CHANNEL_LABEL: Record<string, string> = { whatsapp_cloud: 'واتساب', instagram: 'إنستجرام' };
 
+/**
+ * أقلّ عدد نوافذ قبل أن نعرض نسبةً **بطوليّة**.
+ * الرقم ليس إحصائيّاً دقيقاً بل حدٌّ عمليّ: دونه تقيس النسبة الصدفة، وعرضها
+ * ضخمةً يُعطي انطباعاً كاذباً في الاتّجاهين — «0%» يُحبط بلا سبب، و«100%»
+ * يُطمئن بلا سبب.
+ */
+const SAMPLE_MIN = 10;
+
 const OVERAGE: Record<string, string> = {
   handoff_only:
     'البوت توقّف، والرسائل ما زالت تصل وتُوسَم «يحتاج تدخّلاً». فريقك يردّ يدويّاً بلا حدّ — '
@@ -65,6 +73,8 @@ export default function HomePage() {
   const pct = data.windowsLimit ? data.windowsUsed / data.windowsLimit : 0;
   const atCap = pct >= 1;
   const needs = data.needsAttention > 0;
+  /* عتبةُ عيّنةٍ قبل عرض أيّ نسبةٍ بطوليّة. */
+  const enoughSample = data.windowsUsed >= SAMPLE_MIN;
 
   return (
     <Stack gap="lg">
@@ -88,24 +98,51 @@ export default function HomePage() {
         </Note>
       )}
 
-      {/* ★ البطوليّ يتبدّل بالحالة: ما يحتاجك أوّلاً، وإلّا ما يطمئنك. */}
-      <Grid min={220}>
+      {/* ★ البطوليّ يتبدّل بالحالة — وثلاث قواعدٍ تحكمه:
+          ① ما يحتاجك **الآن** يسبق كلّ شيء.
+          ② **لا نسبةَ من عيّنةٍ لا تكفي.** «0%» من محادثتين ليست إحصاءً، وهي
+             أسوأ انطباعٍ أوّل ممكن — وقد ظهرت فعلاً في أوّل يومٍ حقيقيّ.
+             دون العتبة نعرض حجم النشاط لا جودته.
+          ③ وعند الهدوء والعيّنة الكافية: النسبة التي تطمئن. */}
+      <Grid min={180}>
         {needs ? (
           <Stat hero value={fmt.num(data.needsAttention)} label="محادثة تحتاج تدخّلك الآن" tone="crit" />
-        ) : (
+        ) : enoughSample ? (
           <Stat hero value={fmt.pct(data.selfResolvedRate)} label="أنهاها البوت بلا موظّف" />
+        ) : (
+          <Stat
+            hero
+            value={fmt.num(data.conversationsToday)}
+            label={data.conversationsToday ? 'محادثة اليوم — ولا شيء يحتاجك' : 'محادثة اليوم'}
+          />
         )}
-        <Stat value={fmt.num(data.conversationsToday)} label="محادثة اليوم" />
+
+        {!needs && enoughSample && <Stat value={fmt.num(data.conversationsToday)} label="محادثة اليوم" />}
+        {needs && <Stat value={fmt.num(data.conversationsToday)} label="محادثة اليوم" />}
+
         <Stat value={fmt.num(data.botReplies)} label="ردّ بوت" />
         <Stat
           value={fmt.num(data.windowsUsed)}
           unit={`/ ${fmt.num(data.windowsLimit)}`}
-          label="نوافذ الشهر"
+          label={`نوافذ الشهر · ${fmt.pct(pct)}`}
           meter={{ pct }}
         />
         <Stat value={(data.medianLatencyMs / 1000).toFixed(1)} unit="ث" label="وسيط زمن الردّ" />
-        {needs && <Stat value={fmt.pct(data.selfResolvedRate)} label="أنهاها البوت بلا موظّف" tone="ok" />}
+        {(needs || enoughSample) && (
+          <Stat
+            value={fmt.pct(data.selfResolvedRate)}
+            label="أنهاها البوت بلا موظّف"
+            tone={needs ? 'ok' : undefined}
+          />
+        )}
       </Grid>
+
+      {!enoughSample && !needs && (
+        <p className="muted-p">
+          نسبة «ما أنهاه البوت بنفسه» تظهر بعد <b>{SAMPLE_MIN}</b> محادثاتٍ هذا الشهر —
+          قبلها تقيس الصدفة لا الأداء.
+        </p>
+      )}
 
       {/* العتبات مكتوبةٌ لا مُستنتَجة — فلا يُفاجأ أحدٌ بفاتورة */}
       {!atCap && pct >= 0.8 && (
