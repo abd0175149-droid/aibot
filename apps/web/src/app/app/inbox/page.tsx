@@ -4,8 +4,29 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useApi, useToast, fmt } from '@/lib/useApi';
 import { post, idempotencyKey, ApiError } from '@/lib/api';
 import { useCan } from '@/lib/session';
-import { Empty, ErrorBox } from '@/components/Shell';
 import { useSocket } from '@/lib/socket';
+import {
+  Row, Stack, Pill, Dot, Note, Button, Skeleton, Empty, ErrorBox, KV, KVRow,
+} from '@/components/ui';
+
+/**
+ * الإنبوكس — الشاشة التي يقضي فيها العميل وقته.
+ *
+ * ثلاثة قراراتٍ أُعيد التصميم من أجلها:
+ *
+ * ★ ① **الهاتف أوّلاً.** صاحب المطعم يردّ من هاتفه وسط الخدمة. ثلاثة أعمدةٍ
+ *     مضغوطةٍ على شاشةٍ بعرض 360px ليست إنبوكساً بل ألغاز. فعلى الهاتف لوحٌ
+ *     واحدٌ يُبدَّل (قائمة ⟷ محادثة ⟷ بطاقة)، وثلاثة أعمدةٍ على الحاسوب وحده.
+ *
+ * ★ ② **ضغطة الزبون تظهر كضغطة.** كان الضغط يُعرض نصّاً — «أكّد» — فيقرأ
+ *     الموظّف حواراً لا يفهمه. وهذا بالضبط ما أخفى عن الفريق يوماً كاملاً أنّ
+ *     نمط زرّ التأكيد نصفُ نمط: الأزرار تُرسَل والضغط يصل ولا ينفّذ شيئاً، ثمّ
+ *     يقول البوت «تم تسجيل طلبك» وهو لم يُسجَّل. لو كان الضغط ظاهراً كضغطةٍ
+ *     على إجراءٍ باسمه لانكشف العطل من أوّل نظرة.
+ *
+ * ★ ③ **المصادر الأربعة تُفصَل بالشكل لا باللون وحده.** زبون · بوت · موظّف ·
+ *     نظام — ولكلٍّ موضعٌ وعلامةٌ ونصّ. اللون وحده لا يصل إلى ٨٪ من الرجال.
+ */
 
 interface Conv {
   id: string;
@@ -29,7 +50,10 @@ interface Msg {
   source: string;
   type: string;
   body: string | null;
-  payload: { options?: Array<{ id: string; title: string }> } | null;
+  payload: {
+    options?: Array<{ id: string; title: string }>;
+    buttonPayload?: string | null;
+  } | null;
   status: string | null;
   createdAt: string;
 }
@@ -39,9 +63,9 @@ interface Thread {
   window: { expiresAt: string | null; open: boolean; billedAt: string | null };
 }
 
-const CH: Record<string, { label: string; cls: string }> = {
-  whatsapp_cloud: { label: 'واتساب', cls: 'acc' },
-  instagram: { label: 'إنستجرام', cls: 'vio' },
+const CH: Record<string, { label: string; tone: 'brand' | 'violet' }> = {
+  whatsapp_cloud: { label: 'واتساب', tone: 'brand' },
+  instagram: { label: 'إنستجرام', tone: 'violet' },
 };
 
 const FILTERS = [
@@ -50,15 +74,38 @@ const FILTERS = [
   { id: 'unread', label: 'غير مقروء' },
   { id: 'whatsapp_cloud', label: 'واتساب' },
   { id: 'instagram', label: 'إنستجرام' },
-];
+] as const;
+
+const STATUS: Record<string, string> = {
+  queued: 'في الطابور', sent: '✓', delivered: '✓✓', read: '✓✓ قُرئت', failed: 'فشلت',
+};
+
+const SOURCE: Record<string, { label: string; mark: string }> = {
+  bot: { label: 'بوت', mark: '⬡' },
+  agent: { label: 'موظّف', mark: '◆' },
+  template: { label: 'قالب', mark: '▤' },
+};
+
+/** ما يُعرَض للموظّف عن ضغطةِ زرٍّ — لا «أكّد» عارية. */
+function pressLabel(payload: string): { verb: string; action: string } {
+  const [kind, ...rest] = payload.split(':');
+  const action = rest.join(':') || '—';
+  if (kind === 'confirm') return { verb: 'أكّد', action };
+  if (kind === 'cancel') return { verb: 'ألغى', action };
+  return { verb: 'اختار', action: payload };
+}
+
+type Pane = 'list' | 'thread' | 'card';
 
 export default function InboxPage() {
   const can = useCan();
   const { toast, node: toastNode } = useToast();
-  const [filter, setFilter] = useState('');
+  const [filter, setFilter] = useState<string>('');
   const [active, setActive] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  /** اللوح الظاهر على الهاتف. على الحاسوب لا أثر له — الثلاثة معروضة. */
+  const [pane, setPane] = useState<Pane>('list');
 
   const qs = filter === 'attn' ? '?needsAttention=true'
     : filter === 'unread' ? '?unread=true'
@@ -92,7 +139,13 @@ export default function InboxPage() {
   const conv = list.data?.items.find((c) => c.id === active) ?? null;
   const win = thread.data?.window;
   const remaining = win?.expiresAt ? fmt.remaining(win.expiresAt) : null;
-  const paused = conv?.botPausedUntil && new Date(conv.botPausedUntil) > new Date();
+  const paused = Boolean(conv?.botPausedUntil && new Date(conv.botPausedUntil) > new Date());
+
+  function openConv(id: string) {
+    setActive(id);
+    setPane('thread');
+    void post(`/conversations/${id}/read`).catch(() => undefined);
+  }
 
   async function send(e: FormEvent) {
     e.preventDefault();
@@ -134,85 +187,121 @@ export default function InboxPage() {
 
       {list.error && <ErrorBox message={list.error} onRetry={list.reload} />}
 
-      <div className="inbox">
+      {/* مبدِّل اللوح — يظهر على الهاتف وحده */}
+      <div className="pane-switch" role="tablist" aria-label="أقسام الإنبوكس">
+        {([['list', 'المحادثات'], ['thread', 'الحوار'], ['card', 'الزبون']] as const).map(([id, label]) => (
+          <button
+            key={id} type="button" role="tab" className="tab"
+            aria-selected={pane === id} onClick={() => setPane(id)}
+            disabled={id !== 'list' && !conv}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className={`inbox p-${pane}`}>
         {/* ── القائمة ── */}
-        <div className="ibcol">
+        <div className="ibcol c-list">
           <div className="ibhead">
-            <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
+            <Row gap="xs">
               {FILTERS.map((f) => (
                 <button
-                  key={f.id} onClick={() => setFilter(f.id)} aria-pressed={filter === f.id}
-                  style={{
-                    fontSize: 10.5, padding: '2px 8px', borderRadius: 9,
-                    border: `1px solid ${filter === f.id ? 'var(--accent)' : 'var(--rule)'}`,
-                    background: filter === f.id ? 'var(--accent-wash)' : 'var(--surface)',
-                    color: filter === f.id ? 'var(--accent-ink)' : 'var(--muted)',
-                  }}
-                >{f.label}</button>
+                  key={f.id} type="button" className="chipf"
+                  aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}
+                >
+                  {f.label}
+                </button>
               ))}
-            </div>
+            </Row>
           </div>
 
           <div className="convs">
-            {list.loading && [0, 1, 2].map((i) => (
-              <div key={i} style={{ padding: 12 }}><div className="skel" /></div>
-            ))}
+            {list.loading && <div className="convs-load"><Skeleton rows={4} height={34} /></div>}
+
             {!list.loading && !list.data?.items.length && (
-              <div className="empty" style={{ padding: 28 }}>
-                <b>لا محادثات</b>
-                {filter ? 'بدّل المرشّح لترى غيرها' : 'ستظهر هنا أوّل ما يراسلك زبون'}
-              </div>
+              <Empty
+                title="لا محادثات"
+                hint={filter
+                  ? 'لا محادثة تطابق هذا المرشّح. بدّله لترى غيرها.'
+                  : 'ستظهر هنا أوّل ما يراسلك زبون — خلال ثانيتين من وصول رسالته.'}
+              />
             )}
+
             {list.data?.items.map((c) => (
-              <button
-                key={c.id} className="conv" aria-current={c.id === active}
-                onClick={() => { setActive(c.id); void post(`/conversations/${c.id}/read`).catch(() => {}); }}
-              >
+              <button key={c.id} type="button" className="conv" aria-current={c.id === active}
+                onClick={() => openConv(c.id)}>
                 <span className="r1">
-                  <span className={`pill ${CH[c.channelKind]?.cls ?? 'nt'}`}>{CH[c.channelKind]?.label ?? c.channelKind}</span>
+                  <Pill tone={CH[c.channelKind]?.tone ?? 'neutral'} mark={false}
+                    label={CH[c.channelKind]?.label ?? c.channelKind} />
                   <span className="nm">{c.contactName ?? c.displayHandle ?? c.handle}</span>
                   <span className="tm">{fmt.when(c.lastMessageAt)}</span>
                 </span>
                 <span className="pv">{c.lastMessagePreview ?? '—'}</span>
                 <span className="r3">
-                  {c.needsAttention && <span className="pill crit">يحتاج تدخّلاً</span>}
-                  {c.unreadCount > 0 && <span className="pill nt">{c.unreadCount} جديد</span>}
-                  {c.tags.map((t) => <span className="pill nt" key={t}>{t}</span>)}
+                  {c.needsAttention && <Pill tone="crit" label="يحتاج تدخّلاً" />}
+                  {c.unreadCount > 0 && <Pill tone="brand" label={`${c.unreadCount} جديد`} />}
+                  {c.tags.map((t) => <Pill key={t} tone="neutral" label={t} mark={false} />)}
                 </span>
               </button>
             ))}
           </div>
         </div>
 
-        {/* ── المحادثة ── */}
-        <div className="ibcol">
+        {/* ── الحوار ── */}
+        <div className="ibcol c-thread">
           {!conv ? (
-            <div className="empty" style={{ margin: 'auto' }}><b>اختر محادثة</b></div>
+            <Empty title="اختر محادثة" hint="اختر من القائمة لترى الحوار كما رآه الزبون." />
           ) : (
             <>
-              <div className="ibhead" style={{ display: 'flex', gap: 9, alignItems: 'center', flexWrap: 'wrap' }}>
-                <strong style={{ fontSize: 13 }}>{conv.contactName ?? conv.displayHandle ?? conv.handle}</strong>
-                <span className="mono" style={{ fontSize: 10, color: 'var(--muted)' }}>{conv.handle}</span>
-                <span className={`pill ${CH[conv.channelKind]?.cls ?? 'nt'}`}>{CH[conv.channelKind]?.label}</span>
-                <span className={`pill ${win?.open ? 'ok' : 'warn'}`} style={{ marginInlineStart: 'auto' }}>
-                  {win?.open ? `تبقّى ${remaining ?? '—'}` : 'النافذة مغلقة'}
-                </span>
+              <div className="ibhead">
+                <Row gap="sm">
+                  <strong>{conv.contactName ?? conv.displayHandle ?? conv.handle}</strong>
+                  <span className="mono handle">{conv.handle}</span>
+                  <Pill tone={CH[conv.channelKind]?.tone ?? 'neutral'} mark={false}
+                    label={CH[conv.channelKind]?.label ?? conv.channelKind} />
+                  <span className="grow" />
+                  {/* ★ المؤقّت ظاهرٌ دائماً — لا يُترك الموظّف يكتب ثمّ تُرفض رسالته */}
+                  <Pill tone={win?.open ? 'ok' : 'warn'}
+                    label={win?.open ? `تبقّى ${remaining ?? '—'}` : 'النافذة مغلقة'} />
+                </Row>
               </div>
 
               <div className="thread" ref={threadRef}>
-                {thread.loading && <div className="skel" style={{ height: 60 }} />}
+                {thread.loading && <Skeleton rows={3} height={44} />}
+
                 {thread.data?.items.map((m) => {
                   if (m.source === 'system') return <div className="bub sys" key={m.id}>{m.body}</div>;
+
+                  /* ★ ضغطةُ زرٍّ تُعرض كضغطةٍ على إجراءٍ باسمه، لا كنصٍّ عارٍ. */
+                  const press = m.direction === 'in' ? m.payload?.buttonPayload : null;
+                  if (press) {
+                    const { verb, action } = pressLabel(press);
+                    return (
+                      <div className="bub press" key={m.id}>
+                        <span className="press-v">{verb}</span>
+                        <span className="press-a mono">{action}</span>
+                        <span className="mt">{fmt.clock(m.createdAt)} · ضغطة زرّ</span>
+                      </div>
+                    );
+                  }
+
+                  const src = m.direction === 'in' ? null : SOURCE[m.source] ?? SOURCE.bot!;
                   const cls = m.direction === 'in' ? 'in' : m.source === 'agent' ? 'agent' : 'bot';
                   return (
                     <div className={`bub ${cls}`} key={m.id}>
-                      {m.direction === 'out' && (
-                        <span className="src">{m.source === 'agent' ? 'موظّف' : 'بوت'}</span>
+                      {src && (
+                        <span className="src">
+                          <span aria-hidden="true">{src.mark}</span> {src.label}
+                        </span>
                       )}
                       {m.body}
                       {!!m.payload?.options?.length && (
                         <span className="chips">
-                          {m.payload.options.map((o) => <span className="c" key={o.id}>{o.title}</span>)}
+                          {m.payload.options.map((o) => (
+                            <span className="c" key={o.id}>{o.title}</span>
+                          ))}
+                          <span className="chips-n">أُرسلت كأزرار — والزبون يضغط ولا يكتب</span>
                         </span>
                       )}
                       <span className="mt">
@@ -224,21 +313,20 @@ export default function InboxPage() {
                 })}
               </div>
 
+              {/* ★ حالتان لا لبس بينهما: الغموض هنا = موظّفٌ وبوتٌ يتحدّثان معاً */}
               <div className="takeover">
-                <span className={`dot ${paused ? 'warn' : conv.botEnabled ? 'ok' : 'off'}`} />
+                <Dot tone={paused ? 'warn' : conv.botEnabled ? 'ok' : 'neutral'} />
                 <strong>{paused ? 'تولّيتَ المحادثة' : conv.botEnabled ? 'البوت يردّ' : 'البوت متوقّف'}</strong>
-                <span style={{ color: 'var(--muted)' }}>
+                <span className="muted-p">
                   {paused
                     ? `يعود ${fmt.when(conv.botPausedUntil)}`
                     : conv.botEnabled ? 'وسيتوقّف تلقائيّاً لحظة ما تردّ' : ''}
                 </span>
-                <button
-                  className="btn sm" style={{ marginInlineStart: 'auto' }}
-                  onClick={() => toggleBot(paused ? undefined : 30)}
-                  disabled={can.readOnly}
-                >
+                <span className="grow" />
+                <Button size="sm" disabled={can.readOnly} reason="حسابك للقراءة فقط"
+                  onClick={() => void toggleBot(paused ? undefined : 30)}>
                   {paused ? 'أعِد البوت الآن' : 'تولّيتُ المحادثة'}
-                </button>
+                </Button>
               </div>
 
               {win?.open === false ? (
@@ -250,12 +338,13 @@ export default function InboxPage() {
               ) : (
                 <form className="composer" onSubmit={send}>
                   <input
-                    value={draft} onChange={(e) => setDraft(e.target.value)}
+                    id="inbox-draft" value={draft} onChange={(e) => setDraft(e.target.value)}
                     placeholder="اكتب ردّك…" disabled={sending || can.readOnly} aria-label="نصّ الردّ"
                   />
-                  <button className="btn pri" type="submit" disabled={sending || !draft.trim() || can.readOnly}>
-                    {sending ? '…' : 'إرسال'}
-                  </button>
+                  <Button type="submit" variant="primary" size="sm" busy={sending}
+                    disabled={!draft.trim() || can.readOnly} reason="حسابك للقراءة فقط">
+                    إرسال
+                  </Button>
                 </form>
               )}
             </>
@@ -263,39 +352,52 @@ export default function InboxPage() {
         </div>
 
         {/* ── بطاقة الزبون ── */}
-        <div className="ibcol">
+        <div className="ibcol c-card">
           <div className="pane">
-            {conv && (
-              <>
-                <div className="ph">بطاقة الزبون</div>
-                <div style={{ fontWeight: 600, fontSize: 13 }}>{conv.contactName ?? '—'}</div>
-                <div className="mono" style={{ fontSize: 10.5, color: 'var(--muted)', marginBottom: 10 }}>
-                  {conv.handle}
+            {conv ? (
+              <Stack gap="md">
+                <div>
+                  <div className="ph">بطاقة الزبون</div>
+                  <strong>{conv.contactName ?? '—'}</strong>
+                  <div className="mono handle">{conv.handle}</div>
                 </div>
 
-                <div className="ph">هويّاته عبر القنوات</div>
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-                  <span className={`pill ${CH[conv.channelKind]?.cls ?? 'nt'}`}>{CH[conv.channelKind]?.label}</span>
-                  <span className="mono" style={{ fontSize: 10.5 }}>{conv.handle}</span>
+                <div>
+                  <div className="ph">هويّاته عبر القنوات</div>
+                  <Row gap="xs">
+                    <Pill tone={CH[conv.channelKind]?.tone ?? 'neutral'} mark={false}
+                      label={CH[conv.channelKind]?.label ?? conv.channelKind} />
+                    <span className="mono handle">{conv.handle}</span>
+                  </Row>
                 </div>
 
-                <div className="ph">الوسوم</div>
-                <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                  {conv.tags.length
-                    ? conv.tags.map((t) => <span className="pill nt" key={t}>{t}</span>)
-                    : <span style={{ color: 'var(--muted)', fontSize: 11.5 }}>لا وسوم</span>}
+                <div>
+                  <div className="ph">الوسوم</div>
+                  <Row gap="xs">
+                    {conv.tags.length
+                      ? conv.tags.map((t) => <Pill key={t} tone="neutral" label={t} mark={false} />)
+                      : <span className="muted-p">لا وسوم</span>}
+                  </Row>
                 </div>
+
+                <KV>
+                  <KVRow k="النافذة">
+                    {win?.open ? `مفتوحة — تبقّى ${remaining ?? '—'}` : 'مغلقة'}
+                  </KVRow>
+                  <KVRow k="فُوتِرت">
+                    {win?.billedAt ? fmt.when(win.billedAt) : 'لا — لم يردّ أحدٌ بعد'}
+                  </KVRow>
+                </KV>
 
                 {!can.settings && (
-                  <>
-                    <div className="ph">مقفل عليك</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.6 }}>
-                      إعدادات البوت · المعرفة · الفوترة · حذف جهة الاتّصال.
-                      اطلبها من مالك الحساب.
-                    </div>
-                  </>
+                  <Note>
+                    <b>مقفلٌ عليك:</b> إعدادات البوت · المعرفة · الفوترة · حذف جهة الاتّصال.
+                    اطلبها من مالك الحساب.
+                  </Note>
                 )}
-              </>
+              </Stack>
+            ) : (
+              <p className="muted-p">اختر محادثةً لترى بطاقة زبونها.</p>
             )}
           </div>
         </div>
@@ -305,7 +407,3 @@ export default function InboxPage() {
     </>
   );
 }
-
-const STATUS: Record<string, string> = {
-  queued: 'في الطابور', sent: '✓', delivered: '✓✓', read: '✓✓ قُرئت', failed: 'فشلت',
-};

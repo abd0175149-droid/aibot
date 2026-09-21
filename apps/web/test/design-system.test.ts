@@ -35,7 +35,6 @@ const LEGACY: Record<string, number> = {
   'app/(legal)/privacy/page.tsx': 2,
   'app/(legal)/terms/page.tsx': 2,
   'app/app/bot/page.tsx': 13,
-  'app/app/inbox/page.tsx': 19,
   'app/app/layout.tsx': 1,
   'app/console/incidents/page.tsx': 11,
   'app/console/margin/page.tsx': 13,
