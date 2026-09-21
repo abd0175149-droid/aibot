@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { useApi, fmt } from '@/lib/useApi';
+import { useSession } from '@/lib/session';
 import { Loading, ErrorBox } from '@/components/Shell';
 
 interface Overview {
@@ -27,9 +28,13 @@ interface Gap {
 const CHANNEL_LABEL: Record<string, string> = { whatsapp_cloud: 'واتساب', instagram: 'إنستجرام' };
 
 export default function HomePage() {
-  const { data, error, loading, reload } = useApi<Overview>('/reports/overview');
-  const gaps = useApi<Gap[]>('/bot/knowledge/gaps');
+  const { me } = useSession();
+  const hasTenant = Boolean(me?.tenant);
+  const { data, error, loading, reload } = useApi<Overview>(hasTenant ? '/reports/overview' : null);
+  const gaps = useApi<Gap[]>(hasTenant ? '/bot/knowledge/gaps' : null);
 
+  // مالك المنصّة يُحوَّل إلى /console من Shell — هذا فقط لتفادي وميضٍ
+  if (!hasTenant) return <Loading rows={4} />;
   if (loading) return <Loading rows={4} />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
   if (!data) return null;

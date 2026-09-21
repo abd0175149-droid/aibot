@@ -23,7 +23,16 @@ export function Shell({
   const { me, loading } = useSession();
 
   useEffect(() => {
-    if (!loading && !me) router.replace(`/login?next=${encodeURIComponent(path)}`);
+    if (loading) return;
+    if (!me) { router.replace(`/login?next=${encodeURIComponent(path)}`); return; }
+
+    /* 🔴 مالك المنصّة بلا مستأجر، فكلّ مسار في /app يردّ 403 عليه **بحقّ**:
+       المستأجر يُشتقّ من التوكن، وتوكنه بلا tenantId. الخادم كان محقّاً
+       والواجهة هي التي أخطأت بإبقائه هناك.
+       وحين ينتحل عميلاً يصير له tenant فيُسمح له — ولذلك الشرط على
+       وجود المستأجر لا على الدور. */
+    if (!me.tenant && path.startsWith('/app')) { router.replace('/console'); return; }
+    if (!me.permissions.console && path.startsWith('/console')) router.replace('/app');
   }, [loading, me, path, router]);
 
   if (loading) {

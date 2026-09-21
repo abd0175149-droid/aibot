@@ -19,7 +19,8 @@ interface Overview {
  */
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { me } = useSession();
-  const { data } = useApi<Overview>(me ? '/reports/overview' : null);
+  // لا نداء قبل وجود مستأجر — وإلّا فـ403 مستحقّ على مالك المنصّة
+  const { data } = useApi<Overview>(me?.tenant ? '/reports/overview' : null);
 
   const nav: NavItem[] = [
     { href: '/app', label: 'الرئيسيّة', icon: '⌂', needs: 'settings' },

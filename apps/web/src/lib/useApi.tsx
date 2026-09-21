@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { get, ApiError } from './api';
 import { useSession } from './session';
 
@@ -8,6 +8,14 @@ import { useSession } from './session';
  * جلبٌ بالحالات الثلاث.
  * كلّ عنصر بياناتٍ في الواجهة يملك تحميلاً وفراغاً وخطأً — لا دوّامةٌ أبديّة،
  * ولا شاشةٌ بيضاء عند الفشل.
+ *
+ * 🔴 علّةٌ كلّفت حلقةَ طلبٍ لا نهائيّة في أوّل تشغيلٍ حقيقيّ:
+ *    كانت `deps: unknown[] = []` تُنشئ **مصفوفةً جديدة في كلّ رسم**، فيُعيد
+ *    `useCallback` بناء `load`، فيُعيد `useEffect` الجلب، فتتغيّر الحالة،
+ *    فيُعاد الرسم — ودار الأمر بلا توقّف. ولم تظهر في أيّ اختبارٍ لأنّها
+ *    تحتاج شجرةً حقيقيّة تُعاد رسمها.
+ *    الحلّ: مفتاحٌ **نصّيّ** مستقرّ بدل هويّة المصفوفة، و`me.user.id` بدل
+ *    كائن `me` كاملاً (وهو أيضاً يتغيّر هويّةً مع كلّ تحديثٍ للجلسة).
  */
 export function useApi<T>(path: string | null, deps: unknown[] = []) {
   const { me } = useSession();
@@ -16,8 +24,11 @@ export function useApi<T>(path: string | null, deps: unknown[] = []) {
   const [loading, setLoading] = useState(Boolean(path));
   const alive = useRef(true);
 
+  const depKey = useMemo(() => JSON.stringify(deps), [deps]);
+  const userId = me?.user.id ?? null;
+
   const load = useCallback(async () => {
-    if (!path || !me) return;
+    if (!path || !userId) return;
     setLoading(true);
     setError(null);
     try {
@@ -28,8 +39,7 @@ export function useApi<T>(path: string | null, deps: unknown[] = []) {
     } finally {
       if (alive.current) setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [path, me, ...deps]);
+  }, [path, userId, depKey]);
 
   useEffect(() => {
     alive.current = true;
