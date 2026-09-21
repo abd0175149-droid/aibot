@@ -18,7 +18,25 @@ export interface InboundJob {
  * تأخّرٍ في الردّ، والمهمّة نفسها قد تُعاد ثلاث مرّات. فالقيد الفريد
  * `(channel_id, external_id)` هو ما يجعل التكرار بلا أثر — لا فحصٌ في الكود.
  */
-export async function handleInbound(job: InboundJob): Promise<void> {
+/**
+ * ⚠️ حمولة المهمّة تمرّ عبر ريدِس **مُسلسَلةً بـJSON**، فكلّ `Date` تصل نصّاً.
+ *    تمريرها كما هي إلى drizzle يرمي «value.toISOString is not a function»
+ *    عند أوّل رسالةٍ حقيقيّة — ولا يكشفه أيّ اختبارٍ يستدعي الدالّة مباشرةً.
+ *    الإحياء هنا، عند حدّ الطابور، لا في كلّ موضع استعمال.
+ */
+function reviveJob(job: InboundJob): InboundJob {
+  return {
+    ...job,
+    parsed: {
+      ...job.parsed,
+      messages: job.parsed.messages.map((m) => ({ ...m, at: new Date(m.at) })),
+      statuses: job.parsed.statuses.map((s) => ({ ...s, at: new Date(s.at) })),
+    },
+  };
+}
+
+export async function handleInbound(raw: InboundJob): Promise<void> {
+  const job = reviveJob(raw);
   const db = getDb();
   const caps = capabilitiesFor(job.kind);
 
@@ -188,12 +206,15 @@ async function openOrExtendWindow(
     ))
     .limit(1);
 
-  const expires = sql`now() + ${`${windowHours} hours`}::interval`;
+  /* ⚠️ لا `sql` fragment في عمود timestamp: drizzle ينادي `.toISOString()`
+     على القيمة فيرمي في وقت التشغيل («value.toISOString is not a function»).
+     و`as never` كان يُخرس المدقّق فأخفى العطل حتّى أوّل رسالةٍ حقيقيّة. */
+  const expires = new Date(Date.now() + windowHours * 3600_000);
 
   if (open[0]) {
     await tx
       .update(conversationWindows)
-      .set({ expiresAt: expires as never, messagesIn: sql`${conversationWindows.messagesIn} + 1` })
+      .set({ expiresAt: expires, messagesIn: sql`${conversationWindows.messagesIn} + 1` })
       .where(eq(conversationWindows.id, open[0].id));
     return;
   }
@@ -205,7 +226,7 @@ async function openOrExtendWindow(
       conversationId,
       channelId: job.channelId,
       contactId,
-      expiresAt: expires as never,
+      expiresAt: expires,
       messagesIn: 1,
     })
     .onConflictDoNothing();

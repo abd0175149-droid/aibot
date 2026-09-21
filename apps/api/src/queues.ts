@@ -6,13 +6,19 @@ import type { ChannelKind, ParsedWebhook } from '@aibot/channels';
  * الطوابير — الأسماء محايدةٌ للقناة عمداً (`ch:` لا `wa:`).
  * قناةٌ ثانية لا تضيف طابوراً؛ تضيف `channelId` في الحمولة.
  */
+/**
+ * ⚠️ لا نقطتين في اسم الطابور **ولا في معرّف المهمّة**: BullMQ 5 يرفض الاثنين
+ *    («Queue name cannot contain :» و«Custom Id cannot contain :»).
+ *    كشفهما أوّل تشغيلٍ على الخادم، واحداً بعد الآخر — والثاني لم يظهر إلّا
+ *    بعد إصلاح الأوّل، فالرسالة لم تصل إلى مرحلة الجدولة قبله.
+ */
 export const QUEUE = {
-  inbound: 'ch:inbound',
-  reply: 'bot:reply',
-  outbound: 'ch:outbound',
-  embed: 'kb:embed',
-  health: 'health:poll',
-  notify: 'notify:push',
+  inbound: 'ch-inbound',
+  reply: 'bot-reply',
+  outbound: 'ch-outbound',
+  embed: 'kb-embed',
+  health: 'health-poll',
+  notify: 'notify-push',
 } as const;
 
 let conn: IORedis | null = null;
@@ -62,7 +68,7 @@ export async function enqueueInbound(job: InboundJob): Promise<void> {
  * `setTimeout` يموت مع العمليّة.
  */
 export async function enqueueReply(conversationId: string, delayMs = 2000): Promise<void> {
-  const jobId = `conv:${conversationId}`;
+  const jobId = `conv-${conversationId}`;
   const queue = q(QUEUE.reply);
   const existing = await queue.getJob(jobId);
   if (existing) {
@@ -124,7 +130,7 @@ export interface OutboundJob {
  */
 export async function enqueueOutbound(job: OutboundJob): Promise<void> {
   await q(QUEUE.outbound).add('outbound', job, {
-    ...(job.idempotencyKey ? { jobId: `out:${job.tenantId}:${job.idempotencyKey}` } : {}),
+    ...(job.idempotencyKey ? { jobId: `out-${job.tenantId}-${job.idempotencyKey}` } : {}),
     attempts: 5,
     backoff: { type: 'exponential', delay: 2000 },
     removeOnComplete: 1000,
@@ -135,7 +141,7 @@ export async function enqueueOutbound(job: OutboundJob): Promise<void> {
 export async function enqueueEmbed(job: { tenantId: string; versionId: string }): Promise<void> {
   await q(QUEUE.embed).add('embed', job, {
     // مرّةٌ واحدة بتقدّمٍ مرئيّ — لا إعادة محاولةٍ صامتة تُنتج تضميناً مزدوجاً
-    jobId: `embed:${job.versionId}`,
+    jobId: `embed-${job.versionId}`,
     attempts: 1,
     removeOnComplete: 100,
     removeOnFail: 500,

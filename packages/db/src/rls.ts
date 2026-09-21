@@ -3,6 +3,11 @@ import { TENANT_SCOPED } from './schema.js';
 /**
  * يولّد ترحيل RLS من نفس القائمة التي يقرأها اختبار التسرّب.
  * فجدولٌ جديد يُنسى من `TENANT_SCOPED` يسقط في الاختبار لا في الإنتاج.
+ *
+ * ⚠️ `nullif(..., '')` ليس تجميلاً: `current_setting('app.tenant_id', true)`
+ *    يُرجع NULL حين لا يُضبط قطّ (فلا تظهر صفوف — وهذا المطلوب)، لكنّه يُرجع
+ *    **نصّاً فارغاً** إن ضُبط بفراغ، و`''::uuid` يرمي خطأً بدل أن يمنع بهدوء.
+ *    كشفَ هذا تشغيلٌ على قاعدةٍ حقيقيّة، ولم يكشفه أيّ اختبارٍ بلا قاعدة.
  */
 export function rlsMigrationSql(): string {
   const parts: string[] = [
@@ -15,8 +20,8 @@ export function rlsMigrationSql(): string {
       `ALTER TABLE ${t} FORCE ROW LEVEL SECURITY;`,
       `DROP POLICY IF EXISTS tenant_isolation ON ${t};`,
       `CREATE POLICY tenant_isolation ON ${t}`,
-      `  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)`,
-      `  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);`,
+      `  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)`,
+      `  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);`,
       `GRANT SELECT, INSERT, UPDATE, DELETE ON ${t} TO aibot_app;`,
       '',
     );

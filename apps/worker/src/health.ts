@@ -1,5 +1,5 @@
 import {
-  getDb, tenantChannels, healthChecks, conversations, messages, tenants,
+  getDb, withPlatform, tenantChannels, healthChecks, conversations, messages, tenants,
   eq, and, sql, desc,
 } from '@aibot/db';
 import { getAdapter, type ChannelKind } from '@aibot/channels';
@@ -19,9 +19,13 @@ import { raiseIncident, resolveIfAuto } from './incidents.js';
 
 export async function runHealthPoll(job: { channelId?: string } = {}): Promise<void> {
   const db = getDb();
-  const rows = job.channelId
-    ? await db.select().from(tenantChannels).where(eq(tenantChannels.id, job.channelId))
-    : await db.select().from(tenantChannels).where(eq(tenantChannels.status, 'connected'));
+  /* المراقبة **عابرةٌ للمستأجرين بطبيعتها**: تفحص كلّ القنوات.
+     كشف أوّل تشغيلٍ بدورٍ عاديّ أنّها كانت تُرجع صفراً بصمت — ومراقبٌ
+     يُرجع صفراً بصمت أسوأ من غياب المراقبة، لأنّه يبدو سليماً. */
+  const rows = await withPlatform(db, 'مراقبة: فحص صحّة كلّ القنوات', (tx) =>
+    job.channelId
+      ? tx.select().from(tenantChannels).where(eq(tenantChannels.id, job.channelId))
+      : tx.select().from(tenantChannels).where(eq(tenantChannels.status, 'connected')));
 
   for (const ch of rows) {
     await pollChannel(ch).catch(() => undefined); // عطلُ قناةٍ لا يوقف فحص البقيّة
@@ -44,7 +48,7 @@ async function pollChannel(ch: typeof tenantChannels.$inferSelect): Promise<void
     config: (ch.config ?? {}) as Record<string, unknown>,
   });
 
-  await db.insert(healthChecks).values({
+  await withPlatform(db, 'مراقبة: تسجيل نتيجة الفحص', (tx) => tx.insert(healthChecks).values({
     tenantId: ch.tenantId,
     channelId: ch.id,
     level: report.level,
@@ -53,20 +57,21 @@ async function pollChannel(ch: typeof tenantChannels.$inferSelect): Promise<void
     detail: report.detail as object,
     issues: report.issues as object,
     latencyMs: Date.now() - started,
-  });
+  }));
 
-  await db.update(tenantChannels).set({
+  await withPlatform(db, 'مراقبة: تحديث حالة القناة', (tx) => tx.update(tenantChannels).set({
     qualityRating: report.qualityRating,
     messagingTier: report.messagingTier,
     lastCheckedAt: new Date(),
     lastError: report.issues[0] ?? null,
     status: report.level === 'ok' ? 'connected' : ch.status,
-  }).where(eq(tenantChannels.id, ch.id));
+  }).where(eq(tenantChannels.id, ch.id)));
 
   /* التنبيه عند **تغيّر الحالة** لا عند كلّ فحص — وإلّا فتنبيهٌ كلّ عشر دقائق. */
-  const prev = await db.select({ level: healthChecks.level }).from(healthChecks)
-    .where(eq(healthChecks.channelId, ch.id))
-    .orderBy(desc(healthChecks.checkedAt)).limit(3);
+  const prev = await withPlatform(db, 'مراقبة: قراءة آخر فحصين', (tx) =>
+    tx.select({ level: healthChecks.level }).from(healthChecks)
+      .where(eq(healthChecks.channelId, ch.id))
+      .orderBy(desc(healthChecks.checkedAt)).limit(3));
 
   if (report.level === 'ok') {
     // الرفع التلقائيّ بعد **فحصين سليمين متتاليين** لا واحد
@@ -103,21 +108,29 @@ export async function negativeSignals(): Promise<void> {
   /* ① صمت الويبهوك: لا وارد منذ 3× متوسّط الفجوة التاريخيّة لهذا العميل،
         بحدٍّ أدنى 3 ساعات. المتوسّط لكلّ عميلٍ لا عتبةٌ ثابتة — فمطعمٌ يستقبل
         رسالةً كلّ دقيقة ليس كصيدليّةٍ تستقبل رسالةً كلّ ساعة. */
-  const silent = await db.execute<{ tenant_id: string; channel_id: string; hours: number }>(sql`
-    WITH gaps AS (
-      SELECT m.tenant_id, m.channel_id,
-             avg(extract(epoch FROM (m.created_at - lag(m.created_at)
-                  OVER (PARTITION BY m.channel_id ORDER BY m.created_at)))) AS avg_gap,
-             max(m.created_at) AS last_in
+  /* ⚠️ لا يجوز تعشيش `lag() OVER` داخل `avg()` — بوستجرس يرفضه:
+     «aggregate function calls cannot contain window function calls».
+     فالفجوات تُحسب في مرحلةٍ أولى ثمّ تُجمَّع في الثانية. */
+  const silent = await withPlatform(db, 'مراقبة: كشف صمت الويبهوك', (tx) =>
+    tx.execute<{ tenant_id: string; channel_id: string; hours: number }>(sql`
+    WITH pairs AS (
+      SELECT m.tenant_id, m.channel_id, m.created_at,
+             lag(m.created_at) OVER (PARTITION BY m.channel_id ORDER BY m.created_at) AS prev_at
         FROM messages m
        WHERE m.direction = 'in' AND m.created_at > now() - interval '14 days'
-       GROUP BY m.tenant_id, m.channel_id
+    ), gaps AS (
+      SELECT tenant_id, channel_id,
+             avg(extract(epoch FROM (created_at - prev_at))) AS avg_gap,
+             max(created_at) AS last_in
+        FROM pairs
+       GROUP BY tenant_id, channel_id
     )
     SELECT tenant_id, channel_id,
            extract(epoch FROM (now() - last_in)) / 3600 AS hours
       FROM gaps
-     WHERE last_in < now() - greatest(make_interval(secs => avg_gap * 3), interval '3 hours')
-  `);
+     WHERE last_in < now() - greatest(
+             make_interval(secs => coalesce(avg_gap, 10800) * 3), interval '3 hours')
+  `));
 
   for (const r of silent as unknown as Array<{ tenant_id: string; channel_id: string; hours: number }>) {
     await raiseIncident({
@@ -131,7 +144,8 @@ export async function negativeSignals(): Promise<void> {
 
   /* ② رسائل بلا ردود: ≥3 واردات بلا صادرٍ خلال 10 دقائق والبوت مفعَّل.
         معناها: العامل متوقّف أو الطابور مسدود — وهذا عطل منصّةٍ لا عطل قناة. */
-  const stalled = await db.execute<{ tenant_id: string; conversation_id: string; n: number }>(sql`
+  const stalled = await withPlatform(db, 'مراقبة: رسائل بلا ردود', (tx) =>
+    tx.execute<{ tenant_id: string; conversation_id: string; n: number }>(sql`
     SELECT c.tenant_id, c.id AS conversation_id, count(m.id)::int AS n
       FROM conversations c
       JOIN messages m ON m.conversation_id = c.id
@@ -145,7 +159,7 @@ export async function negativeSignals(): Promise<void> {
             AND o.created_at > now() - interval '10 minutes')
      GROUP BY 1, 2
     HAVING count(m.id) >= 3
-  `);
+  `));
 
   for (const r of stalled as unknown as Array<{ tenant_id: string; conversation_id: string; n: number }>) {
     await raiseIncident({
@@ -157,7 +171,8 @@ export async function negativeSignals(): Promise<void> {
   }
 
   /* ③ ارتفاع الإخفاق: >20% من الصادر فشل خلال 15 دقيقة. */
-  const failing = await db.execute<{ tenant_id: string; channel_id: string; rate: number }>(sql`
+  const failing = await withPlatform(db, 'مراقبة: ارتفاع الإخفاق', (tx) =>
+    tx.execute<{ tenant_id: string; channel_id: string; rate: number }>(sql`
     SELECT tenant_id, channel_id,
            (count(*) FILTER (WHERE status = 'failed'))::float / greatest(count(*), 1) AS rate
       FROM messages
@@ -165,7 +180,7 @@ export async function negativeSignals(): Promise<void> {
      GROUP BY 1, 2
     HAVING count(*) >= 5
        AND (count(*) FILTER (WHERE status = 'failed'))::float / count(*) > 0.2
-  `);
+  `));
 
   for (const r of failing as unknown as Array<{ tenant_id: string; channel_id: string; rate: number }>) {
     await raiseIncident({
@@ -184,13 +199,14 @@ export async function negativeSignals(): Promise<void> {
  * وهو ما يجعل القيد «نافذةٌ مفتوحةٌ واحدة لكلّ محادثة» صحيحاً دائماً.
  */
 export async function closeExpiredWindows(): Promise<number> {
-  const res = await getDb().execute<{ n: number }>(sql`
+  const res = await withPlatform(getDb(), 'صيانة: إغلاق النوافذ المنتهية', (tx) =>
+    tx.execute<{ n: number }>(sql`
     WITH closed AS (
       UPDATE conversation_windows
          SET closed_at = expires_at
        WHERE closed_at IS NULL AND expires_at <= now()
       RETURNING 1)
     SELECT count(*)::int AS n FROM closed
-  `);
+  `));
   return (res as unknown as Array<{ n: number }>)[0]?.n ?? 0;
 }

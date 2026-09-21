@@ -1,4 +1,4 @@
-import { getDb, incidents, eq, and, sql } from '@aibot/db';
+import { getDb, withPlatform, incidents, eq, and, sql } from '@aibot/db';
 import { sha256 } from '@aibot/crypto';
 
 /**
@@ -31,13 +31,16 @@ export async function raiseIncident(i: IncidentInput): Promise<{ id: string; isN
   const db = getDb();
   const fingerprint = fingerprintOf(i);
 
-  const open = await db.select().from(incidents).where(and(
+  /* الحوادث عابرةٌ للمستأجرين: بعضها بلا مستأجرٍ أصلاً (عطل منصّة)،
+     والمراقبة تكتبها من خارج أيّ سياق. */
+  return withPlatform(db, 'حوادث: رفع أو تحديث حادثة', async (tx) => {
+  const open = await tx.select().from(incidents).where(and(
     eq(incidents.fingerprint, fingerprint),
     sql`${incidents.status} <> 'resolved'`,
   )).limit(1);
 
   if (open[0]) {
-    await db.update(incidents).set({
+    await tx.update(incidents).set({
       count: sql`${incidents.count} + 1`,
       lastSeenAt: new Date(),
       detail: (i.detail ?? open[0].detail) as object,
@@ -45,7 +48,7 @@ export async function raiseIncident(i: IncidentInput): Promise<{ id: string; isN
     return { id: open[0].id, isNew: false }; // لا إشعارَ جديد — هذا هو بيت القصيد
   }
 
-  const [row] = await db.insert(incidents).values({
+  const [row] = await tx.insert(incidents).values({
     tenantId: i.tenantId,
     channelId: i.channelId ?? null,
     kind: i.kind,
@@ -56,6 +59,7 @@ export async function raiseIncident(i: IncidentInput): Promise<{ id: string; isN
   }).returning({ id: incidents.id });
 
   return { id: row!.id, isNew: true };
+  });
 }
 
 /**
@@ -67,12 +71,13 @@ const AUTO_RESOLVABLE = new Set(['channel_down', 'token_invalid', 'webhook_silen
 export async function resolveIfAuto(i: Pick<IncidentInput, 'tenantId' | 'channelId' | 'kind' | 'causeKey'>): Promise<boolean> {
   if (!AUTO_RESOLVABLE.has(i.kind)) return false;
   const fingerprint = fingerprintOf(i as IncidentInput);
-  const res = await getDb().update(incidents).set({
+  const res = await withPlatform(getDb(), 'حوادث: حلٌّ آليّ بعد فحصين سليمين',
+    (tx) => tx.update(incidents).set({
     status: 'resolved',
     resolvedAt: new Date(),
   }).where(and(
     eq(incidents.fingerprint, fingerprint),
     sql`${incidents.status} <> 'resolved'`,
-  )).returning({ id: incidents.id });
+  )).returning({ id: incidents.id }));
   return res.length > 0;
 }

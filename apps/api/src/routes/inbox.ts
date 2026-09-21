@@ -153,7 +153,7 @@ export async function registerInbox(app: FastifyInstance) {
         const set: Record<string, unknown> = {};
         if (typeof req.body?.enabled === 'boolean') set.botEnabled = req.body.enabled;
         if (req.body?.pauseMinutes != null) {
-          set.botPausedUntil = sql`now() + make_interval(mins => ${req.body.pauseMinutes})`;
+          set.botPausedUntil = new Date(Date.now() + req.body.pauseMinutes * 60_000);
           set.needsAttention = false;
         }
         const [row] = await tx.update(conversations).set(set)

@@ -26,35 +26,35 @@ const log = (msg: string, extra?: unknown) =>
   console.log(JSON.stringify({ level: 'info', svc: 'worker', msg, ...(extra as object) }));
 
 const workers = [
-  new Worker('ch:inbound', async (job) => handleInbound(job.data), {
+  new Worker('ch-inbound', async (job) => handleInbound(job.data), {
     connection,
     concurrency: 10,
   }),
-  new Worker('bot:reply', async (job) => handleReply(job.data), {
+  new Worker('bot-reply', async (job) => handleReply(job.data), {
     connection,
     // تزامنٌ محدود: ردّان متوازيان في نفس المحادثة يتضاربان، والقفل
     // في BullMQ عبر jobId الثابت يمنع ذلك أصلاً.
     concurrency: 3,
   }),
-  new Worker('ch:outbound', async (job) => { await sendOutbound(job.data); }, {
+  new Worker('ch-outbound', async (job) => { await sendOutbound(job.data); }, {
     connection,
     // حدّ معدّلٍ عامّ؛ الحدّ لكلّ مستأجر يُضاف بمجموعةِ معدّلٍ في المرحلة الرابعة
     concurrency: 5,
     limiter: { max: 10, duration: 1000 },
   }),
-  new Worker('kb:embed', async (job) => handleEmbed(job.data), {
+  new Worker('kb-embed', async (job) => handleEmbed(job.data), {
     connection,
     concurrency: 1, // تضمينٌ واحدٌ في كلّ مرّة — تقدّمٌ مرئيّ لا سباق
   }),
-  new Worker('health:poll', async (job) => runHealthPoll(job.data), {
+  new Worker('health-poll', async (job) => runHealthPoll(job.data), {
     connection,
     concurrency: 5,
   }),
-  new Worker('notify:push', async (job) => handleNotify(job.data), {
+  new Worker('notify-push', async (job) => handleNotify(job.data), {
     connection,
     concurrency: 5,
   }),
-  new Worker('kb:ingest', async (job) => handleIngest(job.data), {
+  new Worker('kb-ingest', async (job) => handleIngest(job.data), {
     connection,
     concurrency: 2,
   }),
@@ -76,7 +76,7 @@ const workers = [
  */
 async function scheduleRepeatables(): Promise<void> {
   const { Queue } = await import('bullmq');
-  const health = new Queue('health:poll', { connection });
+  const health = new Queue('health-poll', { connection });
   const maint = new Queue('maintenance', { connection });
 
   await health.add('poll', {}, {

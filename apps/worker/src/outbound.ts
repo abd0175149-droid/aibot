@@ -149,7 +149,7 @@ export async function sendOutbound(job: SendJob): Promise<{ messageId: string; e
       lastMessagePreview: ('body' in msg ? msg.body : `[${msg.kind}]`).slice(0, 160),
       // ردّ الموظّف يُسكت البوت تلقائيّاً وينزع شارة الانتباه — بلا أن يضغط شيئاً.
       ...(job.source === 'agent'
-        ? { botPausedUntil: sql`now() + interval '30 minutes'` as never, needsAttention: false }
+        ? { botPausedUntil: new Date(Date.now() + 30 * 60_000), needsAttention: false }
         : {}),
     }).where(eq(conversations.id, job.conversationId));
 

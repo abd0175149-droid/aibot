@@ -2,7 +2,7 @@ import { createHmac, randomBytes, scrypt as _scrypt, timingSafeEqual } from 'nod
 import { promisify } from 'node:util';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AppError, ErrorCode, type Role } from '@aibot/shared';
-import { getDb, users, sessions, tenants, eq, and, isNull, gt, sql } from '@aibot/db';
+import { getDb, withPlatform, users, sessions, tenants, eq, and, isNull, gt, sql } from '@aibot/db';
 import { sha256 } from '@aibot/crypto';
 
 const scrypt = promisify(_scrypt) as (p: string, s: Buffer, l: number) => Promise<Buffer>;
@@ -185,7 +185,12 @@ export async function registerAuth(app: FastifyInstance) {
     const password = String(req.body?.password ?? '');
     if (!email || !password) throw new AppError(ErrorCode.VALIDATION, 'البريد وكلمة السرّ مطلوبان', 400);
 
-    const rows = await getDb().select().from(users).where(eq(users.email, email)).limit(1);
+    /* المصادقة **عابرةٌ للمستأجرين بطبيعتها**: لا سياق بعد، وصفُّ مالك
+       المنصّة بلا `tenant_id` أصلاً. فالبحث عن المستخدم يمرّ بالدور المتجاوز
+       صراحةً — وهذا أوضح من سياسةٍ تفتح الجدول للجميع.
+       (كشفه أوّل تشغيلٍ بدورٍ عاديّ: قبله كان التطبيق سوبريوزر فلم يظهر.) */
+    const rows = await withPlatform(getDb(), 'مصادقة: البحث عن المستخدم بالبريد',
+      (tx) => tx.select().from(users).where(eq(users.email, email)).limit(1));
     const user = rows[0];
     // رسالةٌ واحدة للحالتين — لا نكشف أيّ بريدٍ مسجَّل
     const bad = () => new AppError(ErrorCode.UNAUTHORIZED, 'البريد أو كلمة السرّ غير صحيحة', 401);
@@ -195,7 +200,8 @@ export async function registerAuth(app: FastifyInstance) {
     const { refresh, sessionId } = await createSession(user.id, {
       ip: req.ip, userAgent: req.headers['user-agent'],
     });
-    await getDb().update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+    await withPlatform(getDb(), 'مصادقة: ختم آخر دخول',
+      (tx) => tx.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id)));
 
     const access = signAccess({ sub: user.id, tid: user.tenantId, role: user.role, sid: sessionId });
     return reply.header('set-cookie', refreshCookie(refresh)).send({
@@ -212,7 +218,8 @@ export async function registerAuth(app: FastifyInstance) {
       return reply.header('set-cookie', clearRefreshCookie()).code(401)
         .send({ error: { code: ErrorCode.UNAUTHORIZED, message: 'انتهت الجلسة' } });
     }
-    const rows = await getDb().select().from(users).where(eq(users.id, rotated.userId)).limit(1);
+    const rows = await withPlatform(getDb(), 'مصادقة: تجديد الجلسة',
+      (tx) => tx.select().from(users).where(eq(users.id, rotated.userId)).limit(1));
     const user = rows[0];
     if (!user?.isActive) throw new AppError(ErrorCode.UNAUTHORIZED, 'الحساب معطَّل', 401);
 
@@ -227,11 +234,13 @@ export async function registerAuth(app: FastifyInstance) {
 
   app.get('/me', { preHandler: requireAuth() }, async (req) => {
     const db = getDb();
-    const rows = await db.select().from(users).where(eq(users.id, req.auth!.sub)).limit(1);
-    const user = rows[0]!;
-    const tenant = user.tenantId
-      ? (await db.select().from(tenants).where(eq(tenants.id, user.tenantId)).limit(1))[0]
-      : null;
+    const { user, tenant } = await withPlatform(db, 'قراءة بطاقة المستخدم الحاليّ', async (tx) => {
+      const u = (await tx.select().from(users).where(eq(users.id, req.auth!.sub)).limit(1))[0]!;
+      const t = u.tenantId
+        ? (await tx.select().from(tenants).where(eq(tenants.id, u.tenantId)).limit(1))[0]
+        : null;
+      return { user: u, tenant: t };
+    });
     return {
       user: { id: user.id, name: user.name, email: user.email, role: user.role },
       tenant: tenant && { id: tenant.id, name: tenant.name, status: tenant.status, capabilities: tenant.capabilities },

@@ -20,8 +20,8 @@ function q(name: string): Queue {
  * العميل يكتب ثلاثة أسطر فيردّ البوت مرّةً واحدة.
  */
 export async function enqueueReply(conversationId: string, delayMs = 2000): Promise<void> {
-  const jobId = `conv:${conversationId}`;
-  const queue = q('bot:reply');
+  const jobId = `conv-${conversationId}`;
+  const queue = q('bot-reply');
   const existing = await queue.getJob(jobId);
   if (existing) {
     const state = await existing.getState();

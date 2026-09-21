@@ -173,7 +173,7 @@ export async function handleReply(job: { conversationId: string }): Promise<void
 
     if (result.flags.handoff) {
       await tx.update(conversations)
-        .set({ needsAttention: true, botPausedUntil: sql`now() + make_interval(mins => ${cfg.pauseMinutes})` as never })
+        .set({ needsAttention: true, botPausedUntil: new Date(Date.now() + cfg.pauseMinutes * 60_000) })
         .where(eq(conversations.id, conv.id));
     }
 

@@ -48,7 +48,7 @@ trap rollback ERR
 # ── 0. البيئة ────────────────────────────────────────────────────
 [ -f .env ] || { fail ".env غائب — الأسرار تُكتب باليد على الخادم فقط"; exit 1; }
 set -a; . ./.env; set +a
-for v in JWT_SECRET MASTER_KEY PLATFORM_AI_KEY DB_PASSWORD; do
+for v in JWT_SECRET MASTER_KEY PLATFORM_AI_KEY DB_PASSWORD APP_DB_PASSWORD; do
   [ -n "${!v:-}" ] || { fail "$v غائبٌ من .env — لا إقلاع بسرٍّ ناقص"; exit 1; }
 done
 
@@ -111,6 +111,11 @@ for f in packages/db/migrations/*.sql; do
     exit 1
   fi
 done
+
+# ── 5ب. كلمة سرّ دور التطبيق ──
+# تُضبط بعد الترحيل لأنّ الدور يُنشأ فيه. ومتَماثِلة: تكرارها لا يضرّ.
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "${DB_USER}" -d "${DB_NAME:-aibot}"   -c "ALTER ROLE aibot_app LOGIN PASSWORD '${APP_DB_PASSWORD}';" >/dev/null
+echo "  ✔ دور التطبيق مضبوط (غير سوبريوزر — سياسات RLS تسري عليه)"
 
 # ── 6. بوّابة الصحّة — هي التي تقرّر النجاح، لا نهاية السكربت ───
 say "بوّابة الصحّة"

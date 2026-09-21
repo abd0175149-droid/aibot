@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { getAdapter, isChannelSupported, type ChannelKind, type RawWebhook } from '@aibot/channels';
-import { getDb, tenantChannels, tenants, eq, and, sql } from '@aibot/db';
+import { getDb, withPlatform, tenantChannels, tenants, eq, and, sql } from '@aibot/db';
 import { open as decrypt, safeEqual } from '@aibot/crypto';
 
 /**
@@ -18,7 +18,10 @@ async function resolveTenantChannel(kind: ChannelKind, req: RawWebhook) {
   const key = adapter.resolveKey(req);
   if (!key) return null;
 
-  const db = getDb();
+  /* عابرٌ للمستأجرين **بطبيعته**: لا سياق بعد — المستأجر هو ما نبحث عنه.
+     ولذلك يمرّ بالدور المتجاوز صراحةً. كشفه أوّل تشغيلٍ بدورٍ عاديّ:
+     قبله كان التطبيق سوبريوزر فنجح الاستعلام وأخفى العيب. */
+  return withPlatform(getDb(), 'ويبهوك: حلّ المستأجر من مفتاح القناة', async (db) => {
   if (key.by === 'path') {
     const rows = await db
       .select({ ch: tenantChannels, tenantId: tenants.id, status: tenants.status })
@@ -36,6 +39,7 @@ async function resolveTenantChannel(kind: ChannelKind, req: RawWebhook) {
     .where(and(eq(tenantChannels.kind, kind), eq(tenantChannels.externalAccountId, key.externalId)))
     .limit(1);
   return rows[0] ?? null;
+  });
 }
 
 function rawOf(req: FastifyRequest, pathPublicId?: string): RawWebhook {
@@ -87,7 +91,9 @@ export async function registerWebhooks(app: FastifyInstance) {
     const raw = rawOf(req, publicId);
     const found = await resolveTenantChannel(kind, raw);
     if (!found) {
-      req.log.warn({ kind, publicId }, 'ويبهوك لمستأجرٍ غير معروف');
+      // التمييز مقصود: مستأجرٌ موجود بلا قناةٍ موصولة ≠ معرّفٌ مجهول.
+      // الأوّل خطأ تهيئة، والثاني محاولة تخمين — وتشخيصهما مختلف.
+      req.log.warn({ kind, publicId }, 'لا قناة موصولة لهذا المعرّف — راجع تهيئة العميل');
       return; // 200 على كلّ حال — لا نكشف أيّ معرّفٍ صالح
     }
     if (found.status === 'suspended' || found.status === 'archived') return;

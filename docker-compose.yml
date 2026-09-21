@@ -71,7 +71,9 @@ services:
       # GIT_REV يُقرأ في /api/health ويُطابق عليه deploy.sh.
       # بدونه لا تستطيع البوّابة أن تميّز «نُشرت النسخة الجديدة» من «القديمة ما زالت تعمل».
       GIT_REV: ${GIT_REV:?يُمرَّر من deploy.sh — لا تنشر يدويّاً}
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME:-aibot}
+      # 🔴 دور التطبيق لا مالك القاعدة: المالك سوبريوزر ويتجاوز RLS كليّاً،
+      #    فتصير البوّابة الثانية زينةً في الإنتاج. راجع 0003_roles.sql
+      DATABASE_URL: postgresql://${APP_DB_USER:-aibot_app}:${APP_DB_PASSWORD:?اضبط APP_DB_PASSWORD}@db:5432/${DB_NAME:-aibot}
       REDIS_URL: redis://redis:6379
       # 🔑 بلا قيمةٍ احتياطيّة عمداً: غياب السرّ يجب أن يُفشل الإقلاع بصوتٍ عالٍ
       #    لا أن يستبدله بقيمةٍ محظورة يعرفها كلّ من يقرأ المستودع.
@@ -106,7 +108,9 @@ services:
     environment:
       NODE_ENV: production
       GIT_REV: ${GIT_REV:-unknown}
-      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME:-aibot}
+      # 🔴 دور التطبيق لا مالك القاعدة: المالك سوبريوزر ويتجاوز RLS كليّاً،
+      #    فتصير البوّابة الثانية زينةً في الإنتاج. راجع 0003_roles.sql
+      DATABASE_URL: postgresql://${APP_DB_USER:-aibot_app}:${APP_DB_PASSWORD:?اضبط APP_DB_PASSWORD}@db:5432/${DB_NAME:-aibot}
       REDIS_URL: redis://redis:6379
       MASTER_KEY: ${MASTER_KEY:?}
       MASTER_KEY_VERSION: ${MASTER_KEY_VERSION:-1}
