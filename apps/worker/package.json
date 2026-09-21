@@ -18,6 +18,13 @@
     "@aibot/core": "workspace:*",
     "bullmq": "^5.34.5",
     "ioredis": "^5.4.2",
-    "@aibot/ai": "workspace:*"
+    "@aibot/ai": "workspace:*",
+    "web-push": "^3.6.7",
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.9.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/web-push": "^3.6.4"
   }
 }

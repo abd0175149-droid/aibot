@@ -7,6 +7,7 @@ import { registerAuth } from './auth.js';
 import { registerInbox } from './routes/inbox.js';
 import { registerBot } from './routes/bot.js';
 import { registerConsole } from './routes/console.js';
+import { registerReports } from './routes/reports.js';
 import { attachRealtime, closeRealtime } from './realtime.js';
 import { pingRedis, closeQueues, queueDepths } from './queues.js';
 
@@ -67,6 +68,7 @@ await app.register(async (api) => {
   await registerInbox(api);
   await registerBot(api);
   await registerConsole(api);
+  await registerReports(api);
 }, { prefix: '/api' });
 
 app.setErrorHandler((err, req, reply) => {

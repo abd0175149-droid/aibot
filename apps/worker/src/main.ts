@@ -5,7 +5,9 @@ import { handleInbound } from './inbound.js';
 import { handleReply } from './reply.js';
 import { handleEmbed } from './embed.js';
 import { sendOutbound } from './outbound.js';
-import { runHealthPoll } from './health.js';
+import { runHealthPoll, closeExpiredWindows, negativeSignals } from './health.js';
+import { handleNotify, flushDigest } from './notify.js';
+import { handleIngest } from './extract.js';
 
 /**
  * عمّال الطوابير.
@@ -48,7 +50,52 @@ const workers = [
     connection,
     concurrency: 5,
   }),
+  new Worker('notify:push', async (job) => handleNotify(job.data), {
+    connection,
+    concurrency: 5,
+  }),
+  new Worker('kb:ingest', async (job) => handleIngest(job.data), {
+    connection,
+    concurrency: 2,
+  }),
+  new Worker('maintenance', async (job) => {
+    if (job.name === 'windows') {
+      const n = await closeExpiredWindows();
+      log('أُغلقت نوافذ منتهية', { n });
+    } else if (job.name === 'signals') {
+      await negativeSignals();
+    } else if (job.name === 'digest') {
+      await flushDigest();
+    }
+  }, { connection, concurrency: 1 }),
 ];
+
+/**
+ * المجدوِلات المتكرّرة.
+ * تُسجَّل بمعرّفاتٍ ثابتة، فإعادة التشغيل لا تُضاعفها.
+ */
+async function scheduleRepeatables(): Promise<void> {
+  const { Queue } = await import('bullmq');
+  const health = new Queue('health:poll', { connection });
+  const maint = new Queue('maintenance', { connection });
+
+  await health.add('poll', {}, {
+    repeat: { every: 10 * 60 * 1000 }, jobId: 'health-poll', removeOnComplete: 10,
+  });
+  await maint.add('windows', {}, {
+    repeat: { every: 10 * 60 * 1000 }, jobId: 'close-windows', removeOnComplete: 10,
+  });
+  await maint.add('signals', {}, {
+    repeat: { every: 5 * 60 * 1000 }, jobId: 'negative-signals', removeOnComplete: 10,
+  });
+  await maint.add('digest', {}, {
+    // التجميع كلّ 15 دقيقة — الحرج يخترقه ويمرّ فوراً
+    repeat: { every: 15 * 60 * 1000 }, jobId: 'digest', removeOnComplete: 10,
+  });
+}
+
+await scheduleRepeatables().catch((e) =>
+  console.error(JSON.stringify({ level: 'error', svc: 'worker', msg: 'فشل جدولة المتكرّرات', err: String(e) })));
 
 for (const w of workers) {
   w.on('completed', (job) => log('مهمّة تمّت', { queue: w.name, id: job.id }));

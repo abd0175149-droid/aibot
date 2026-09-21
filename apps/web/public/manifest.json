@@ -1,0 +1,11 @@
+{
+  "name": "AiBot",
+  "short_name": "AiBot",
+  "start_url": "/app",
+  "display": "standalone",
+  "background_color": "#f1f3f2",
+  "theme_color": "#00998a",
+  "lang": "ar",
+  "dir": "rtl",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

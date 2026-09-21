@@ -1,15 +1,17 @@
 import type { ChannelAdapter, ChannelKind, OutboundMessage, ChannelCapabilities } from './types.js';
 import { WhatsAppAdapter, whatsappCapabilities } from './whatsapp.js';
+import { InstagramAdapter, instagramCapabilities } from './instagram.js';
 
 export * from './types.js';
 export * from './phone.js';
 export { WhatsAppAdapter, whatsappCapabilities };
+export { InstagramAdapter, instagramCapabilities };
 
 const REGISTRY = new Map<ChannelKind, ChannelAdapter>([
   ['whatsapp_cloud', new WhatsAppAdapter()],
-  // ['instagram', new InstagramAdapter()],  ← المرحلة ٨، عند أوّل عميلٍ يطلبها.
-  //   كلّ ما يلزم عندها: ملفٌّ واحد يُنفّذ ChannelAdapter ويُسجَّل هنا.
-  //   لا تعديل في النواة ولا في الطوابير ولا في الإنبوكس ولا في عدّاد النوافذ.
+  // إضافة القناة الثانية كانت سطراً واحداً هنا وملفّاً واحداً بجانبه.
+  // لم تتغيّر النواة ولا الطوابير ولا الإنبوكس ولا عدّاد النوافذ ولا الحرّاس.
+  ['instagram', new InstagramAdapter()],
 ]);
 
 export function getAdapter(kind: ChannelKind): ChannelAdapter {
