@@ -191,6 +191,61 @@ export async function registerBot(app: FastifyInstance) {
     },
   );
 
+  /**
+   * تعديل أداة.
+   *
+   * ★ `key` **لا يُعدَّل**: هو الاسم الذي يناديه النموذج، وتغييره يكسر كلّ
+   *   إجراءٍ معلَّقٍ يحمله وكلّ سجلّ استعمالٍ سابق. الاسم يُستبدل بأداةٍ جديدة.
+   *
+   * و`secrets` تُستبدل أو تُترك: إغفالها يحفظ القديمة، و`{}` يمحوها. فلا
+   * يمحو حفظُ تسميةٍ سرَّ الأداة بالخطأ.
+   */
+  app.patch<{ Params: { id: string }; Body: Record<string, any> }>(
+    '/bot/tools/:id',
+    { preHandler: auth },
+    async (req) => {
+      const tenantId = tenantOf(req);
+      const b = req.body ?? {};
+      if (b.http?.url) {
+        await assertPublicUrl(String(b.http.url)).catch((e) => {
+          throw new AppError(ErrorCode.TOOL_BLOCKED, (e as Error).message, 400);
+        });
+      }
+      return withTenant(getDb(), tenantId, async (tx) => {
+        const cur = (await tx.select().from(botTools).where(eq(botTools.id, req.params.id)).limit(1))[0];
+        if (!cur) throw new AppError(ErrorCode.VALIDATION, 'أداةٌ غير موجودة', 404);
+
+        const patch: Record<string, unknown> = {};
+        if (b.titleAr !== undefined) patch.titleAr = String(b.titleAr);
+        if (b.description !== undefined) patch.description = String(b.description);
+        if (b.paramsSchema !== undefined) patch.paramsSchema = b.paramsSchema;
+        if (b.http !== undefined) patch.http = b.http;
+        if (b.responseMap !== undefined) patch.responseMap = b.responseMap;
+        if (b.requiresCapabilities !== undefined) {
+          patch.requiresCapabilities = Array.isArray(b.requiresCapabilities) ? b.requiresCapabilities : [];
+        }
+        if (b.confirmRequired !== undefined) patch.confirmRequired = Boolean(b.confirmRequired);
+        if (b.confirmTemplate !== undefined) patch.confirmTemplate = b.confirmTemplate ?? null;
+        if (b.secrets !== undefined) {
+          const sealed = Object.keys(b.secrets ?? {}).length ? seal(JSON.stringify(b.secrets)) : null;
+          patch.secretsEnc = sealed?.enc ?? null;
+          patch.keyVersion = sealed?.keyVersion ?? cur.keyVersion;
+        }
+        if (b.enabled !== undefined) {
+          patch.enabled = Boolean(b.enabled);
+          /* التفعيل اليدويّ يُصفّر قاطع الدائرة وسببَ التعطيل: العميل أصلح
+             الخلل عند نظامه، فإبقاء السبب يعطّلها من جديد عند أوّل نداء. */
+          if (b.enabled) { patch.failureCount = 0; patch.disabledReason = null; }
+        }
+
+        const [row] = await tx.update(botTools).set(patch)
+          .where(eq(botTools.id, req.params.id)).returning();
+        const { secretsEnc, ...safe } = row!;
+        return { ...safe, hasSecrets: Boolean(secretsEnc) };
+      });
+    },
+  );
+
   app.delete<{ Params: { id: string } }>('/bot/tools/:id', { preHandler: auth }, async (req) => {
     const tenantId = tenantOf(req);
     return withTenant(getDb(), tenantId, async (tx) => {

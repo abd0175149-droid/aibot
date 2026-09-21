@@ -11,58 +11,89 @@
  */
 
 :root {
-  --bg: #f1f3f2;
-  --surface: #fcfcfb;
-  --surface-2: #e8edeb;
-  --surface-3: #dfe6e4;
-  --ink: #101917;
-  --ink-2: #3c4a48;
-  --muted: #697876;
-  --rule: #d2d9d7;
-  --rule-soft: #e2e8e6;
-  --accent: #00998a;
-  --accent-ink: #00635a;
-  --accent-wash: #e3f0ee;
-  --amber: #b06407;
-  --amber-ink: #8a4e06;
-  --amber-wash: #f6eadc;
-  --violet: #9146a8;
-  --violet-ink: #73348a;
-  --violet-wash: #f1e7f5;
-  --ok: #1b6e43;
-  --warn: #9a6a05;
-  --crit: #a32219;
-  --ok-wash: #e4f0e9;
-  --warn-wash: #f7eeda;
-  --crit-wash: #f7e4e2;
-  --radius: 7px;
-  --shadow: 0 1px 2px rgba(16, 25, 23, .06), 0 4px 12px rgba(16, 25, 23, .04);
+  /* ═══ الأسطح — رماديّاتٌ مُنحازةٌ بردٍّ خفيف نحو هوى الأساس.
+         رماديٌّ خالصٌ يقرأ «غير مقصود»؛ الميل يجعل الشاشة مجموعةً واحدة. ═══ */
+  --bg: #f3f6f7;
+  --surface: #ffffff;
+  --surface-2: #e9eef0;
+  --surface-3: #dbe3e6;
+  --ink: #0c1719;
+  --ink-2: #35484d;
+  --muted: #61757b;
+  --rule: #ccd7db;
+  --rule-soft: #e3eaec;
+
+  /* ═══ الأساس: بحريٌّ عميق، لا أزرق شركاتيّ.
+         «ثقة» = لونٌ واحدٌ هادئ في أقلّ من ٥٪ من البكسلات — الفعل الأساس
+         والعنصر النشط وحدهما. اللون الكثير يقرأ دِعايةً لا أداة. ═══ */
+  --brand: #0f6d86;
+  --brand-ink: #0a5468;
+  --brand-wash: #e2eff3;
+  /** «تقدّم»: للنموّ وحده — فرقٌ موجب، سقفٌ يرتفع. لا يُستعمل زينةً. */
+  --progress: #157f56;
+
+  /* أسماءٌ قديمة تبقى عاملةً أثناء الترحيل التدريجيّ. الجديد يستعمل --brand. */
+  --accent: var(--brand);
+  --accent-ink: var(--brand-ink);
+  --accent-wash: var(--brand-wash);
+
+  --amber: #8f6304;
+  --amber-ink: #6f4d03;
+  --amber-wash: #f7efda;
+  --violet: #7b52b5;
+  --violet-ink: #603f90;
+  --violet-wash: #eee7f7;
+
+  /* ═══ ألوان الحالة **محجوزة**: لا تصير سلسلةً في رسمٍ ولا لون علامة.
+         ولا معنى باللون وحده — كلّ حالةٍ أيقونةٌ ونصٌّ معها. ═══ */
+  --ok: #16653e;
+  --warn: #8f6304;
+  --serious: #a8500b;
+  --crit: #9c2018;
+  --ok-wash: #e2efe8;
+  --warn-wash: #f7efda;
+  --serious-wash: #f9ebdf;
+  --crit-wash: #f8e5e3;
+
+  /* ═══ سلَّم الطباعة — ملتزَم. المقاسات المتفرّقة في JSX هي ما يُفقد التدرّج. ═══ */
+  --t-display: 26px; --t-h1: 20px; --t-h2: 16px;
+  --t-body: 14px; --t-sm: 12.5px; --t-label: 11px;
+
+  --radius: 8px;
+  --shadow: 0 1px 2px rgba(12, 23, 25, .05), 0 6px 18px rgba(12, 23, 25, .045);
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #0b1110; --surface: #101615; --surface-2: #18201f; --surface-3: #202927;
-    --ink: #e7eeec; --ink-2: #b6c3c1; --muted: #85928f;
-    --rule: #263030; --rule-soft: #1c2423;
-    --accent: #1fa994; --accent-ink: #52cdb8; --accent-wash: #122624;
-    --amber: #c17f1e; --amber-ink: #dda249; --amber-wash: #251c0f;
-    --violet: #a86bc4; --violet-ink: #c793db; --violet-wash: #1f1526;
-    --ok: #3aa76d; --warn: #c79a2a; --crit: #d9564c;
-    --ok-wash: #11221a; --warn-wash: #231c0c; --crit-wash: #261210;
-    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 4px 14px rgba(0,0,0,.28);
+    --bg: #091114; --surface: #0f1a1d; --surface-2: #16242a; --surface-3: #1e3037;
+    --ink: #e5eef0; --ink-2: #b0c2c7; --muted: #7c9097;
+    --rule: #223640; --rule-soft: #182930;
+    /* الداكن **مُصمَّمٌ لا معكوس**: اللون العميق على خلفيّةٍ داكنة يختفي،
+       فيُرفع لمعاناً ويُخفَض تشبّعاً. قيمةٌ أخرى تماماً لا نفس القيمة. */
+    --brand: #38a3bd; --brand-ink: #6fc4d8; --brand-wash: #0f2b33;
+    --progress: #3aa87a;
+    --amber: #c79a2a; --amber-ink: #dfb659; --amber-wash: #241d0d;
+    --violet: #9670cb; --violet-ink: #b795de; --violet-wash: #1d1526;
+    --ok: #3fae79; --warn: #c79a2a; --serious: #d1763a; --crit: #d9564c;
+    --ok-wash: #102420; --warn-wash: #241d0d; --serious-wash: #26170f; --crit-wash: #271311;
+    --shadow: 0 1px 2px rgba(0,0,0,.45), 0 6px 20px rgba(0,0,0,.3);
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
-  --bg: #0b1110; --surface: #101615; --surface-2: #18201f; --surface-3: #202927;
-  --ink: #e7eeec; --ink-2: #b6c3c1; --muted: #85928f;
-  --rule: #263030; --rule-soft: #1c2423;
-  --accent: #1fa994; --accent-ink: #52cdb8; --accent-wash: #122624;
-  --amber: #c17f1e; --amber-ink: #dda249; --amber-wash: #251c0f;
-  --violet: #a86bc4; --violet-ink: #c793db; --violet-wash: #1f1526;
-  --ok: #3aa76d; --warn: #c79a2a; --crit: #d9564c;
-  --ok-wash: #11221a; --warn-wash: #231c0c; --crit-wash: #261210;
+  --bg: #091114; --surface: #0f1a1d; --surface-2: #16242a; --surface-3: #1e3037;
+  --ink: #e5eef0; --ink-2: #b0c2c7; --muted: #7c9097;
+  --rule: #223640; --rule-soft: #182930;
+  /* الداكن **مُصمَّمٌ لا معكوس**: اللون العميق على خلفيّةٍ داكنة يختفي،
+     فيُرفع لمعاناً ويُخفَض تشبّعاً. قيمةٌ أخرى تماماً لا نفس القيمة. */
+  --brand: #38a3bd; --brand-ink: #6fc4d8; --brand-wash: #0f2b33;
+  --progress: #3aa87a;
+  --amber: #c79a2a; --amber-ink: #dfb659; --amber-wash: #241d0d;
+  --violet: #9670cb; --violet-ink: #b795de; --violet-wash: #1d1526;
+  --ok: #3fae79; --warn: #c79a2a; --serious: #d1763a; --crit: #d9564c;
+  --ok-wash: #102420; --warn-wash: #241d0d; --serious-wash: #26170f; --crit-wash: #271311;
+  --shadow: 0 1px 2px rgba(0,0,0,.45), 0 6px 20px rgba(0,0,0,.3);
   color-scheme: dark;
 }
 

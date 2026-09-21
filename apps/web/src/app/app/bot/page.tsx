@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import { useApi, useToast, fmt } from '@/lib/useApi';
-import { put, post, ApiError } from '@/lib/api';
+import { put, post, patch, ApiError } from '@/lib/api';
 import { useCan } from '@/lib/session';
 import { Loading, ErrorBox } from '@/components/Shell';
+import { ToolBuilder, EMPTY_DRAFT, type ToolDraft } from '@/components/ToolBuilder';
+import { Button, Row, Empty, Note } from '@/components/ui';
 
 interface BotState {
   config: {
@@ -28,6 +30,42 @@ interface Tool {
   id: string; key: string; titleAr: string; description: string;
   enabled: boolean; kind: string; hasSecrets: boolean;
   requiresCapabilities: string[]; disabledReason: string | null;
+  paramsSchema?: { properties?: Record<string, { type?: string; description?: string }>; required?: string[] } | null;
+  http?: { method?: string; url?: string; headers?: Record<string, string>; bodyTemplate?: string } | null;
+  responseMap?: Record<string, string> | null;
+  confirmRequired?: boolean; confirmTemplate?: string | null;
+}
+
+/**
+ * صفُّ القاعدة ⟶ مسوّدة الباني.
+ *
+ * ★ السرّ **لا يُعاد أبداً** — حتّى وجوده يأتي علماً (`hasSecrets`) لا قيمة.
+ *   فحقل السرّ يبدأ فارغاً، وتركه فارغاً يعني «أبقِ القديم» لا «امحُه».
+ */
+function toDraft(t: Tool): ToolDraft {
+  const props = t.paramsSchema?.properties ?? {};
+  const required = new Set(t.paramsSchema?.required ?? []);
+  return {
+    id: t.id,
+    key: t.key,
+    titleAr: t.titleAr,
+    description: t.description,
+    params: Object.entries(props).map(([name, v]) => ({
+      name,
+      type: (v?.type as 'string') ?? 'string',
+      desc: v?.description ?? '',
+      required: required.has(name),
+    })),
+    method: (t.http?.method as 'GET') ?? 'GET',
+    url: t.http?.url ?? '',
+    bodyTemplate: t.http?.bodyTemplate ?? '',
+    authHeader: t.http?.headers?.Authorization ?? '',
+    secretValue: '',
+    hasSecrets: t.hasSecrets,
+    responseMap: Object.entries(t.responseMap ?? {}).map(([field, path]) => ({ field, path })),
+    confirmRequired: Boolean(t.confirmRequired),
+    confirmTemplate: t.confirmTemplate ?? '',
+  };
 }
 
 const TABS = [
@@ -49,6 +87,8 @@ export default function BotPage() {
   const tools = useApi<Tool[]>('/bot/tools');
 
   const [tab, setTab] = useState<(typeof TABS)[number]['id']>('persona');
+  /* المسوّدة المفتوحة في الباني. `null` = مغلق. */
+  const [editing, setEditing] = useState<ToolDraft | null>(null);
   const [persona, setPersona] = useState('');
   const [knowledge, setKnowledge] = useState('');
   const [dirty, setDirty] = useState(false);
@@ -206,6 +246,24 @@ export default function BotPage() {
 
       {tab === 'tools' && (
         <>
+          <Row end>
+            <span className="muted-p">
+              كلّ أداةٍ نداءٌ إلى نظامك. والبوت يستعملها **بوصفها** — فالوصف هو نصف الأداة.
+            </span>
+            <Button variant="primary" disabled={can.readOnly} reason="حسابك للقراءة فقط"
+              onClick={() => setEditing({ ...EMPTY_DRAFT })}>
+              + أداةٌ جديدة
+            </Button>
+          </Row>
+
+          {editing && (
+            <ToolBuilder
+              initial={editing}
+              onClose={() => setEditing(null)}
+              onSaved={() => { setEditing(null); void tools.reload(); }}
+            />
+          )}
+
           {tools.loading && <Loading rows={3} />}
           {tools.data?.map((t) => (
             <div className="card" key={t.id} style={{ padding: '12px 15px' }}>
@@ -231,21 +289,37 @@ export default function BotPage() {
                   تحتاج من القناة: {t.requiresCapabilities.join('، ')} — وتُخفى تلقائيّاً على قناةٍ لا تدعمها
                 </div>
               )}
+              <Row gap="xs">
+                <Button size="sm" disabled={can.readOnly} reason="حسابك للقراءة فقط"
+                  onClick={() => setEditing(toDraft(t))}>
+                  عدّلها وجرّبها
+                </Button>
+                {t.disabledReason && (
+                  <Button size="sm" variant="primary" disabled={can.readOnly}
+                    onClick={async () => { await patch(`/bot/tools/${t.id}`, { enabled: true }); void tools.reload(); }}>
+                    أعِد تفعيلها
+                  </Button>
+                )}
+              </Row>
             </div>
           ))}
           {!tools.loading && !tools.data?.length && (
-            <div className="card">
-              <div className="empty">
-                <b>لا أدوات مخصَّصة بعد</b>
-                بوتك يستعمل الأدوات الجاهزة (تحويل لموظّف، ملاحظات، خيارات سريعة).
-                أضِف أداةً حين يكون عندك نظامٌ يستعلم منه.
-              </div>
-            </div>
+            <Empty
+              title="لا أدوات مخصَّصة بعد"
+              hint="بوتك يستعمل الأدوات الجاهزة (تحويل لموظّف، ملاحظات، خيارات سريعة). أضِف أداةً حين يكون عندك نظامٌ يستعلم منه — أسعارٌ، مخزونٌ، مواعيد، أو حساب زبون."
+              action={(
+                <Button variant="primary" disabled={can.readOnly} reason="حسابك للقراءة فقط"
+                  onClick={() => setEditing({ ...EMPTY_DRAFT })}>
+                  ابنِ أوّل أداة
+                </Button>
+              )}
+            />
           )}
-          <div className="note c">
-            <b>حدودٌ مفروضة بالكود.</b> HTTPS فقط · رفض العناوين الداخليّة · مهلة 8 ثوانٍ ·
-            حجمٌ محدود · وتعطيلٌ آليّ بعد خمسة إخفاقات متتالية مع إشعارك.
-          </div>
+          <Note tone="crit">
+            <b>حدودٌ مفروضة بالكود لا بالشاشة.</b> HTTPS فقط · رفض العناوين الداخليّة بعد حلّ
+            الاسم وعند كلّ تحويل · مهلة 8 ثوانٍ · 256 كيلوبايت · وتعطيلٌ آليّ بعد خمسة إخفاقاتٍ
+            متتالية مع إشعارك.
+          </Note>
         </>
       )}
 

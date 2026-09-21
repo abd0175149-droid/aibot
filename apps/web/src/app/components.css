@@ -1,0 +1,230 @@
+/*
+ * طبقة المكوّنات — يقابل كلّ صنفٍ هنا مكوّناً في `components/ui`.
+ *
+ * ★ لماذا مِلفٌّ مستقلّ: `globals.css` يحمل التوكِنات والهيكل والشاشات القديمة.
+ *   وفصل طبقة المكوّنات يجعل الترحيل التدريجيّ مقروءاً — ما يستورد من `ui/`
+ *   يستعمل هذه الأصناف، وما لم يُهاجَر بعد يبقى على القديمة بلا تضارب.
+ *
+ * والقاعدة التي يحرسها هذا الملفّ: **صفر `style={{` في ملفٍّ جديد.**
+ * فما لا يوجد له صنفٌ هنا يُضاف هنا، لا في JSX.
+ */
+
+/* ══════════════ تخطيط ══════════════ */
+.stack { display: flex; flex-direction: column; min-width: 0; }
+.stack.xs { gap: 5px; }
+.stack.sm { gap: 9px; }
+.stack.md { gap: 14px; }
+.stack.lg { gap: 24px; }
+
+.row { display: flex; align-items: center; min-width: 0; }
+.row.xs { gap: 5px; }
+.row.sm { gap: 8px; }
+.row.md { gap: 14px; }
+.row.wrap { flex-wrap: wrap; }
+.row.end > :last-child { margin-inline-start: auto; }
+
+/* الفراغ من التخطيط لا من هوامش الأبناء — الهوامش تنطوي وتتضاعف بصمت */
+.grid { display: grid; gap: 14px; }
+.g220 { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.g280 { grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.g320 { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.g400 { grid-template-columns: repeat(auto-fit, minmax(min(400px, 100%), 1fr)); }
+.card.span { grid-column: 1 / -1; }
+
+/* ══════════════ البطاقة ══════════════ */
+/* الحافة والفِلّ والظلّ تقول «عنصرٌ منفصل» — فتُنفَق على ما يُرفع فعلاً
+   لا على كلّ كتلةٍ في الشاشة، وإلّا استوى التدرّج كلّه. */
+.card-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 11px; }
+.card-h h2 { font-size: var(--t-h2); font-weight: 600; margin: 0; }
+.card-a { margin-inline-start: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* ══════════════ الشارات ══════════════ */
+/* ★ لا معنى باللون وحده: علامةٌ ونصٌّ معه دائماً. */
+.pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: var(--t-label); font-weight: 500; font-family: inherit;
+  padding: 2px 9px; border-radius: 999px; line-height: 1.75;
+  white-space: nowrap; border: 1px solid transparent;
+}
+.pill-m { font-size: 7px; line-height: 1; }
+.pill.ok { color: var(--ok); background: var(--ok-wash); }
+.pill.warn { color: var(--warn); background: var(--warn-wash); }
+.pill.serious { color: var(--serious); background: var(--serious-wash); }
+.pill.crit { color: var(--crit); background: var(--crit-wash); }
+.pill.brand { color: var(--brand-ink); background: var(--brand-wash); }
+.pill.violet { color: var(--violet-ink); background: var(--violet-wash); }
+.pill.neutral { color: var(--muted); background: var(--surface-2); }
+
+.dot.ok { background: var(--ok); }
+.dot.warn { background: var(--warn); }
+.dot.serious { background: var(--serious); }
+.dot.crit { background: var(--crit); }
+.dot.brand { background: var(--brand); }
+.dot.violet { background: var(--violet); }
+.dot.neutral { background: var(--muted); }
+
+/* ══════════════ الأرقام ══════════════ */
+.stat {
+  background: var(--surface); border: 1px solid var(--rule-soft);
+  border-radius: var(--radius); padding: 13px 15px;
+  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+}
+.stat-v { font-size: 21px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stat-v small { font-size: 11.5px; color: var(--muted); font-weight: 400; margin-inline-start: 3px; }
+.stat-k { font-size: var(--t-label); color: var(--muted); line-height: 1.5; }
+/* رقمٌ بطوليٌّ واحدٌ في الشاشة — والستّة المتساوية لا تقول أيّها يهمّ */
+.stat.hero { background: var(--brand-wash); border-color: transparent; }
+.stat.hero .stat-v { font-size: var(--t-display); font-weight: 700; color: var(--brand-ink); }
+.stat.t-ok .stat-v { color: var(--ok); }
+.stat.t-warn .stat-v { color: var(--warn); }
+.stat.t-serious .stat-v { color: var(--serious); }
+.stat.t-crit .stat-v { color: var(--crit); }
+
+.meter {
+  display: block; height: 5px; border-radius: 3px;
+  background: var(--surface-3); overflow: hidden; margin-top: 6px;
+}
+.meter i { display: block; height: 100%; border-radius: 3px; background: var(--brand); }
+.meter.ok i { background: var(--progress); }
+.meter.warn i { background: var(--warn); }
+.meter.serious i { background: var(--serious); }
+.meter.crit i { background: var(--crit); }
+
+.kv-r { display: contents; }
+/* ★ أرقامٌ جدوليّة على كلّ رقمٍ في عمود — بدونها ترقص المبالغ فتُقرأ خطأً */
+.num, td.n, th.n { font-variant-numeric: tabular-nums; }
+td.n, th.n { white-space: nowrap; }
+.muted-p { color: var(--muted); font-size: var(--t-sm); margin: 0; }
+
+/* ══════════════ الحالات الثلاث ══════════════ */
+.empty p {
+  margin: 0 auto; font-size: var(--t-sm); color: var(--muted);
+  max-width: 46ch; line-height: 1.7;
+}
+.empty-a { margin-top: 13px; display: flex; gap: 7px; justify-content: center; flex-wrap: wrap; }
+.errbox {
+  border: 1px solid var(--crit); background: var(--crit-wash);
+  border-radius: var(--radius); padding: 14px 16px;
+  display: flex; flex-direction: column; gap: 7px; align-items: flex-start;
+}
+.errbox b { color: var(--crit); font-size: var(--t-h2); }
+.errbox p { margin: 0; font-size: var(--t-sm); color: var(--ink-2); }
+
+/* ══════════════ الأفعال ══════════════ */
+.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
+.btn.quiet { background: var(--surface); border-color: var(--rule); color: var(--ink-2); }
+.btn.quiet:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
+.btn.danger { background: var(--surface); border-color: var(--crit); color: var(--crit); }
+.btn.danger:hover:not(:disabled) { background: var(--crit-wash); }
+.btn.md { padding: 7px 14px; font-size: var(--t-sm); }
+/* هدف لمسٍ ≥ 44px حيث يُستعمل بإصبع — الإنبوكس يُدار من الهاتف */
+@media (pointer: coarse) {
+  .btn { min-height: 40px; }
+  .btn.md { min-height: 44px; }
+}
+
+/* ══════════════ الحقول ══════════════ */
+.field > label { display: block; font-size: var(--t-sm); font-weight: 500; margin-bottom: 5px; }
+.field .hint {
+  display: block; font-weight: 400; color: var(--muted);
+  font-size: var(--t-label); margin-top: 2px; line-height: 1.6;
+}
+.field-e { display: block; color: var(--crit); font-size: var(--t-label); margin-top: 5px; }
+.cnt.warn { color: var(--warn); }
+.cnt.crit { color: var(--crit); font-weight: 600; }
+
+.toggle { display: inline-flex; align-items: center; gap: 9px; font-size: var(--t-sm); cursor: pointer; }
+.toggle input { position: absolute; opacity: 0; width: 0; height: 0; }
+.toggle-t {
+  width: 34px; height: 19px; border-radius: 10px; flex: none; position: relative;
+  background: var(--surface-3); border: 1px solid var(--rule); transition: background .15s;
+}
+.toggle-t::after {
+  content: ""; position: absolute;
+  inset-block-start: 2px; inset-inline-start: 2px;
+  width: 13px; height: 13px; border-radius: 50%;
+  background: var(--surface); box-shadow: 0 1px 2px rgba(0, 0, 0, .2);
+  transition: inset-inline-start .15s;
+}
+.toggle input:checked + .toggle-t { background: var(--brand); border-color: var(--brand); }
+.toggle input:checked + .toggle-t::after { inset-inline-start: 18px; }
+.toggle input:focus-visible + .toggle-t { outline: 2px solid var(--brand); outline-offset: 2px; }
+.toggle input:disabled + .toggle-t { opacity: .5; }
+
+/* ══════════════ التبويبات ══════════════ */
+.tab[aria-selected="true"] { color: var(--brand-ink); border-bottom-color: var(--brand); font-weight: 600; }
+.tab-b {
+  margin-inline-start: 6px; background: var(--crit); color: #fff;
+  border-radius: 9px; padding: 0 6px; font-size: 10px; line-height: 16px; display: inline-block;
+}
+
+/* ══════════════ الملاحظات ══════════════ */
+.note.brand { border-inline-start-color: var(--brand); background: var(--brand-wash); }
+.note.warn { border-inline-start-color: var(--warn); background: var(--warn-wash); }
+.note.crit { border-inline-start-color: var(--crit); background: var(--crit-wash); }
+
+/* ══════════════ الحوار ══════════════ */
+.scrim {
+  position: fixed; inset: 0; z-index: 80;
+  background: rgba(8, 16, 18, .55);
+  display: grid; place-items: center; padding: 16px; overflow-y: auto;
+}
+.modal {
+  background: var(--surface); border-radius: 11px; box-shadow: var(--shadow);
+  width: 100%; max-width: 480px; max-height: 90vh;
+  display: flex; flex-direction: column;
+}
+.modal.wide { max-width: 760px; }
+.modal > header {
+  display: flex; align-items: center; gap: 10px; flex: none;
+  padding: 15px 18px; border-bottom: 1px solid var(--rule);
+}
+.modal > header h2 { margin: 0; font-size: var(--t-h2); font-weight: 600; }
+.modal > header .x {
+  margin-inline-start: auto; color: var(--muted);
+  font-size: 15px; line-height: 1; padding: 4px 7px; border-radius: 5px;
+}
+.modal > header .x:hover { background: var(--surface-2); color: var(--ink); }
+.modal-b { padding: 18px; overflow-y: auto; }
+.modal > footer {
+  display: flex; gap: 7px; flex-wrap: wrap; flex: none;
+  padding: 13px 18px; border-top: 1px solid var(--rule); background: var(--surface-2);
+}
+
+/* ══════════════ الكود والفرق ══════════════ */
+.codeb {
+  position: relative; background: var(--surface-2);
+  border: 1px solid var(--rule); border-radius: 6px; padding: 11px 13px;
+}
+.codeb-l { display: block; font-size: var(--t-label); color: var(--muted); margin-bottom: 6px; }
+.codeb pre {
+  margin: 0; font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 11.5px; line-height: 1.65; white-space: pre-wrap; word-break: break-all;
+}
+.codeb .btn { position: absolute; inset-block-start: 8px; inset-inline-end: 8px; }
+
+.diff {
+  border: 1px solid var(--rule); border-radius: 6px; overflow: hidden;
+  font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 11.5px; line-height: 1.7;
+}
+.dl { display: flex; gap: 8px; padding: 1px 10px; }
+.dl-m { flex: none; width: 9px; color: var(--muted); }
+.dl.same { background: var(--surface); color: var(--ink-2); }
+.dl.add { background: var(--ok-wash); color: var(--ok); }
+.dl.del {
+  background: var(--crit-wash); color: var(--crit);
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in oklab, var(--crit) 45%, transparent);
+}
+
+/* ══════════════ التركيز والحركة ══════════════ */
+/* حلقةٌ مرئيّةٌ دائماً — ولا `outline: none` بلا بديل */
+:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; border-radius: 4px; }
+
+/* الحركة تُخبر بتغيّرٍ أو تُحذف — ومن طلب تقليلها لا يراها */
+@media (prefers-reduced-motion: reduce) {
+  .toggle-t,
+  .toggle-t::after,
+  .btn { transition: none; }
+}

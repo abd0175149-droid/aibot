@@ -91,6 +91,9 @@ export const post = <T>(p: string, body?: unknown, headers?: HeadersInit) =>
   api<T>(p, { method: 'POST', body: body === undefined ? undefined : JSON.stringify(body), headers });
 export const put = <T>(p: string, body: unknown) =>
   api<T>(p, { method: 'PUT', body: JSON.stringify(body) });
+/** تعديلٌ جزئيّ: ما لا يُذكَر لا يُلمَس — فحفظُ تسميةٍ لا يمحو سرّاً. */
+export const patch = <T>(p: string, body: unknown) =>
+  api<T>(p, { method: 'PATCH', body: JSON.stringify(body) });
 export const del = <T>(p: string) => api<T>(p, { method: 'DELETE' });
 
 /** مفتاح تكرارٍ لكلّ إرسال: ضغطتان لا ترسلان رسالتين. */
