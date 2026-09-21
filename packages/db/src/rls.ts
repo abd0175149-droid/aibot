@@ -1,0 +1,31 @@
+import { TENANT_SCOPED } from './schema.js';
+
+/**
+ * يولّد ترحيل RLS من نفس القائمة التي يقرأها اختبار التسرّب.
+ * فجدولٌ جديد يُنسى من `TENANT_SCOPED` يسقط في الاختبار لا في الإنتاج.
+ */
+export function rlsMigrationSql(): string {
+  const parts: string[] = [
+    '-- مولَّد من TENANT_SCOPED — لا تُحرّره يدويّاً، حرّر schema.ts',
+    '',
+  ];
+  for (const t of TENANT_SCOPED) {
+    parts.push(
+      `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY;`,
+      `ALTER TABLE ${t} FORCE ROW LEVEL SECURITY;`,
+      `DROP POLICY IF EXISTS tenant_isolation ON ${t};`,
+      `CREATE POLICY tenant_isolation ON ${t}`,
+      `  USING (tenant_id = current_setting('app.tenant_id', true)::uuid)`,
+      `  WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);`,
+      `GRANT SELECT, INSERT, UPDATE, DELETE ON ${t} TO aibot_app;`,
+      '',
+    );
+  }
+  parts.push(
+    "GRANT USAGE ON SCHEMA public TO aibot_app, aibot_platform;",
+    "GRANT SELECT ON tenants, plans TO aibot_app;",
+    "-- audit_log إضافةٌ فقط: لا واجهة تحذف منه ولا تعدّله",
+    "REVOKE UPDATE, DELETE ON audit_log FROM aibot_app;",
+  );
+  return parts.join('\n');
+}

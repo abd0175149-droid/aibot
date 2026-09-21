@@ -1,0 +1,22 @@
+{
+  "name": "aibot",
+  "private": true,
+  "packageManager": "pnpm@9.12.3",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "build": "turbo run build",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "db:generate": "pnpm --filter @aibot/db run generate",
+    "dev:api": "pnpm --filter @aibot/api run dev",
+    "dev:worker": "pnpm --filter @aibot/worker run dev"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8",
+    "tsx": "^4.19.2"
+  }
+}

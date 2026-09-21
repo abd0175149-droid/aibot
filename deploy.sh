@@ -1,0 +1,158 @@
+#!/bin/bash
+# ════════════════════════════════════════════════════════════════
+# AiBot — نصّ النشر
+#
+# العقد: نسخةٌ احتياطيّة قبل أيّ لمس · صورٌ موسومةٌ للتراجع · الترحيل يُظهر
+# خطأه · **بوّابة صحّةٍ تُقرّر النجاح** · وتراجعٌ تلقائيّ عند الفشل.
+#
+# 🔴 الفخّ الذي أُعيدت كتابة البوّابة من أجله (مُتحقَّقٌ منه على الخادم 2026-09-21):
+#    https://aibot.masaros.net/api/health يردّ **200 الآن** — من تطبيق MasarOS
+#    عبر wildcard على *.masaros.net. فبوّابةٌ تنتظر «200» تنجح فوراً بينما
+#    AiBot غير موصولٍ إطلاقاً، ويُعلن النشر نجاحه عن نظامٍ لا يعمل.
+#    لذلك ثلاثة شروطٍ معاً لا واحد:
+#      ① الفحص على 127.0.0.1 لا على النطاق العامّ.
+#      ② مطابقة **جسم** الاستجابة: "service":"aibot".
+#      ③ مطابقة GIT_REV — فلا تمرّ البوّابة على نسخةٍ قديمة ما زالت تعمل.
+# ════════════════════════════════════════════════════════════════
+set -Eeuo pipefail
+
+API_PORT="${API_PORT:-4100}"
+WEB_PORT="${WEB_PORT:-3070}"
+STAMP="$(date +%Y%m%d-%H%M%S)"
+BACKUP_DIR="${HOME}/backups/aibot"
+SERVICES="api worker web"
+PUBLIC_URL="${PUBLIC_URL:-https://aibot.masaros.net}"
+
+say()  { echo -e "\n▶ $1"; }
+fail() { echo -e "\n❌ $1" >&2; }
+
+rollback() {
+  fail "فشل النشر — تراجع إلى وسوم rollback-${STAMP}"
+  for s in $SERVICES; do
+    if docker image inspect "aibot-${s}:rollback-${STAMP}" >/dev/null 2>&1; then
+      docker tag "aibot-${s}:rollback-${STAMP}" "aibot-${s}:latest"
+    fi
+  done
+  # 🔴 لا --force-recreate: آليّته تُعيد تسمية الحاوية إلى <id>_<name> كخطوةٍ
+  #    وسيطة، فيتولّد الاسم نفسه في كلّ محاولةٍ ويصطدم ببقايا السابقة:
+  #    «Conflict. The container name is already in use». أفشل ثلاث نشرات،
+  #    وأفشل التراجعَ نفسه مرّةً فكادت الخدمة تبقى ساقطة.
+  #    الحذف الصريح ثمّ الإنشاء لا يمرّ باسمٍ وسيط إطلاقاً.
+  docker compose rm -sf $SERVICES 2>/dev/null || true
+  docker compose up -d --no-build $SERVICES || true
+  echo "النسخة الاحتياطيّة: ${BACKUP_DIR}/db-${STAMP}.sql.gz"
+  exit 1
+}
+trap rollback ERR
+
+# ── 0. البيئة ────────────────────────────────────────────────────
+[ -f .env ] || { fail ".env غائب — الأسرار تُكتب باليد على الخادم فقط"; exit 1; }
+set -a; . ./.env; set +a
+for v in JWT_SECRET MASTER_KEY PLATFORM_AI_KEY DB_PASSWORD; do
+  [ -n "${!v:-}" ] || { fail "$v غائبٌ من .env — لا إقلاع بسرٍّ ناقص"; exit 1; }
+done
+
+# ── 1. نسخة احتياطيّة قبل أيّ لمس ────────────────────────────────
+say "نسخة احتياطيّة"
+mkdir -p "$BACKUP_DIR"
+BK="${BACKUP_DIR}/db-${STAMP}.sql.gz"
+docker compose exec -T db pg_dump -U "${DB_USER}" "${DB_NAME:-aibot}" | gzip > "$BK"
+# فشل pg_dump الصامت يُنتج ملفّاً ضئيلاً. بلا هذا الفحص تنشر فوق حالةٍ لا تُستعاد.
+SZ=$(stat -c%s "$BK" 2>/dev/null || echo 0)
+[ "$SZ" -gt 10000 ] || { fail "النسخة ${SZ} بايت فقط — pg_dump فشل صامتاً"; exit 1; }
+echo "  ✔ ${BK} (${SZ} بايت)"
+ls -t "${BACKUP_DIR}"/db-*.sql.gz | tail -n +15 | xargs -r rm -f
+
+# ── 2. الشيفرة — pull فقط ────────────────────────────────────────
+# 🔴 git reset --hard ممنوع: يحذف docker-compose.override.yml فتُنشئ Docker
+#    volumes جديدةً فارغة بدل ربط الأصلية = فقدانٌ كامل للبيانات.
+say "سحب الشيفرة (master)"
+BEFORE="$(git rev-parse HEAD)"
+git pull origin master
+AFTER="$(git rev-parse HEAD)"
+export GIT_REV="$AFTER"
+
+# ── 2ب. السكربت يُحدّث نفسه فيجب أن يُعيد قراءتها ────────────────
+# 🔴 علّةٌ صامتة كلّفت ترحيلَين: bash يقرأ السكربت على دفعات، فحين يسحب
+#    git pull نسخةً جديدة تكون كتلةُ الترحيل (أسفل) قد قُرئت من النسخة
+#    القديمة. فيُنفَّذ ترحيلُ الأمس ويُعلَن «تمّ» بصدق — عن ترحيلٍ ليس فيه
+#    ما أُضيف. لا خطأ ولا تحذير ولا أثر.
+if [ "$BEFORE" != "$AFTER" ] && [ "${AIBOT_REEXEC:-0}" != "1" ]; then
+  if ! git diff --quiet "$BEFORE" "$AFTER" -- deploy.sh; then
+    say "deploy.sh تغيّر — إعادة تنفيذ نفسه مرّةً واحدة"
+    trap - ERR
+    AIBOT_REEXEC=1 exec bash "$0" "$@"
+  fi
+fi
+
+# ── 3. وسم الصور العاملة قبل البناء ─────────────────────────────
+say "وسم الصور الحاليّة للتراجع"
+for s in $SERVICES; do
+  docker image inspect "aibot-${s}:latest" >/dev/null 2>&1 \
+    && docker tag "aibot-${s}:latest" "aibot-${s}:rollback-${STAMP}" || true
+done
+
+say "البناء"
+docker compose build --build-arg GIT_REV="$GIT_REV" $SERVICES
+
+# ── 4. الاستبدال — التطبيق وحده، لا db ولا redis ────────────────
+# إعادة إنشاء القاعدة وريدِس في كلّ نشرٍ خطرٌ مجّانيّ على حالة الإنتاج.
+say "الاستبدال"
+docker compose rm -sf $SERVICES 2>/dev/null || true
+docker compose up -d $SERVICES
+
+# ── 5. الترحيل — الخطأ يُظهَر لا يُبتلع ─────────────────────────
+say "الترحيل"
+for f in packages/db/migrations/*.sql; do
+  echo "  → $(basename "$f")"
+  if ! docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "${DB_USER}" \
+        -d "${DB_NAME:-aibot}" -f - < "$f"; then
+    fail "فشل الترحيل $(basename "$f") — ما قالته القاعدة أعلاه"
+    exit 1
+  fi
+done
+
+# ── 6. بوّابة الصحّة — هي التي تقرّر النجاح، لا نهاية السكربت ───
+say "بوّابة الصحّة"
+OK=0
+for i in $(seq 1 30); do
+  BODY="$(curl -fsS -m 5 "http://127.0.0.1:${API_PORT}/api/health" 2>/dev/null || true)"
+  if echo "$BODY" | grep -q '"service":"aibot"' \
+     && echo "$BODY" | grep -q "\"rev\":\"${GIT_REV}\""; then
+    OK=1; echo "  ✔ الخلفيّة حيّة على النسخة ${GIT_REV:0:8}"; break
+  fi
+  sleep 1
+done
+[ "$OK" = 1 ] || { fail "الخلفيّة لم تُثبت أنّها هي ولا أنّها النسخة الجديدة"; exit 1; }
+
+# «الخلفيّة حيّة» ≠ «الموقع يفتح»
+CODE="$(curl -s -o /dev/null -w '%{http_code}' -m 8 "http://127.0.0.1:${WEB_PORT}/" || echo 000)"
+case "$CODE" in 200|307|308) echo "  ✔ الواجهة تردّ ${CODE}";; *) fail "الواجهة ردّت ${CODE}"; exit 1;; esac
+
+# ── 7. فحصٌ عامّ: هل يصل النطاق إلى حاويتك أصلاً؟ ───────────────
+# لا يُفشل النشر — النفق خارج سيطرة هذا السكربت — لكنّه يقول الحقيقة بصوتٍ عالٍ.
+PUB="$(curl -fsS -m 8 "${PUBLIC_URL}/api/health" 2>/dev/null || true)"
+if echo "$PUB" | grep -q '"service":"aibot"'; then
+  echo "  ✔ ${PUBLIC_URL} يصل إلى AiBot"
+else
+  echo "  ⚠ ${PUBLIC_URL}/api/health لا يُرجع AiBot."
+  echo "    الأرجح: سجلّ DNS لـaibot غير منشأ، أو إدخالات النفق ناقصة."
+  echo "    ما يردّ الآن هو تطبيق wildcard على *.masaros.net — وهذا ليس عطلاً في النشر."
+fi
+
+# ── 8. التنظيف ──────────────────────────────────────────────────
+for s in $SERVICES; do
+  docker images --format '{{.Repository}}:{{.Tag}}' "aibot-${s}" \
+    | grep 'rollback-' | sort -r | tail -n +4 | xargs -r docker rmi -f 2>/dev/null || true
+done
+docker image prune -f >/dev/null 2>&1 || true
+
+trap - ERR
+cat <<EOF
+
+✅ نُشرت النسخة ${GIT_REV:0:8}
+   الرابط:        ${PUBLIC_URL}
+   النسخة:        ${BK}
+   أمر التراجع:   for s in ${SERVICES}; do docker tag aibot-\$s:rollback-${STAMP} aibot-\$s:latest; done \\
+                  && docker compose rm -sf ${SERVICES} && docker compose up -d --no-build ${SERVICES}
+EOF

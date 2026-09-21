@@ -1,0 +1,145 @@
+# ════════════════════════════════════════════════════════════════
+# AiBot — الإنتاج على sysadmin-Inspiron-3593
+#
+# المنافذ: مُتحقَّقٌ أنّها حرّة بقراءةٍ حيّة للخادم في 2026-09-21.
+#   3070  web    ← إليه يوجّه النفق على المسار /
+#   4100  api    ← إليه يوجّه النفق على /api/* و/socket.io/*
+#   5437  db     ← 127.0.0.1 فقط
+#   6385  redis  ← 127.0.0.1 فقط
+#
+# ⚠️ ما لا يجوز استعماله هنا مهما بدا متاحاً في التوثيق القديم:
+#     4080 · 4081  محجوزة لـbtec_app و btec_pma
+#     4090 · 4091  محجوزة لـgrade.sbs و pma.grade.sbs
+#     6384         محجوز لـbtec_redis
+#   أعِد الفحص قبل كلّ نشرٍ على جهازٍ فيه 59 حاوية:
+#     ss -ltn | grep -E ':(3070|4100|5437|6385) '
+#
+# 🔒 قاعدة غير قابلة للنقاش: منافذ مخازن البيانات تُربط بـ127.0.0.1 صراحةً.
+#    كتابة "5437:5432" مجرّدةً تجعل قاعدة بيانات عملائك مرئيّةً لكلّ جهازٍ
+#    على شبكة البيت.
+# ════════════════════════════════════════════════════════════════
+
+services:
+  db:
+    # pgvector مبنيٌّ داخل الصورة — الاسترجاع يحتاجه من الترحيل الأوّل،
+    # وإضافته لاحقاً تعني ترحيل جدولٍ ضخم.
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER:?اضبط DB_USER في .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?اضبط DB_PASSWORD في .env}
+      POSTGRES_DB: ${DB_NAME:-aibot}
+      # العربيّة في الرسائل والملاحظات: الترتيب والمقارنة يجب أن يكونا UTF-8
+      LANG: C.UTF-8
+    ports:
+      - "127.0.0.1:${DB_PORT:-5437}:5432"
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME:-aibot}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    # appendonly: مهامّ الطوابير حالةٌ حقيقيّة — رسالةٌ واردة دُفعت للطابور
+    # ولم تُنفَّذ بعد تضيع نهائيّاً مع لقطةٍ دوريّة. لا تُزل هذا.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6385}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GIT_REV: ${GIT_REV:-unknown}
+    restart: always
+    command: ["node", "--import", "tsx", "apps/api/src/main.ts"]
+    environment:
+      NODE_ENV: production
+      PORT: ${API_PORT:-4100}
+      # GIT_REV يُقرأ في /api/health ويُطابق عليه deploy.sh.
+      # بدونه لا تستطيع البوّابة أن تميّز «نُشرت النسخة الجديدة» من «القديمة ما زالت تعمل».
+      GIT_REV: ${GIT_REV:?يُمرَّر من deploy.sh — لا تنشر يدويّاً}
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME:-aibot}
+      REDIS_URL: redis://redis:6379
+      # 🔑 بلا قيمةٍ احتياطيّة عمداً: غياب السرّ يجب أن يُفشل الإقلاع بصوتٍ عالٍ
+      #    لا أن يستبدله بقيمةٍ محظورة يعرفها كلّ من يقرأ المستودع.
+      JWT_SECRET: ${JWT_SECRET:?اضبط JWT_SECRET في .env — ولا تُعِد قيمةً احتياطيّة هنا}
+      # 🔑 أخطر سرٍّ في المنصّة: به تُفكّ توكنات واتساب لكلّ عملائك.
+      #    انسخه احتياطيّاً خارج الخادم. فقدانه = فقدان كلّ التوكنات بلا استرجاع.
+      MASTER_KEY: ${MASTER_KEY:?اضبط MASTER_KEY — 32 بايت base64}
+      MASTER_KEY_VERSION: ${MASTER_KEY_VERSION:-1}
+      # ثابتان: تغييرهما يُبطل كلّ اشتراكات الإشعارات القائمة بصمت.
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?}
+      PUBLIC_URL: ${PUBLIC_URL:-https://aibot.masaros.net}
+      PLATFORM_AI_KEY: ${PLATFORM_AI_KEY:?مفتاح Gemini للمنصّة}
+      EMBED_MODEL: ${EMBED_MODEL:-gemini-embedding-001}
+    ports:
+      - "127.0.0.1:${API_PORT:-4100}:${API_PORT:-4100}"
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    volumes:
+      - media_data:/app/media
+
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        GIT_REV: ${GIT_REV:-unknown}
+    restart: always
+    # نفس الصورة، أمرٌ مختلف — فلا تنسخ إعداداً ولا تُبنى صورتان.
+    command: ["node", "--import", "tsx", "apps/worker/src/main.ts"]
+    environment:
+      NODE_ENV: production
+      GIT_REV: ${GIT_REV:-unknown}
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME:-aibot}
+      REDIS_URL: redis://redis:6379
+      MASTER_KEY: ${MASTER_KEY:?}
+      MASTER_KEY_VERSION: ${MASTER_KEY_VERSION:-1}
+      PLATFORM_AI_KEY: ${PLATFORM_AI_KEY:?}
+      EMBED_MODEL: ${EMBED_MODEL:-gemini-embedding-001}
+      VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?}
+      VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?}
+      PUBLIC_URL: ${PUBLIC_URL:-https://aibot.masaros.net}
+    depends_on:
+      db: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    volumes:
+      - media_data:/app/media
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        GIT_REV: ${GIT_REV:-unknown}
+    restart: always
+    environment:
+      NODE_ENV: production
+      PORT: ${WEB_PORT:-3070}
+      HOSTNAME: 0.0.0.0
+      API_INTERNAL_URL: http://api:${API_PORT:-4100}
+      NEXT_PUBLIC_API_URL: ${PUBLIC_URL:-https://aibot.masaros.net}/api
+    ports:
+      - "127.0.0.1:${WEB_PORT:-3070}:${WEB_PORT:-3070}"
+    depends_on:
+      - api
+
+volumes:
+  db_data:
+  redis_data:
+  media_data:
