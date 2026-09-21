@@ -76,6 +76,104 @@ export async function handleReply(job: { conversationId: string }): Promise<void
     )).limit(1);
     if (!win[0] || new Date(win[0].expiresAt) <= new Date()) return null; // نافذةٌ مغلقة: لا نداء نموذج
 
+    /* ═══ المعالج الحتميّ لضغط الأزرار ═══
+       يسبق النموذج عن قصد. نمط الزرّ كان نصفَ نمط: الأزرار تُرسَل، وضغط
+       «أكّد» يصل ويُخزَّن في `messages.payload` **ولا يقرأه أحد** — فلا
+       `request_quote` تُنفَّذ ولا `confirm_booking`، ثمّ يقول النموذج للزبون
+       «تم تسجيل طلبك» وهو لم يُسجَّل. رصدناه على زبونٍ حقيقيّ على رقم LIVE.
+
+       ولماذا حتميّ لا عبر النموذج: الزبون ضغط زرّاً، فالفعل معروفٌ تماماً
+       ولا شيء يُستنتَج. وإقحام النموذج هنا يعني احتمال أن يكذب على الزبون
+       أو يبدّل الوسائط — ولا مقابلَ لذلك إطلاقاً. */
+    const pressed = await tx
+      .select({ payload: messages.payload })
+      .from(messages)
+      .where(and(eq(messages.conversationId, conv.id), eq(messages.direction, 'in')))
+      .orderBy(desc(messages.createdAt))
+      .limit(1);
+    const press = String((pressed[0]?.payload as { buttonPayload?: string } | null)?.buttonPayload ?? '');
+
+    if (press.startsWith('cancel:')) {
+      await tx.update(conversations).set({ pendingAction: null }).where(eq(conversations.id, conv.id));
+      return {
+        conversationId: conv.id,
+        sends: [{ source: 'system', message: { kind: 'text', body: 'تمّ الإلغاء. في خدمتك لو احتجت شي تاني.' } }],
+      };
+    }
+
+    if (press.startsWith('confirm:')) {
+      const pending = conv.pendingAction as { key?: string; args?: Record<string, unknown>; expiresAt?: string } | null;
+      const wanted = press.slice('confirm:'.length);
+
+      const stale = isPendingStale(pending, wanted);
+
+      await tx.update(conversations).set({ pendingAction: null }).where(eq(conversations.id, conv.id));
+
+      // `!pending?.key` مكرّرٌ عمداً: هو ما يُضيّق النوع، فلا نحتاج `!` يُخرس المدقّق
+      if (stale || !pending?.key) {
+        return {
+          conversationId: conv.id,
+          sends: [{ source: 'system', message: { kind: 'text', body: 'انتهت صلاحيّة هذا الطلب. اكتب لي تفاصيلك من جديد ورح جهّزه إلك.' } }],
+        };
+      }
+      const actionKey = pending.key;
+
+      const confirmTools = await tx.select().from(botTools).where(and(
+        eq(botTools.tenantId, tenantId), eq(botTools.enabled, true), isNull(botTools.disabledReason),
+      ));
+      const confirmCaps = getAdapter(ch.kind as ChannelKind).capabilities;
+      const confirmEmits: OutboundMessage[] = [];
+
+      const exec = await execTenantTool({
+        tx,
+        /* نداءٌ نُصنّعه نحن لا النموذج: `raw` فارغٌ لأنّه لا يعود لمزوّد،
+           و`id` وسمُ مصدرٍ يميّزه في أيّ تشخيصٍ لاحق. */
+        call: {
+          id: `confirm-${Date.now()}`,
+          name: actionKey,
+          args: { ...pending.args, __confirmed: true },
+          raw: null,
+        } satisfies ToolCall,
+        tenantId,
+        conversationId: conv.id,
+        versionId: ver.id,
+        caps: confirmCaps,
+        tools: confirmTools,
+        emits: confirmEmits,
+        deferred: [],
+      });
+
+      const titleAr = confirmTools.find((t) => t.key === actionKey)?.titleAr ?? actionKey;
+      const data = (exec.result as { data?: Record<string, unknown> } | null)?.data ?? {};
+      const reference = data.reference ?? data.id ?? null;
+
+      if (exec.failed) {
+        /* فشل التنفيذ **بعد** أن أكّد الزبون: لا نبتلعه ولا نُجمّله.
+           نصدُق معه ونحوّله لموظّف — ونوسم المحادثة فلا تضيع. */
+        await tx.update(conversations).set({ needsAttention: true }).where(eq(conversations.id, conv.id));
+        return {
+          conversationId: conv.id,
+          sends: [{ source: 'system', message: { kind: 'text', body: `تعذّر تسجيل «${titleAr}» حالياً لخلل تقني. حوّلتك لموظّف ورح يتواصل معك.` } }],
+        };
+      }
+
+      return {
+        conversationId: conv.id,
+        sends: [
+          ...confirmEmits.map((message) => ({ source: 'system' as const, message })),
+          {
+            source: 'system',
+            message: {
+              kind: 'text',
+              body: reference
+                ? `تمّ تسجيل «${titleAr}». الرقم المرجعي: ${String(reference)}. موظّفنا رح يتواصل معك.`
+                : `تمّ تسجيل «${titleAr}». موظّفنا رح يتواصل معك.`,
+            },
+          },
+        ],
+      };
+    }
+
     if (!withinBusinessHours(cfg.businessHours as BusinessHours | null)) {
       return cfg.outsideHoursMessage
         ? { conversationId: conv.id, sends: [{ source: 'system', message: { kind: 'text', body: cfg.outsideHoursMessage } }] }
@@ -141,6 +239,7 @@ export async function handleReply(job: { conversationId: string }): Promise<void
     const keyOwner = keyRow ? 'tenant' : 'platform';
 
     const emits: OutboundMessage[] = [];
+    const deferred: Array<{ key: string; args: Record<string, unknown> }> = [];
     const result = await runAgent({
       provider: getProvider(ver.provider),
       apiKey,
@@ -157,7 +256,7 @@ export async function handleReply(job: { conversationId: string }): Promise<void
         toolNames: decls.map((d) => d.name),
       },
       execTool: (call: ToolCall) =>
-        execTenantTool({ tx, call, tenantId, conversationId: conv.id, versionId: ver.id, caps, tools: toolRows, emits }),
+        execTenantTool({ tx, call, tenantId, conversationId: conv.id, versionId: ver.id, caps, tools: toolRows, emits, deferred }),
     });
 
     /* ── القياس: صفٌّ لكلّ ردّ، وكلفةٌ بسعرٍ لحظة العرض ── */
@@ -191,6 +290,28 @@ export async function handleReply(job: { conversationId: string }): Promise<void
       await tx.update(conversations)
         .set({ needsAttention: true, botPausedUntil: new Date(Date.now() + cfg.pauseMinutes * 60_000) })
         .where(eq(conversations.id, conv.id));
+    }
+
+    /* ★ إجراءٌ أُجِّل ⟵ يُحفظ على المحادثة، **ونصّ النموذج يُطرح**.
+       النموذج يُخبَر «انتظر ضغط الزبون — لا تنفّذ شيئاً» فيكتب رغم ذلك
+       «تم تسجيل طلبك». والملاحظة توجيهٌ لا حدّ، فالحدّ يفرضه التنفيذ:
+       حين يكون هناك إجراءٌ معلَّق لا يخرج إلّا نصّ التأكيد وأزراره.
+       رسالةٌ ناقصة أهون من كذبةٍ على زبون. */
+    if (deferred.length) {
+      const last = deferred[deferred.length - 1]!;
+      await tx.update(conversations).set({
+        pendingAction: {
+          key: last.key,
+          args: last.args,
+          // صلاحيّةٌ قصيرة: زرٌّ عمره ساعة لا يُنفّذ بوسائط بائتة
+          expiresAt: new Date(Date.now() + 60 * 60_000).toISOString(),
+        },
+      }).where(eq(conversations.id, conv.id));
+
+      return {
+        conversationId: conv.id,
+        sends: emits.map((message) => ({ source: 'bot' as const, message, aiRunId: run!.id })),
+      };
     }
 
     /* الترتيب مقصود: ما أنتجته الأدوات أوّلاً، ثمّ نصّ النموذج. */
@@ -245,6 +366,26 @@ async function safeSend(job: Parameters<typeof sendOutbound>[0]): Promise<void> 
 interface BusinessHours {
   tz?: string;
   days?: Record<string, Array<[string, string]>>;
+}
+
+/**
+ * هل الإجراء المحفوظ غير صالحٍ للتنفيذ؟ ثلاثة فحوصٍ — والضغط وحده لا يكفي:
+ *  ① يوجد إجراءٌ محفوظ  ② يطابق الزرّ المضغوط  ③ لم تنقضِ صلاحيّته.
+ *
+ * ② يمنع زرّاً قديماً من تنفيذ إجراءٍ أحدث استبدله (الزبون ضغط «أكّد» في
+ *    رسالةٍ أعلى الشاشة بعد أن طلب شيئاً آخر).
+ * ③ يمنع زرّاً عمره يومان من التنفيذ بوسائطٍ بائتة — سعرٌ تغيّر أو مقعدٌ نُفد.
+ * وغياب `expiresAt` يُعامَل كصلاحٍ: البيانات القديمة قبل هذا العمود لا
+ * تُرفَض بأثرٍ رجعيّ، والكتابة الجديدة تضبطه دائماً.
+ */
+export function isPendingStale(
+  pending: { key?: string; args?: Record<string, unknown>; expiresAt?: string } | null | undefined,
+  wantedKey: string,
+  at = new Date(),
+): boolean {
+  if (!pending?.key) return true;
+  if (pending.key !== wantedKey) return true;
+  return pending.expiresAt ? new Date(pending.expiresAt) <= at : false;
 }
 
 export function withinBusinessHours(bh: BusinessHours | null, at = new Date()): boolean {

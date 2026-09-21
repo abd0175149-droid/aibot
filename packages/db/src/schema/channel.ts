@@ -105,6 +105,18 @@ export const conversations = pgTable('conversations', {
   lastMessagePreview: text('last_message_preview'),
   tags: text('tags').array().notNull().default(sql`'{}'::text[]`),
   windowId: uuid('window_id'),
+  /**
+   * ★ الإجراء المنتظِر تأكيد الزبون: `{ key, args, expiresAt }`.
+   *
+   * نمط الزرّ يحتاج نصفين: أداةٌ تتحقّق وترسل أزراراً، **ومعالجٌ حتميّ ينفّذ
+   * عند الضغط**. والنصف الثاني يحتاج أن يتذكّر ما يُنفَّذ — فبلا هذا العمود
+   * كان ضغط «أكّد» يصل ويُخزَّن ولا ينفّذ شيئاً، ثمّ يقول النموذج للزبون
+   * «تم تسجيل طلبك» وهو لم يُسجَّل. كذبٌ على زبونٍ حقيقيّ، لا مجرّد عطل.
+   *
+   * واحدٌ لكلّ محادثة عن قصد: الأحدث يُلغي ما قبله، فلا طابورَ تأكيداتٍ
+   * قديمةٍ ينفّذ زرٌّ واحدٌ أقدمَها.
+   */
+  pendingAction: jsonb('pending_action'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(now),
 }, (t) => [
   /** هويّةٌ واحدة = محادثةٌ واحدة. هذا ما يمنع ازدواج المحادثات عند تدفّقٍ متزامن. */

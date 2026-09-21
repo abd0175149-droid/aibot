@@ -28,6 +28,14 @@ export interface ExecCtx {
   caps: ChannelCapabilities;
   tools: Array<typeof botTools.$inferSelect>;
   emits: OutboundMessage[];
+  /**
+   * ★ ما أُجِّل انتظاراً لتأكيد الزبون — مُخرَجٌ كـ`emits`.
+   *
+   * وُجد لأنّ نمط الزرّ كان نصفَ نمط: الأزرار تُرسَل وضغط «أكّد» يصل
+   * ولا يُنفّذ شيئاً. المعالج الحتميّ يحتاج أن يعرف **ما يُنفَّذ وبأيّ وسائط**،
+   * فيُحفظ هنا ثمّ يُخزَّن على المحادثة.
+   */
+  deferred: Array<{ key: string; args: Record<string, unknown> }>;
 }
 
 export async function execTenantTool(ctx: ExecCtx): Promise<{
@@ -148,6 +156,10 @@ async function execCustom(ctx: ExecCtx): Promise<{
 
   // فعلٌ خطر بلا تأكيد: يُحوَّل إلى أزرارٍ بدل أن يُنفَّذ
   if (tool.confirmRequired && !ctx.call.args.__confirmed) {
+    /* الوسائط تُحفظ كما صاغها النموذج **الآن**، لا تُعاد صياغتها عند الضغط.
+       فما يُنفَّذ هو ما رآه الزبون في نصّ التأكيد حرفيّاً — لا ما يتذكّره
+       النموذج بعد رسالتين. */
+    ctx.deferred.push({ key: tool.key, args: { ...ctx.call.args } });
     ctx.emits.push({
       kind: 'choices',
       body: tool.confirmTemplate ?? `هل أؤكّد ${tool.titleAr}؟`,
