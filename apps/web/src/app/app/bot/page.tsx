@@ -6,7 +6,8 @@ import { put, post, patch, ApiError } from '@/lib/api';
 import { useCan } from '@/lib/session';
 import { Loading, ErrorBox } from '@/components/Shell';
 import { ToolBuilder, EMPTY_DRAFT, type ToolDraft } from '@/components/ToolBuilder';
-import { Button, Row, Empty, Note } from '@/components/ui';
+import { Button, Row, Empty, Note, Stack } from '@/components/ui';
+import { KnowledgeFiles, type KbSource } from '@/components/KnowledgeFiles';
 
 interface BotState {
   config: {
@@ -236,11 +237,21 @@ export default function BotPage() {
             <span>استعمل عناوين (سطرٌ يبدأ بـ# أو ينتهي بنقطتين) — تُحسّن دقّة البوت كثيراً</span>
           </div>
 
-          <div className="note">
+          <Note>
             <b>لماذا فاتورتك لا تكبر مع معرفتك.</b> فوق 8 آلاف توكن، البوت لم يعد يقرأ معرفتك
             كاملةً مع كلّ سؤال: يُرسَل إليه <b>الأساسيات والقيود وما يرتبط بالسؤال فقط</b>.
             فمعرفةٌ بحجم عشرة أضعاف لا تكلّفك عشرة أضعاف.
-          </div>
+          </Note>
+
+          <Stack gap="md">
+            <h2>ملفّاتك</h2>
+            <KnowledgeFiles
+              sources={(kb.data?.sources ?? []) as KbSource[]}
+              loading={kb.loading}
+              readOnly={can.readOnly}
+              onChanged={() => void kb.reload()}
+            />
+          </Stack>
         </>
       )}
 

@@ -228,3 +228,24 @@ td.n, th.n { white-space: nowrap; }
   .toggle-t::after,
   .btn { transition: none; }
 }
+
+/* ══════════════ رفع ملفّات المعرفة ══════════════ */
+.drop {
+  border: 2px dashed var(--rule); border-radius: var(--radius);
+  background: var(--surface); padding: 26px 20px; text-align: center;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  transition: border-color .15s, background .15s;
+}
+.drop.over { border-color: var(--brand); background: var(--brand-wash); }
+.drop b { font-size: var(--t-h2); }
+.drop p { margin: 0; font-size: var(--t-sm); color: var(--muted); max-width: 48ch; line-height: 1.6; }
+.hidden-file { position: absolute; width: 0; height: 0; opacity: 0; }
+
+.kb-prev {
+  margin: 0; max-height: 46vh; overflow: auto;
+  background: var(--surface-2); border: 1px solid var(--rule); border-radius: 6px;
+  padding: 12px 14px; font-size: 12px; line-height: 1.8;
+  white-space: pre-wrap; word-break: break-word;
+}
+
+@media (prefers-reduced-motion: reduce) { .drop { transition: none; } }

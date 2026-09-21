@@ -19,6 +19,7 @@ export const QUEUE = {
   embed: 'kb-embed',
   health: 'health-poll',
   notify: 'notify-push',
+  ingest: 'kb-ingest',
 } as const;
 
 let conn: IORedis | null = null;
@@ -135,6 +136,27 @@ export async function enqueueOutbound(job: OutboundJob): Promise<void> {
     backoff: { type: 'exponential', delay: 2000 },
     removeOnComplete: 1000,
     removeOnFail: 5000,
+  });
+}
+
+/**
+ * استيعاب ملفّ معرفة.
+ *
+ * ★ كان عامل `kb-ingest` مسجَّلاً **بلا منتِجٍ إطلاقاً** — أي أنّ رفع الملفّات
+ *   ميزةٌ مبنيّةٌ وميّتة: المستخرِج جاهز ولا شيء يُدخل له مهمّة. هذه الدالّة هي
+ *   المنتِج الناقص.
+ *
+ * `jobId` بمعرّف المصدر: ضغطتان على «ارفع» لا تُنتجان استيعابَين.
+ */
+export async function enqueueIngest(job: {
+  tenantId: string; sourceId: string; path: string; mime: string;
+}): Promise<void> {
+  await q(QUEUE.ingest).add('ingest', job, {
+    jobId: `ingest-${job.sourceId}`,
+    attempts: 2,
+    backoff: { type: 'exponential', delay: 1500 },
+    removeOnComplete: 200,
+    removeOnFail: 500,
   });
 }
 

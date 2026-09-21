@@ -7,7 +7,10 @@ import { AppError, ErrorCode } from '@aibot/shared';
 import { seal } from '@aibot/crypto';
 import { decideKnowledgeMode, estimateTokens, execHttpTool, assertPublicUrl, type HttpToolSpec } from '@aibot/core';
 import { requireAuth, tenantOf } from '../auth.js';
-import { enqueueEmbed } from '../queues.js';
+import { enqueueEmbed, enqueueIngest } from '../queues.js';
+import { mkdir, writeFile, unlink } from 'node:fs/promises';
+import { join } from 'node:path';
+import { randomUUID } from 'node:crypto';
 
 export async function registerBot(app: FastifyInstance) {
   const auth = requireAuth({ settings: true });
@@ -273,6 +276,128 @@ export async function registerBot(app: FastifyInstance) {
       return { sources, chunks, chars: total, tokens, suggestedMode: decideKnowledgeMode(tokens) };
     });
   });
+
+  /* ───────────────────── ملفّات المعرفة ───────────────────── */
+
+  /**
+   * ★ رفع ملفّ معرفة — الميزة التي كانت **مبنيّةً وميّتة**: عامل الاستيعاب
+   *   مسجَّلٌ والمستخرِج جاهز، ولا نقطةَ رفعٍ ولا منتِجَ مهمّة. أي أنّ تبويب
+   *   «المعرفة» كان يعرض قائمةً لا يمكن أن تمتلئ.
+   *
+   * ولماذا بايتاتٌ خام لا multipart: ملفٌّ واحدٌ لكلّ طلب — فلا حاجة لتحليل
+   * حدودٍ ولا لمُلحقٍ جديد، والتقدّم والحالة تصير لكلّ ملفٍّ على حدة. الاسم
+   * يأتي في ترويسةٍ مرمَّزة لأنّ الترويسات لاتينيّةٌ وأسماء الملفّات عربيّة.
+   *
+   * وثلاثة حدودٍ يفرضها الخادم:
+   *  ① نوعٌ من قائمةٍ بيضاء — لا استنتاجَ من الامتداد.
+   *  ② حجمٌ أقصى 12 ميجابايت.
+   *  ③ الاسم يُطهَّر ولا يُستعمل مساراً — الملفّ يُحفظ بـuuid، والاسم الأصليّ
+   *     بيانٌ في القاعدة فقط. بلا هذا يكتب `../../` في أيّ مكان.
+   */
+  const KB_MIMES = new Set([
+    'text/plain', 'text/markdown', 'text/csv', 'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  ]);
+  const KB_MAX = 12 * 1024 * 1024;
+  const KB_ROOT = process.env.MEDIA_ROOT ?? '/app/media';
+
+  /* محلّل يبتلع البايتات كما وصلت للأنواع المسموحة وحدها. */
+  for (const mime of KB_MIMES) {
+    app.addContentTypeParser(mime, { parseAs: 'buffer', bodyLimit: KB_MAX }, (_req, body, done) => {
+      done(null, body);
+    });
+  }
+
+  app.post('/bot/knowledge/files', { preHandler: auth }, async (req, reply) => {
+    const tenantId = tenantOf(req);
+    const mime = String(req.headers['content-type'] ?? '').split(';')[0]!.trim();
+    if (!KB_MIMES.has(mime)) {
+      throw new AppError(
+        ErrorCode.VALIDATION,
+        'نوع ملفٍّ غير مدعوم. المدعوم: نصّ، Markdown، CSV، PDF، Word، Excel.',
+        415,
+      );
+    }
+    const buf = req.body as Buffer;
+    if (!Buffer.isBuffer(buf) || !buf.length) {
+      throw new AppError(ErrorCode.VALIDATION, 'الملفّ فارغ', 400);
+    }
+    if (buf.length > KB_MAX) {
+      throw new AppError(ErrorCode.VALIDATION, 'الملفّ أكبر من 12 ميجابايت', 413);
+    }
+
+    const raw = String(req.headers['x-file-name'] ?? 'ملفّ');
+    let original = raw;
+    try { original = decodeURIComponent(raw); } catch { /* اسمٌ غير مرمَّز — يُقبل كما هو */ }
+    // ★ لا يُستعمل الاسم مساراً أبداً: نحفظ بـuuid، والاسم بيانٌ في القاعدة
+    const title = original.replace(/\s+/g, ' ').slice(0, 160).trim() || 'ملفّ';
+
+    const dir = join(KB_ROOT, 'kb', tenantId);
+    const storagePath = join(dir, randomUUID());
+    await mkdir(dir, { recursive: true });
+    await writeFile(storagePath, buf);
+
+    let sourceId: string;
+    try {
+      sourceId = await withTenant(getDb(), tenantId, async (tx) => {
+        const [row] = await tx.insert(knowledgeSources).values({
+          tenantId, kind: 'file', title,
+          originalName: original.slice(0, 255),
+          storagePath,
+          status: 'pending',
+        }).returning({ id: knowledgeSources.id });
+        return row!.id;
+      });
+    } catch (e) {
+      // لا ملفٌّ يتيمٌ على القرص إن فشل الصفّ — وإلّا امتلأ القرص بما لا يُرى
+      await unlink(storagePath).catch(() => undefined);
+      throw e;
+    }
+
+    await enqueueIngest({ tenantId, sourceId, path: storagePath, mime });
+    return reply.code(202).send({ id: sourceId, title, status: 'pending' });
+  });
+
+  /** النصّ المستخرَج للمعاينة — «ready» لا تعني «معتمدة»: العميل يعاين ثمّ ينشر. */
+  app.get<{ Params: { id: string } }>(
+    '/bot/knowledge/files/:id',
+    { preHandler: requireAuth() },
+    async (req) => {
+      const tenantId = tenantOf(req);
+      return withTenant(getDb(), tenantId, async (tx) => {
+        const row = (await tx.select().from(knowledgeSources)
+          .where(eq(knowledgeSources.id, req.params.id)).limit(1))[0];
+        if (!row) throw new AppError(ErrorCode.VALIDATION, 'مصدرٌ غير موجود', 404);
+        return {
+          id: row.id, title: row.title, status: row.status, error: row.error,
+          charCount: row.charCount,
+          // معاينةٌ لا تنزيل: أوّل 4000 محرفٍ تكفي للحكم على جودة الاستخراج
+          preview: (row.extractedText ?? '').slice(0, 4000),
+          truncated: (row.extractedText ?? '').length > 4000,
+        };
+      });
+    },
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/bot/knowledge/files/:id',
+    { preHandler: auth },
+    async (req) => {
+      const tenantId = tenantOf(req);
+      const path = await withTenant(getDb(), tenantId, async (tx) => {
+        const row = (await tx.select({ p: knowledgeSources.storagePath }).from(knowledgeSources)
+          .where(eq(knowledgeSources.id, req.params.id)).limit(1))[0];
+        await tx.delete(knowledgeSources).where(eq(knowledgeSources.id, req.params.id));
+        return row?.p ?? null;
+      });
+      // الصفّ أوّلاً ثمّ الملفّ: ملفٌّ يتيمٌ أهون من صفٍّ يشير إلى لا شيء
+      if (path) await unlink(path).catch(() => undefined);
+      return { ok: true };
+    },
+  );
 
   /**
    * فجوات المعرفة — وتمييزٌ يوفّر على العميل أسبوعاً.
