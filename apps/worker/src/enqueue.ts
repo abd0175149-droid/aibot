@@ -15,17 +15,60 @@ function q(name: string): Queue {
 }
 
 /**
- * دمج الرسائل المتتالية بلا مؤقّتٍ في الذاكرة:
- * jobId ثابتٌ لكلّ محادثة + تأخير 2000ms — رسالةٌ جديدة تستبدل المهمّة المؤجَّلة.
- * العميل يكتب ثلاثة أسطر فيردّ البوت مرّةً واحدة.
+ * ما نفعله بمهمّةٍ تحمل المعرّف نفسه.
+ *
+ * ★ الفخّ الذي وُلدت منه هذه الدالّة: **BullMQ يتجاهل بصمت** `add` بمعرّفٍ
+ *   موجود — لا يرمي ولا يُبلّغ. وكان الكود يحذف المهمّة القديمة في حالتَي
+ *   `delayed`/`waiting` وحدهما، فبقيت المهمّة المكتملة في مجموعة `completed`
+ *   (وعمرها 500 مهمّة)، فصار المعرّف محجوزاً إلى الأبد:
+ *   **كلّ محادثة تأخذ ردّاً واحداً في عمرها كلّه، والباقي يُهمَل بصمت.**
+ *   ولم يكن في السجلّ سطرٌ واحد يدلّ عليه.
+ *
+ * مفصولةٌ عن ريدِس عمداً لتُختبر بلا بنيةٍ تحتيّة — القرار هو ما ينكسر،
+ * لا استدعاء الشبكة.
  */
-export async function enqueueReply(conversationId: string, delayMs = 2000): Promise<void> {
+export type EnqueueAction =
+  /** لا مهمّة بالمعرّف — أضِف مباشرةً. */
+  | 'add'
+  /** مؤجَّلة أو منتظرة: احذفها وأضِف — وهذا هو دمج الرسائل المتتالية. */
+  | 'replace'
+  /** مكتملة أو فاشلة: احذفها وأضِف — وإلّا حُجز المعرّف إلى الأبد. */
+  | 'clear-then-add'
+  /** قيد التوليد الآن: لا تلمسه، وجدوِل تالياً بمعرّفٍ مستقلّ. */
+  | 'sidecar';
+
+export function decideEnqueue(state: string | undefined): EnqueueAction {
+  if (!state || state === 'unknown') return 'add';
+  if (state === 'delayed' || state === 'waiting' || state === 'waiting-children' || state === 'prioritized') {
+    return 'replace';
+  }
+  if (state === 'active') return 'sidecar';
+  // completed · failed — ومعهما أيّ حالةٍ نهائيّة تضيفها BullMQ لاحقاً
+  return 'clear-then-add';
+}
+
+const REPLY_OPTS = { delay: 2000, attempts: 2, removeOnComplete: 500 } as const;
+
+/**
+ * دمج الرسائل المتتالية بلا مؤقّتٍ في الذاكرة:
+ * معرّفٌ ثابتٌ لكلّ محادثة + تأخيرٌ قصير — رسالةٌ جديدة تستبدل المهمّة
+ * المؤجَّلة. العميل يكتب ثلاثة أسطر فيردّ البوت مرّةً واحدة.
+ */
+export async function enqueueReply(conversationId: string, delayMs = REPLY_OPTS.delay): Promise<void> {
   const jobId = `conv-${conversationId}`;
   const queue = q('bot-reply');
   const existing = await queue.getJob(jobId);
-  if (existing) {
-    const state = await existing.getState();
-    if (state === 'delayed' || state === 'waiting') await existing.remove();
+  const action = decideEnqueue(existing ? await existing.getState() : undefined);
+
+  if (action === 'sidecar') {
+    /* ردٌّ قيد التوليد لا يرى الرسالة التي وصلت للتوّ، فلو انتظرنا ضاعت.
+       معرّفٌ مستقلّ يضمن ردّاً تالياً — ونقبل احتمال ردَّين متقاربَين،
+       فهو أهون بكثيرٍ من رسالةٍ بلا ردّ. */
+    await queue.add('reply', { conversationId },
+      { ...REPLY_OPTS, jobId: `${jobId}-next-${Date.now()}`, delay: delayMs });
+    return;
   }
-  await queue.add('reply', { conversationId }, { jobId, delay: delayMs, attempts: 2, removeOnComplete: 500 });
+
+  if (existing && action !== 'add') await existing.remove();
+  await queue.add('reply', { conversationId }, { ...REPLY_OPTS, jobId, delay: delayMs });
 }
