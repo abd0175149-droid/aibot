@@ -39,36 +39,47 @@ export async function handleReply(job: { conversationId: string }): Promise<void
   if (!head[0]) return;
   const tenantId = head[0].conv.tenantId;
 
-  await withTenant(db, tenantId, async (tx) => {
+  /**
+   * ★ المعاملة تُخطِّط، ولا تُرسل.
+   *
+   * القفل الذاتيّ الذي وُلد منه هذا الشكل: تحديث كلفة النافذة يقفل صفّها،
+   * ثمّ كان الإرسال يُنادى **داخل** نفس المعاملة، وهو يفتح معاملةً ثانية
+   * على اتّصالٍ آخر ليختم الفوترة على **الصفّ نفسه** — فينتظر قفلاً لا
+   * يُفرَج عنه إلّا بانتهاء المعاملة الأولى، وهي تنتظره. تجمّدت المهمّة في
+   * `active` إلى الأبد: لا خطأ، ولا فشل، ولا إعادة محاولة.
+   *   pid A  idle in transaction   update conversation_windows set ai_cost_usd …
+   *   pid B  active (تنتظر)        update conversation_windows set billed_at …
+   * ولذلك قاعدةٌ صريحة: **لا نداءَ شبكةٍ داخل معاملة.** المعاملة تكتب
+   * وتُسلّم خطّة إرسال، والإرسال يجري بعد الإيداع.
+   */
+  const plan = await withTenant(db, tenantId, async (tx): Promise<SendPlan | null> => {
     const conv = head[0]!.conv;
     const ch = head[0]!.ch;
 
     /* ── البوّابات ── */
     const cfgRows = await tx.select().from(botConfigs).where(eq(botConfigs.tenantId, tenantId)).limit(1);
     const cfg = cfgRows[0];
-    if (!cfg?.enabled) return;                                   // البوت مطفأ عامّاً
-    if (!conv.botEnabled) return;                                 // مطفأ لهذه المحادثة
-    if (conv.botPausedUntil && conv.botPausedUntil > new Date()) return; // موظّفٌ تولّاها
+    if (!cfg?.enabled) return null;                                   // البوت مطفأ عامّاً
+    if (!conv.botEnabled) return null;                                 // مطفأ لهذه المحادثة
+    if (conv.botPausedUntil && conv.botPausedUntil > new Date()) return null; // موظّفٌ تولّاها
 
     const verRows = cfg.publishedVersionId
       ? await tx.select().from(botVersions).where(eq(botVersions.id, cfg.publishedVersionId)).limit(1)
       : [];
     const ver = verRows[0];
-    if (!ver) return;                       // لا نسخةَ منشورة — البوت الحيّ لا يقرأ المسوّدة أبداً
-    if (ver.embedStatus === 'pending') return; // المعرفة قيد التجهيز — النسخة القديمة تخدم
+    if (!ver) return null;                  // لا نسخةَ منشورة — البوت الحيّ لا يقرأ المسوّدة أبداً
+    if (ver.embedStatus === 'pending') return null; // المعرفة قيد التجهيز — النسخة القديمة تخدم
 
     const win = await tx.select().from(conversationWindows).where(and(
       eq(conversationWindows.conversationId, conv.id),
       isNull(conversationWindows.closedAt),
     )).limit(1);
-    if (!win[0] || new Date(win[0].expiresAt) <= new Date()) return; // نافذةٌ مغلقة: لا نداء نموذج
+    if (!win[0] || new Date(win[0].expiresAt) <= new Date()) return null; // نافذةٌ مغلقة: لا نداء نموذج
 
     if (!withinBusinessHours(cfg.businessHours as BusinessHours | null)) {
-      if (cfg.outsideHoursMessage) {
-        await safeSend({ tenantId, conversationId: conv.id, source: 'system',
-          message: { kind: 'text', body: cfg.outsideHoursMessage } });
-      }
-      return;
+      return cfg.outsideHoursMessage
+        ? { conversationId: conv.id, sends: [{ source: 'system', message: { kind: 'text', body: cfg.outsideHoursMessage } }] }
+        : null;
     }
 
     /* ── السياق ── */
@@ -182,11 +193,26 @@ export async function handleReply(job: { conversationId: string }): Promise<void
         .where(eq(conversations.id, conv.id));
     }
 
-    /* ── الإرسال: الرسائل التي أنتجتها الأدوات أوّلاً، ثمّ نصّ النموذج ── */
-    for (const m of [...emits, ...(result.text ? [{ kind: 'text', body: result.text } as OutboundMessage] : [])]) {
-      await safeSend({ tenantId, conversationId: conv.id, source: 'bot', message: m, aiRunId: run!.id });
-    }
+    /* الترتيب مقصود: ما أنتجته الأدوات أوّلاً، ثمّ نصّ النموذج. */
+    return {
+      conversationId: conv.id,
+      sends: [...emits, ...(result.text ? [{ kind: 'text', body: result.text } as OutboundMessage] : [])]
+        .map((message) => ({ source: 'bot' as const, message, aiRunId: run!.id })),
+    };
   });
+
+  if (!plan) return;
+
+  /* ── الإرسال: بعد الإيداع، وبلا أيّ قفلٍ في اليد ── */
+  for (const s of plan.sends) {
+    await safeSend({ tenantId, conversationId: plan.conversationId, ...s });
+  }
+}
+
+/** ما تُسلّمه المعاملة للإرسال — لا اتّصال قاعدةٍ ولا قفلٌ فيه. */
+interface SendPlan {
+  conversationId: string;
+  sends: Array<{ source: 'bot' | 'system'; message: OutboundMessage; aiRunId?: string }>;
 }
 
 /**
