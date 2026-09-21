@@ -14,8 +14,8 @@
  * يُخفي ما نقيسه، وكلفةٌ بلا مقابل. المتانة في الوارد لا في الردّ.
  *
  * يُشغَّل على الخادم:
- *   TENANT_SLUG=drill COUNT=40 KILL_AFTER_MS=900 \
- *     node --import tsx ops/testing/drill-restart.ts
+ *   TENANT_SLUG=drill COUNT=60 [KILL_AFTER=20] \
+ *     node --import tsx apps/worker/scripts/drill-restart.ts
  *
  * ولا يترك أثراً: يحذف ما أنشأه في النهاية ولو فشل.
  */
@@ -76,7 +76,7 @@ async function main(): Promise<void> {
   const redisUrl = process.env.REDIS_URL;
   if (!redisUrl) throw new Error('REDIS_URL غير مضبوط');
 
-  console.log(`\n▶ تمرين المتانة — ${COUNT} رسالة، وقتل العامل بعد ${KILL_AFTER_MS}ms\n`);
+  console.log(`\n▶ تمرين المتانة — ${COUNT} رسالة، وقتل العامل بعد ${KILL_AFTER} مضخوخة\n`);
 
   /* ① مستأجرٌ وقناةٌ للتمرين، ببوتٍ مطفأ. */
   const ctx = await withPlatform(db, 'تمرين: تهيئة مستأجر وقناة للاختبار', async (tx) => {
