@@ -7,7 +7,7 @@
  * ملاحظة: `ops/` خارج أيّ حزمة، فلا `type: module` — ولذلك دالّةٌ غير متزامنة
  * لا `await` في المستوى الأعلى.
  */
-import { getDb, closeDb, tenants, tenantChannels, eq } from '../../packages/db/src/index';
+import { getDb, closeDb, withPlatform, tenants, tenantChannels, eq } from '../../packages/db/src/index';
 import { seal, fingerprint } from '../../packages/crypto/src/index';
 
 async function main(): Promise<void> {
@@ -19,26 +19,35 @@ async function main(): Promise<void> {
   const phoneId = process.env.TEST_PHONE_ID ?? 'TEST_PHONE_ID_1';
 
   const db = getDb();
-  const t = (await db.select().from(tenants).where(eq(tenants.slug, slug)).limit(1))[0];
-  if (!t) throw new Error(`لا مستأجر بـslug=${slug}`);
 
-  const sealedToken = seal(token);
-  const sealedSecret = seal(appSecret);
+  /* ★ `withPlatform` لا `db` المجرّد. كان هذا السكربت يستعلم مباشرةً، فكان
+     إدراج القناة يمرّ على **صفر صفوف** تحت RLS بلا أن يرمي — سكربت تهيئةٍ
+     يقول «تمّ» ولا يكتب شيئاً. وتهيئةُ قناةٍ عمليّةٌ عابرةٌ للمستأجرين
+     بطبيعتها: لا سياق مستأجرٍ مضبوطٌ بعد حين نُنشئها. */
+  const { t, ch } = await withPlatform(db, 'تهيئة: إنشاء قناةٍ تجريبيّة لمستأجر', async (tx) => {
+    const tenant = (await tx.select().from(tenants).where(eq(tenants.slug, slug)).limit(1))[0];
+    if (!tenant) throw new Error(`لا مستأجر بـslug=${slug}`);
 
-  const [ch] = await db.insert(tenantChannels).values({
-    tenantId: t.id,
-    kind: 'whatsapp_cloud',
-    externalAccountId: phoneId,
-    displayName: '+962 6 000 0000 (اختبار)',
-    config: { wabaId: 'TEST_WABA' },
-    tokenEnc: sealedToken.enc,
-    tokenFingerprint: fingerprint(token),
-    appSecretEnc: sealedSecret.enc,
-    verifyToken: process.env.TEST_VERIFY_TOKEN ?? 'verify-me',
-    keyVersion: sealedToken.keyVersion,
-    status: 'connected',
-    connectedAt: new Date(),
-  }).onConflictDoNothing().returning();
+    const sealedToken2 = seal(token);
+    const sealedSecret2 = seal(appSecret);
+
+    const [row] = await tx.insert(tenantChannels).values({
+      tenantId: tenant.id,
+      kind: 'whatsapp_cloud',
+      externalAccountId: phoneId,
+      displayName: '+962 6 000 0000 (اختبار)',
+      config: { wabaId: 'TEST_WABA' },
+      tokenEnc: sealedToken2.enc,
+      tokenFingerprint: fingerprint(token),
+      appSecretEnc: sealedSecret2.enc,
+      verifyToken: process.env.TEST_VERIFY_TOKEN ?? 'verify-me',
+      keyVersion: sealedToken2.keyVersion,
+      status: 'connected',
+      connectedAt: new Date(),
+    }).onConflictDoNothing().returning();
+
+    return { t: tenant, ch: row };
+  });
 
   console.log(JSON.stringify({
     ok: true,

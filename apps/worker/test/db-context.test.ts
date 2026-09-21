@@ -22,7 +22,10 @@ import { join, relative } from 'node:path';
  *     // rls-exempt: sessions جدولٌ عامّ، مفتاحه user_id
  */
 
-const ROOTS = ['apps/worker/src', 'apps/api/src'];
+/* `ops/` مشمولٌ عمداً: سكربتات التشغيل تضرب نفس القاعدة بنفس الدور، فتسقط
+   في نفس الفخّ بصمت — وأسوأ، لأنّها تُشغَّل يدويّاً مرّةً ولا يلاحظ أحدٌ أنّها
+   لم تكتب شيئاً. (كُشفت `ops/testing/seed-channel.ts` بهذا التوسيع.) */
+const ROOTS = ['apps/worker/src', 'apps/api/src', 'ops'];
 const REPO = join(__dirname, '..', '..', '..');
 
 /** أفعال الاستعلام على مقبضٍ مجرّد — `db.` أو `getDb().` مباشرةً. */
