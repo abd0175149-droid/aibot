@@ -31,7 +31,13 @@ import { publicId } from '@aibot/crypto';
 
 const SLUG = process.env.TENANT_SLUG ?? 'drill';
 const COUNT = Number(process.env.COUNT ?? '40');
-const KILL_AFTER_MS = Number(process.env.KILL_AFTER_MS ?? '900');
+/* ★ القتل بعد **عددٍ مضخوخ** لا بعد مدّة. المدّة كانت تمرّ قبل أن ينتهي الضخّ
+   (‏40 مهمّة تُضخّ في أقلّ من 900ms)، فيصير القتل بعد التدفّق لا وسطه —
+   والتمرين يقيس شيئاً آخر بلا أن يُعلن. العدد حتميّ. */
+const KILL_AFTER = Number(process.env.KILL_AFTER ?? String(Math.max(1, Math.floor(COUNT / 3))));
+/* فاصلٌ صغير بين الإضافات: بلا ذلك يُضخّ كلّ شيءٍ قبل أن يبدأ العامل، فلا
+   تكون مهمّةٌ «قيد التنفيذ» لحظة القتل — وهي الحالة التي نختبرها. */
+const STAGGER_MS = Number(process.env.STAGGER_MS ?? '40');
 const WORKER = process.env.WORKER_CONTAINER ?? 'aibot-worker-1';
 /** بادئةٌ تميّز رسائل التمرين فلا تُخلط بحركةٍ حقيقيّة ولا تُحذف غيرها. */
 const TAG = `drill-${Date.now()}`;
@@ -106,7 +112,6 @@ async function main(): Promise<void> {
   const conn = new IORedis(redisUrl, { maxRetriesPerRequest: null, enableReadyCheck: false });
   const q = new Queue('ch-inbound', { connection: conn });
 
-  const killAt = Date.now() + KILL_AFTER_MS;
   let killed = false;
   let killedAfter = 0;
 
@@ -120,7 +125,9 @@ async function main(): Promise<void> {
     /* ★ القتل **وسط** التدفّق لا قبله ولا بعده: مهامٌّ منتظرة، وواحدةٌ على
        الأقلّ قيد التنفيذ. و`kill` لا `stop`: الإغلاق اللطيف يُنهي ما بيده
        فيُخفي ما نقيسه — نريد انقطاعاً قاسياً كانقطاع الكهرباء. */
-    if (!killed && Date.now() >= killAt) {
+    if (STAGGER_MS > 0) await new Promise((r) => setTimeout(r, STAGGER_MS));
+
+    if (!killed && i + 1 >= KILL_AFTER) {
       killed = true;
       killedAfter = i + 1;
       log(`✂ قتل العامل قسراً بعد ضخّ ${killedAfter}`);
@@ -130,12 +137,7 @@ async function main(): Promise<void> {
     }
   }
 
-  if (!killed) {
-    log('⚠ انتهى الضخّ قبل موعد القتل — أطِل KILL_AFTER_MS أو زِد COUNT');
-    execFileSync('docker', ['kill', WORKER], { stdio: 'ignore' });
-    execFileSync('docker', ['start', WORKER], { stdio: 'ignore' });
-    killedAfter = COUNT;
-  }
+  if (!killed) throw new Error('لم يُقتل العامل — راجع KILL_AFTER');
 
   log(`ضُخَّت ${COUNT} مهمّة`);
 
@@ -148,10 +150,20 @@ async function main(): Promise<void> {
 
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 1500));
-    const counts = await q.getJobCounts('waiting', 'active', 'delayed', 'failed');
+    const counts = await q.getJobCounts('waiting', 'active', 'delayed');
     waiting = (counts.waiting ?? 0) + (counts.delayed ?? 0);
     active = counts.active ?? 0;
-    failed = counts.failed ?? 0;
+
+    /* ★ فشلُ **مهامّ هذا التمرين** لا فشلُ الطابور كلّه.
+       أوّل تشغيلٍ أعلن فشلاً بسبب أربع مهامٍّ قديمة من عطلٍ أُصلح قبل ساعات
+       («value.toISOString is not a function») — بقيت في مجموعة الفاشلة فعدَّها
+       الحكم. اختبارٌ يعدّ أثر غيره يُنتج إنذاراً كاذباً، وذاك أسرع طريقٍ
+       لإطفاء الاختبارات. */
+    const failedJobs = await q.getFailed(0, 200);
+    failed = failedJobs.filter((j) => {
+      const d = j.data as { tenantId?: string } | undefined;
+      return d?.tenantId === ctx.tenantId;
+    }).length;
 
     stored = await withPlatform(db, 'تمرين: عدّ الرسائل المخزَّنة', async (tx) => {
       const [r] = await tx.select({ n: sql<number>`count(*)::int` })
