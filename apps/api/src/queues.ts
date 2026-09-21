@@ -106,3 +106,38 @@ export async function closeQueues(): Promise<void> {
   await conn?.quit();
   conn = null;
 }
+
+export interface OutboundJob {
+  tenantId: string;
+  conversationId: string;
+  message: unknown;
+  source: 'bot' | 'agent' | 'system';
+  userId?: string;
+  aiRunId?: string;
+  idempotencyKey?: string;
+}
+
+/**
+ * الإرسال.
+ * `jobId` من مفتاح التكرار: ضغطتان على «إرسال» تُنتجان مهمّةً واحدة —
+ * BullMQ يرفض المعرّف المكرّر بلا رمي.
+ */
+export async function enqueueOutbound(job: OutboundJob): Promise<void> {
+  await q(QUEUE.outbound).add('outbound', job, {
+    ...(job.idempotencyKey ? { jobId: `out:${job.tenantId}:${job.idempotencyKey}` } : {}),
+    attempts: 5,
+    backoff: { type: 'exponential', delay: 2000 },
+    removeOnComplete: 1000,
+    removeOnFail: 5000,
+  });
+}
+
+export async function enqueueEmbed(job: { tenantId: string; versionId: string }): Promise<void> {
+  await q(QUEUE.embed).add('embed', job, {
+    // مرّةٌ واحدة بتقدّمٍ مرئيّ — لا إعادة محاولةٍ صامتة تُنتج تضميناً مزدوجاً
+    jobId: `embed:${job.versionId}`,
+    attempts: 1,
+    removeOnComplete: 100,
+    removeOnFail: 500,
+  });
+}

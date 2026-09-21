@@ -8,7 +8,9 @@
     "typecheck": "tsc --noEmit",
     "generate": "drizzle-kit generate",
     "build": "echo noop",
-    "test": "vitest run"
+    "test": "vitest run",
+    "seed": "tsx scripts/seed.ts",
+    "gen:rls": "tsx scripts/gen-rls.ts"
   },
   "dependencies": {
     "@aibot/shared": "workspace:*",

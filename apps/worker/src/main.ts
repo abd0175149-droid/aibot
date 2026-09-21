@@ -2,6 +2,10 @@ import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { closeDb } from '@aibot/db';
 import { handleInbound } from './inbound.js';
+import { handleReply } from './reply.js';
+import { handleEmbed } from './embed.js';
+import { sendOutbound } from './outbound.js';
+import { runHealthPoll } from './health.js';
 
 /**
  * عمّال الطوابير.
@@ -24,8 +28,26 @@ const workers = [
     connection,
     concurrency: 10,
   }),
-  // bot:reply و ch:outbound ينضمّان في المرحلة الثانية — وحمولتهما تحمل
-  // channelId وحده، فقناةٌ ثانية لا تضيف طابوراً ولا عاملاً.
+  new Worker('bot:reply', async (job) => handleReply(job.data), {
+    connection,
+    // تزامنٌ محدود: ردّان متوازيان في نفس المحادثة يتضاربان، والقفل
+    // في BullMQ عبر jobId الثابت يمنع ذلك أصلاً.
+    concurrency: 3,
+  }),
+  new Worker('ch:outbound', async (job) => { await sendOutbound(job.data); }, {
+    connection,
+    // حدّ معدّلٍ عامّ؛ الحدّ لكلّ مستأجر يُضاف بمجموعةِ معدّلٍ في المرحلة الرابعة
+    concurrency: 5,
+    limiter: { max: 10, duration: 1000 },
+  }),
+  new Worker('kb:embed', async (job) => handleEmbed(job.data), {
+    connection,
+    concurrency: 1, // تضمينٌ واحدٌ في كلّ مرّة — تقدّمٌ مرئيّ لا سباق
+  }),
+  new Worker('health:poll', async (job) => runHealthPoll(job.data), {
+    connection,
+    concurrency: 5,
+  }),
 ];
 
 for (const w of workers) {

@@ -1,7 +1,13 @@
 import Fastify from 'fastify';
 import { REDACT_PATHS } from '@aibot/crypto';
+import { AppError } from '@aibot/shared';
 import { pingDb, closeDb } from '@aibot/db';
 import { registerWebhooks } from './webhooks.js';
+import { registerAuth } from './auth.js';
+import { registerInbox } from './routes/inbox.js';
+import { registerBot } from './routes/bot.js';
+import { registerConsole } from './routes/console.js';
+import { attachRealtime, closeRealtime } from './realtime.js';
 import { pingRedis, closeQueues, queueDepths } from './queues.js';
 
 const PORT = Number(process.env.PORT ?? 4100);
@@ -55,9 +61,17 @@ app.get('/api/health/deep', async () => ({
   uptimeSec: Math.round(process.uptime()),
 }));
 
-await app.register(async (api) => { await registerWebhooks(api); }, { prefix: '/api' });
+await app.register(async (api) => {
+  await registerWebhooks(api);
+  await registerAuth(api);
+  await registerInbox(api);
+  await registerBot(api);
+  await registerConsole(api);
+}, { prefix: '/api' });
 
 app.setErrorHandler((err, req, reply) => {
+  // أخطاء المجال تُعاد بكودها الثابت القابل للترجمة — لا بنصٍّ إنجليزيّ للمستخدم
+  if (err instanceof AppError) return reply.code(err.status).send(err.toJSON());
   req.log.error({ err }, 'خطأ غير متوقَّع');
   reply.code(500).send({ error: { code: 'INTERNAL', message: 'خطأ داخليّ' } });
 });
@@ -67,11 +81,14 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
   process.on(sig, async () => {
     app.log.info('إغلاقٌ لطيف…');
     await app.close();
+    await closeRealtime();
     await closeQueues();
     await closeDb();
     process.exit(0);
   });
 }
+
+attachRealtime(app);
 
 await app.listen({ port: PORT, host: '0.0.0.0' });
 app.log.info({ port: PORT, rev: GIT_REV }, `AiBot API listening on ${PORT}`);

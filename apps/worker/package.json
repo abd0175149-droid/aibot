@@ -7,7 +7,8 @@
     "dev": "tsx watch src/main.ts",
     "start": "node --import tsx src/main.ts",
     "typecheck": "tsc --noEmit",
-    "build": "echo noop"
+    "build": "echo noop",
+    "test": "vitest run"
   },
   "dependencies": {
     "@aibot/shared": "workspace:*",
@@ -16,6 +17,7 @@
     "@aibot/channels": "workspace:*",
     "@aibot/core": "workspace:*",
     "bullmq": "^5.34.5",
-    "ioredis": "^5.4.2"
+    "ioredis": "^5.4.2",
+    "@aibot/ai": "workspace:*"
   }
 }

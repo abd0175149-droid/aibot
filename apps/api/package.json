@@ -7,7 +7,8 @@
     "dev": "tsx watch src/main.ts",
     "start": "node --import tsx src/main.ts",
     "typecheck": "tsc --noEmit",
-    "build": "echo noop"
+    "build": "echo noop",
+    "test": "vitest run"
   },
   "dependencies": {
     "@aibot/shared": "workspace:*",
@@ -18,6 +19,8 @@
     "fastify": "^5.2.0",
     "bullmq": "^5.34.5",
     "ioredis": "^5.4.2",
-    "zod": "^3.24.1"
+    "zod": "^3.24.1",
+    "@aibot/ai": "workspace:*",
+    "socket.io": "^4.8.1"
   }
 }
