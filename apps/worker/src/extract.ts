@@ -1,5 +1,5 @@
 import { readFile } from 'node:fs/promises';
-import { getDb, knowledgeSources, eq } from '@aibot/db';
+import { getDb, withTenant, knowledgeSources, eq } from '@aibot/db';
 
 /**
  * استيعاب المعرفة: ملفّ ← نصّ نظيف.
@@ -22,17 +22,20 @@ export async function handleIngest(job: { tenantId: string; sourceId: string; pa
     const out = await extract(buf, job.mime);
     const clean = cleanText(out.text);
 
-    await db.update(knowledgeSources).set({
+    /* `withTenant` لا `db` المجرّد: `knowledge_sources` تحت RLS، والمهمّة
+       تحمل `tenantId` فلا عذر. بلا سياقٍ يمرّ التحديث على **صفر صفوف** بلا
+       خطأ، فيبقى الملفّ عند العميل «قيد المعالجة» إلى الأبد. */
+    await withTenant(db, job.tenantId, (tx) => tx.update(knowledgeSources).set({
       extractedText: clean,
       charCount: clean.length,
       // `ready` لا تعني «معتمدة» — العميل يعاين ثمّ ينشر
       status: clean.trim() ? 'ready' : 'failed',
       error: clean.trim() ? (out.warnings.join(' · ') || null) : 'لم يُستخرج أيّ نصّ — الملفّ صورٌ على الأرجح',
-    }).where(eq(knowledgeSources.id, job.sourceId));
+    }).where(eq(knowledgeSources.id, job.sourceId)));
   } catch (e) {
-    await db.update(knowledgeSources).set({
+    await withTenant(db, job.tenantId, (tx) => tx.update(knowledgeSources).set({
       status: 'failed', error: (e as Error).message,
-    }).where(eq(knowledgeSources.id, job.sourceId));
+    }).where(eq(knowledgeSources.id, job.sourceId)));
     throw e;
   }
 }

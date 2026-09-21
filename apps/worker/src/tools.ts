@@ -1,4 +1,4 @@
-import { getDb, botTools, contacts, conversations, channelIdentities, eq, and, sql } from '@aibot/db';
+import { botTools, contacts, conversations, channelIdentities, eq, and, sql, type Tx } from '@aibot/db';
 import { open as decrypt } from '@aibot/crypto';
 import { execHttpTool, choicesMessage, type HttpToolSpec } from '@aibot/core';
 import type { ToolCall } from '@aibot/ai';
@@ -14,6 +14,13 @@ import { embedQuery, hybridSearch } from './retrieval.js';
  */
 
 export interface ExecCtx {
+  /**
+   * ★ معاملة المستأجر نفسها، لا `ctx.tx`.
+   *   كلّ جداول الأدوات تحت RLS، فاتّصالٌ آخر بلا سياق مستأجر يجعل
+   *   `handoff_to_human` و`save_note` و`collect_lead` **تنجح صامتةً بلا أثر**:
+   *   النموذج يُخبَر «تمّ» والموظّف لا يرى شيئاً. أسوأ من الفشل الصريح.
+   */
+  tx: Tx;
   call: ToolCall;
   tenantId: string;
   conversationId: string;
@@ -28,19 +35,19 @@ export async function execTenantTool(ctx: ExecCtx): Promise<{
 }> {
   const { call, caps, emits } = ctx;
   const args = call.args as Record<string, any>;
-  const db = getDb();
+  const tx = ctx.tx;
 
   switch (call.name) {
     case 'handoff_to_human':
-      await db.update(conversations)
+      await tx.update(conversations)
         .set({ needsAttention: true })
         .where(eq(conversations.id, ctx.conversationId));
       return { result: { ok: true, message: 'تمّ التحويل لموظّف' }, handoff: true };
 
     case 'save_note': {
-      const conv = (await db.select().from(conversations).where(eq(conversations.id, ctx.conversationId)).limit(1))[0];
+      const conv = (await tx.select().from(conversations).where(eq(conversations.id, ctx.conversationId)).limit(1))[0];
       if (conv) {
-        await db.update(contacts).set({
+        await tx.update(contacts).set({
           attributes: sql`jsonb_set(${contacts.attributes}, '{notes}',
             coalesce(${contacts.attributes}->'notes','[]'::jsonb) || ${JSON.stringify([args.note])}::jsonb)`,
         }).where(eq(contacts.id, conv.contactId));
@@ -49,9 +56,9 @@ export async function execTenantTool(ctx: ExecCtx): Promise<{
     }
 
     case 'set_contact_attribute': {
-      const conv = (await db.select().from(conversations).where(eq(conversations.id, ctx.conversationId)).limit(1))[0];
+      const conv = (await tx.select().from(conversations).where(eq(conversations.id, ctx.conversationId)).limit(1))[0];
       if (conv && args.key) {
-        await db.update(contacts).set({
+        await tx.update(contacts).set({
           attributes: sql`jsonb_set(${contacts.attributes}, ${`{${String(args.key)}}`}, ${JSON.stringify(String(args.value ?? ''))}::jsonb, true)`,
         }).where(eq(contacts.id, conv.contactId));
       }
@@ -85,13 +92,13 @@ export async function execTenantTool(ctx: ExecCtx): Promise<{
       return { result: { open: true, note: 'استعمل هذه النتيجة ولا تخترع ساعاتٍ أخرى.' } };
 
     case 'collect_lead': {
-      const conv = (await db.select().from(conversations).where(eq(conversations.id, ctx.conversationId)).limit(1))[0];
+      const conv = (await tx.select().from(conversations).where(eq(conversations.id, ctx.conversationId)).limit(1))[0];
       if (conv) {
-        await db.update(contacts).set({
+        await tx.update(contacts).set({
           displayName: args.name ? String(args.name) : undefined,
           tags: sql`array_append(${contacts.tags}, 'lead')`,
         }).where(eq(contacts.id, conv.contactId));
-        await db.update(conversations).set({ needsAttention: true }).where(eq(conversations.id, conv.id));
+        await tx.update(conversations).set({ needsAttention: true }).where(eq(conversations.id, conv.id));
       }
       return { result: { ok: true } };
     }
@@ -103,7 +110,7 @@ export async function execTenantTool(ctx: ExecCtx): Promise<{
       const q = String(args.query ?? '');
       if (!q.trim()) return { result: { found: [] } };
       const { vec } = await embedQuery(q);
-      const lists = await hybridSearch(ctx.versionId, q, vec, 8);
+      const lists = await hybridSearch(ctx.tx, ctx.versionId, q, vec, 8);
       const seen = new Set<string>();
       const found: Array<{ heading: string | null; text: string }> = [];
       for (const list of lists) {
@@ -117,7 +124,7 @@ export async function execTenantTool(ctx: ExecCtx): Promise<{
     }
 
     case 'escalate_complaint':
-      await db.update(conversations)
+      await tx.update(conversations)
         .set({ needsAttention: true, tags: sql`array_append(${conversations.tags}, 'شكوى')` })
         .where(eq(conversations.id, ctx.conversationId));
       return { result: { ok: true, reference: args.reference ?? null }, handoff: true };
@@ -163,7 +170,7 @@ async function execCustom(ctx: ExecCtx): Promise<{
    * الهويّة تأتي من **المحادثة** لا ممّا يكتبه النموذج أو يمليه الزبون.
    * فلا يستطيع أحدٌ أن يطلب رصيد رقمٍ غير رقمه، ولو أقنع النموذج بذلك.
    */
-  const identity = await getDb()
+  const identity = await ctx.tx
     .select({ ext: channelIdentities.externalId, contactId: conversations.contactId })
     .from(conversations)
     .innerJoin(channelIdentities, eq(channelIdentities.id, conversations.identityId))
@@ -186,12 +193,12 @@ async function execCustom(ctx: ExecCtx): Promise<{
   if (!res.ok) {
     /* قاطع الدائرة: خمسة إخفاقاتٍ متتالية ⟵ تعطيل الأداة وإشعارك.
        بلا هذا، أداةٌ معطوبة تستهلك 8 ثوانٍ من كلّ ردٍّ إلى الأبد. */
-    const [updated] = await getDb().update(botTools)
+    const [updated] = await ctx.tx.update(botTools)
       .set({ failureCount: sql`${botTools.failureCount} + 1` })
       .where(eq(botTools.id, tool.id))
       .returning({ n: botTools.failureCount });
     if ((updated?.n ?? 0) >= 5) {
-      await getDb().update(botTools)
+      await ctx.tx.update(botTools)
         .set({ enabled: false, disabledReason: `تعطّلت آليّاً بعد 5 إخفاقات: ${res.error}` })
         .where(eq(botTools.id, tool.id));
     }
@@ -199,7 +206,7 @@ async function execCustom(ctx: ExecCtx): Promise<{
   }
 
   if (tool.failureCount > 0) {
-    await getDb().update(botTools).set({ failureCount: 0 }).where(eq(botTools.id, tool.id));
+    await ctx.tx.update(botTools).set({ failureCount: 0 }).where(eq(botTools.id, tool.id));
   }
 
   // نتيجة الأداة **بياناتٌ لا تعليمات** — تُغلَّف قبل أن تدخل السياق

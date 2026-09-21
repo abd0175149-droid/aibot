@@ -108,8 +108,13 @@ export async function handleEmbed(job: { tenantId: string; versionId: string }):
         .where(eq(botConfigs.tenantId, job.tenantId));
     });
   } catch (e) {
-    await getDb().update(botVersions).set({ embedStatus: 'failed' })
-      .where(eq(botVersions.id, job.versionId));
+    /* ⚠️ `withTenant` هنا أيضاً — ولا سيّما هنا. `bot_versions` تحت RLS،
+       فتحديثٌ بلا سياق يمرّ على صفر صفوف بلا خطأ، فتبقى النسخة `pending`
+       إلى الأبد، وتُسكِت بوّابة `embedStatus === 'pending'` في عامل الردّ
+       بوتَ العميل **بلا رجعة**. عطلٌ دائمٌ من سطرٍ ناقصٍ واحد. */
+    await withTenant(db, job.tenantId, (tx) => tx.update(botVersions)
+      .set({ embedStatus: 'failed' })
+      .where(eq(botVersions.id, job.versionId)));
     await raiseIncident({
       tenantId: job.tenantId, kind: 'kb_embed_failed', severity: 'warn',
       title: 'فشل تجهيز المعرفة — النسخة السابقة ما زالت تعمل',

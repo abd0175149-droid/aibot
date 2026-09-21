@@ -1,5 +1,5 @@
 import {
-  getDb, withTenant, conversations, messages, botConfigs, botVersions, botTools,
+  getDb, withTenant, withPlatform, conversations, messages, botConfigs, botVersions, botTools,
   aiRuns, aiKeys, prices, contacts, tenantChannels, conversationWindows,
   eq, and, desc, isNull, sql,
 } from '@aibot/db';
@@ -25,12 +25,17 @@ import { raiseIncident } from './incidents.js';
 export async function handleReply(job: { conversationId: string }): Promise<void> {
   const db = getDb();
 
-  const head = await db
+  /* ★ استنتاج المستأجر من المحادثة — عمليّةٌ عابرةٌ للمستأجرين بطبيعتها.
+     حمولة المهمّة تحمل `conversationId` وحده، فلا سياق مستأجرٍ بعد لنضبطه.
+     وبلا `withPlatform` يحجب RLS هذا الاستعلام فيرجع صفراً، فيخرج العامل
+     صامتاً في ثماني مِلّي — لا خطأ ولا سجلّ ولا ردّ. كلّفنا هذا رسائل
+     حقيقيّة قبل أن يُكتشف؛ راجع اختبار `db-context.test.ts`. */
+  const head = await withPlatform(db, 'ردّ البوت: استنتاج المستأجر من معرّف المحادثة', (tx) => tx
     .select({ conv: conversations, ch: tenantChannels })
     .from(conversations)
     .innerJoin(tenantChannels, eq(tenantChannels.id, conversations.channelId))
     .where(eq(conversations.id, job.conversationId))
-    .limit(1);
+    .limit(1));
   if (!head[0]) return;
   const tenantId = head[0].conv.tenantId;
 
@@ -84,7 +89,7 @@ export async function handleReply(job: { conversationId: string }): Promise<void
     const knowledge: KnowledgeProvider =
       ver.knowledgeMode === 'full'
         ? new FullKnowledge(ver.knowledgeBase)
-        : new RagKnowledge(tenantId, ver.id, ver.knowledgeMode);
+        : new RagKnowledge(tx, tenantId, ver.id, ver.knowledgeMode);
 
     const contact = (await tx.select().from(contacts).where(eq(contacts.id, conv.contactId)).limit(1))[0];
     const caps = getAdapter(ch.kind as ChannelKind).capabilities;
@@ -141,7 +146,7 @@ export async function handleReply(job: { conversationId: string }): Promise<void
         toolNames: decls.map((d) => d.name),
       },
       execTool: (call: ToolCall) =>
-        execTenantTool({ call, tenantId, conversationId: conv.id, versionId: ver.id, caps, tools: toolRows, emits }),
+        execTenantTool({ tx, call, tenantId, conversationId: conv.id, versionId: ver.id, caps, tools: toolRows, emits }),
     });
 
     /* ── القياس: صفٌّ لكلّ ردّ، وكلفةٌ بسعرٍ لحظة العرض ── */

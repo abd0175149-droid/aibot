@@ -1,5 +1,5 @@
 import IORedis from 'ioredis';
-import { getDb, kbChunks, kbRetrievals, sql, eq, and } from '@aibot/db';
+import { kbChunks, kbRetrievals, sql, eq, and, type Tx } from '@aibot/db';
 import { getProvider, DEFAULT_EMBED_MODEL, EMBED_DIMS } from '@aibot/ai';
 import {
   normalizeArabic, shouldSkipRetrieval, rrf, fitChunks,
@@ -50,7 +50,13 @@ export async function embedQuery(text: string): Promise<{ vec: number[]; cacheHi
 
 export class RagKnowledge implements KnowledgeProvider {
   private lastQuery = '';
+  /**
+   * ★ `tx` لا `getDb()`: مقاطع المعرفة تحت RLS، فاستعلامٌ على اتّصالٍ آخر
+   *   بلا سياق مستأجر يرجع **صفراً بلا خطأ** — أي بوتٌ يقول «لا أعرف» عن
+   *   معرفةٍ موجودة. نمرّر معاملة المستأجر نفسها فلا يبقى الأمر اختياريّاً.
+   */
   constructor(
+    private readonly tx: Tx,
     private readonly tenantId: string,
     private readonly versionId: string,
     readonly mode: 'hybrid' | 'rag',
@@ -58,7 +64,7 @@ export class RagKnowledge implements KnowledgeProvider {
 
   /** الأساسيات — تُحقن دائماً ولا تنافس على مقاعد الاسترجاع. */
   async pinned(): Promise<KnowledgeChunk[]> {
-    const rows = await getDb().select({
+    const rows = await this.tx.select({
       id: kbChunks.id, headingPath: kbChunks.headingPath,
       body: kbChunks.body, tokenCount: kbChunks.tokenCount,
     }).from(kbChunks).where(and(
@@ -78,7 +84,7 @@ export class RagKnowledge implements KnowledgeProvider {
     }
 
     const { vec, cacheHit } = await embedQuery(query);
-    const lists = await hybridSearch(this.versionId, query, vec, 20);
+    const lists = await hybridSearch(this.tx, this.versionId, query, vec, 20);
     const top = rrf(lists, 60, 6).map((f) => f.item);
 
     return {
@@ -106,12 +112,13 @@ interface Hit extends KnowledgeChunk {
  * على مئات الصفوف أسرع من الفهرس التقريبيّ **وأدقّ منه**.
  */
 export async function hybridSearch(
+  tx: Tx,
   versionId: string,
   queryText: string,
   queryVec: number[],
   limit = 20,
 ): Promise<Hit[][]> {
-  const db = getDb();
+  const db = tx;
   const vecLiteral = `[${queryVec.join(',')}]`;
   const norm = normalizeArabic(queryText);
 
@@ -154,12 +161,12 @@ function resolveParents(rows: Hit[]): Hit[] {
 }
 
 /** يُسجَّل لكلّ ردّ — ومنه تُبنى بوّابة التبديل وقياس جودة الاسترجاع. */
-export async function logRetrieval(row: {
+export async function logRetrieval(tx: Tx, row: {
   tenantId: string; conversationId: string; aiRunId?: string; mode: string;
   queryText: string; chunkIds: string[]; retrievedTokens: number;
   cacheHit: boolean; skipped: boolean; toolFallbackUsed: boolean; latencyMs: number;
 }): Promise<void> {
-  await getDb().insert(kbRetrievals).values({
+  await tx.insert(kbRetrievals).values({
     tenantId: row.tenantId,
     conversationId: row.conversationId,
     aiRunId: row.aiRunId ?? null,

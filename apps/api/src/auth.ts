@@ -79,6 +79,7 @@ export async function createSession(
   meta: { ip?: string; userAgent?: string },
 ): Promise<{ refresh: string; sessionId: string }> {
   const refresh = randomBytes(32).toString('base64url');
+  // rls-exempt: sessions جدولٌ عامّ خارج RLS — مفتاحه user_id لا tenant_id
   const [row] = await getDb().insert(sessions).values({
     userId,
     refreshHash: sha256(refresh),
@@ -99,6 +100,7 @@ export async function rotateSession(
 ): Promise<{ userId: string; sessionId: string; refresh: string } | null> {
   const db = getDb();
   const hash = sha256(refresh);
+  // rls-exempt: sessions جدولٌ عامّ خارج RLS — مفتاحه user_id لا tenant_id
   const rows = await db.select().from(sessions).where(and(
     eq(sessions.refreshHash, hash),
     isNull(sessions.revokedAt),
@@ -108,6 +110,7 @@ export async function rotateSession(
   if (!row) return null;
 
   const next = randomBytes(32).toString('base64url');
+  // rls-exempt: sessions جدولٌ عامّ خارج RLS — مفتاحه user_id لا tenant_id
   await db.update(sessions)
     .set({ refreshHash: sha256(next), expiresAt: new Date(Date.now() + REFRESH_TTL_SEC * 1000) })
     .where(eq(sessions.id, row.id));
@@ -115,6 +118,7 @@ export async function rotateSession(
 }
 
 export async function revokeSession(sessionId: string): Promise<void> {
+  // rls-exempt: sessions جدولٌ عامّ خارج RLS — مفتاحه user_id لا tenant_id
   await getDb().update(sessions).set({ revokedAt: new Date() }).where(eq(sessions.id, sessionId));
 }
 

@@ -1,6 +1,6 @@
 import webpush from 'web-push';
 import {
-  getDb, pushSubscriptions, notifications, users, incidents,
+  getDb, withPlatform, pushSubscriptions, notifications, users, incidents,
   eq, and, isNull, sql, desc,
 } from '@aibot/db';
 
@@ -47,27 +47,36 @@ export interface NotifyJob {
 export async function handleNotify(job: NotifyJob): Promise<void> {
   const db = getDb();
 
-  const existing = await db.select().from(notifications).where(and(
-    eq(notifications.userId, job.userId),
-    eq(notifications.tag, job.tag),
-    isNull(notifications.readAt),
-  )).limit(1);
+  /* ★ `withPlatform` لا `db` المجرّد: `notifications` و`push_subscriptions`
+     تحت RLS، و`tenant_id` فيهما قابلٌ للفراغ لأنّ مالك المنصّة يُشعَر أيضاً.
+     فالمُشعِر عابرٌ للمستأجرين بطبيعته — وبلا هذا تُكتب الصفوف ولا تُقرأ،
+     أو تُحجب فلا يصل تنبيهٌ واحد. وقناة التنبيه أسوأ ما يُصاب بالصمت. */
+  await withPlatform(db, 'إشعارات: إشعارٌ حيٌّ واحد لكلّ موضوع', async (tx) => {
+    const existing = await tx.select().from(notifications).where(and(
+      eq(notifications.userId, job.userId),
+      eq(notifications.tag, job.tag),
+      isNull(notifications.readAt),
+    )).limit(1);
 
-  if (existing[0]) {
-    await db.update(notifications)
-      .set({ title: job.title, body: job.body ?? null, data: { url: job.url } as object, createdAt: new Date() })
-      .where(eq(notifications.id, existing[0].id));
-  } else {
-    await db.insert(notifications).values({
-      userId: job.userId, tenantId: job.tenantId ?? null,
-      tag: job.tag, title: job.title, body: job.body ?? null,
-      data: { url: job.url } as object,
-    });
-  }
+    if (existing[0]) {
+      await tx.update(notifications)
+        .set({ title: job.title, body: job.body ?? null, data: { url: job.url } as object, createdAt: new Date() })
+        .where(eq(notifications.id, existing[0].id));
+    } else {
+      await tx.insert(notifications).values({
+        userId: job.userId, tenantId: job.tenantId ?? null,
+        tag: job.tag, title: job.title, body: job.body ?? null,
+        data: { url: job.url } as object,
+      });
+    }
+  });
 
   if (!configure()) return;
 
-  const subs = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, job.userId));
+  /* الإرسال الشبكيّ **خارج** المعاملة: معاملةٌ مفتوحة أثناء نداء Web Push
+     تحتجز اتّصالاً لثوانٍ وتخنق البِرْكة عند أوّل دفعةٍ كبيرة. */
+  const subs = await withPlatform(db, 'إشعارات: قراءة اشتراكات الدفع للمستخدم', (tx) =>
+    tx.select().from(pushSubscriptions).where(eq(pushSubscriptions.userId, job.userId)));
 
   await Promise.all(subs.map(async (s) => {
     try {
@@ -83,18 +92,19 @@ export async function handleNotify(job: NotifyJob): Promise<void> {
         }),
         { urgency: job.severity === 'critical' ? 'high' : 'normal', TTL: 3600 },
       );
-      await db.update(pushSubscriptions)
+      await withPlatform(db, 'إشعارات: تسجيل نجاح الدفع', (tx) => tx.update(pushSubscriptions)
         .set({ lastOkAt: new Date(), failCount: 0 })
-        .where(eq(pushSubscriptions.id, s.id));
+        .where(eq(pushSubscriptions.id, s.id)));
     } catch (e) {
       const status = (e as { statusCode?: number }).statusCode;
       // 410 Gone / 404: الاشتراك ميّت. احذفه فوراً وإلّا انتفخ الجدول بموتى.
       if (status === 410 || status === 404) {
-        await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, s.id));
+        await withPlatform(db, 'إشعارات: حذف اشتراكٍ ميّت', (tx) =>
+          tx.delete(pushSubscriptions).where(eq(pushSubscriptions.id, s.id)));
       } else {
-        await db.update(pushSubscriptions)
+        await withPlatform(db, 'إشعارات: عدّ إخفاق الدفع', (tx) => tx.update(pushSubscriptions)
           .set({ failCount: sql`${pushSubscriptions.failCount} + 1` })
-          .where(eq(pushSubscriptions.id, s.id));
+          .where(eq(pushSubscriptions.id, s.id)));
       }
     }
   }));
@@ -109,18 +119,19 @@ export async function handleNotify(job: NotifyJob): Promise<void> {
 export async function flushDigest(): Promise<void> {
   const db = getDb();
 
-  const pending = await db.select({
+  const pending = await withPlatform(db, 'إشعارات: جمع حوادث كلّ العملاء للتجميعة', (tx) => tx.select({
     id: incidents.id, title: incidents.title, tenantId: incidents.tenantId,
     severity: incidents.severity,
   }).from(incidents).where(and(
     isNull(incidents.notifiedAt),
     sql`${incidents.severity} <> 'critical'`,
     sql`${incidents.status} <> 'resolved'`,
-  )).limit(50);
+  )).limit(50));
 
   if (!pending.length) return;
 
-  const owners = await db.select({ id: users.id }).from(users).where(eq(users.role, 'platform_owner'));
+  const owners = await withPlatform(db, 'إشعارات: قراءة ملّاك المنصّة', (tx) =>
+    tx.select({ id: users.id }).from(users).where(eq(users.role, 'platform_owner')));
   const tenantCount = new Set(pending.map((p) => p.tenantId)).size;
 
   for (const o of owners) {
@@ -134,21 +145,25 @@ export async function flushDigest(): Promise<void> {
     });
   }
 
-  await db.update(incidents).set({ notifiedAt: new Date() })
-    .where(sql`${incidents.id} in ${pending.map((p) => p.id)}`);
+  await withPlatform(db, 'إشعارات: وسم الحوادث بأنّها أُبلِغت', (tx) =>
+    tx.update(incidents).set({ notifiedAt: new Date() })
+      .where(sql`${incidents.id} in ${pending.map((p) => p.id)}`));
 }
 
 /** الحرج يخترق ساعات الهدوء والسقف اليوميّ — وحده. */
 export async function notifyCritical(incidentId: string): Promise<void> {
   const db = getDb();
-  const inc = (await db.select().from(incidents).where(eq(incidents.id, incidentId)).limit(1))[0];
+  const inc = await withPlatform(db, 'إشعارات: قراءة حادثةٍ حرجة', async (tx) =>
+    (await tx.select().from(incidents).where(eq(incidents.id, incidentId)).limit(1))[0]);
   if (!inc || inc.notifiedAt) return;
 
-  const recipients = await db.select({ id: users.id }).from(users).where(
-    inc.tenantId
-      ? sql`(${users.role} = 'platform_owner' or (${users.tenantId} = ${inc.tenantId} and ${users.role} = 'tenant_owner'))`
-      : eq(users.role, 'platform_owner'),
-  );
+  /* المستقبِلون يعبرون حدّ المستأجر عمداً: مالك المنصّة **ومالك العميل** معاً. */
+  const recipients = await withPlatform(db, 'إشعارات: مستقبِلو التنبيه الحرج', (tx) =>
+    tx.select({ id: users.id }).from(users).where(
+      inc.tenantId
+        ? sql`(${users.role} = 'platform_owner' or (${users.tenantId} = ${inc.tenantId} and ${users.role} = 'tenant_owner'))`
+        : eq(users.role, 'platform_owner'),
+    ));
 
   for (const r of recipients) {
     await handleNotify({
@@ -161,7 +176,8 @@ export async function notifyCritical(incidentId: string): Promise<void> {
       severity: 'critical',
     });
   }
-  await db.update(incidents).set({ notifiedAt: new Date() }).where(eq(incidents.id, inc.id));
+  await withPlatform(db, 'إشعارات: وسم الحادثة الحرجة بأنّها أُبلِغت', (tx) =>
+    tx.update(incidents).set({ notifiedAt: new Date() }).where(eq(incidents.id, inc.id)));
 }
 
 /** الأخطاء بلغةٍ بشريّة — لا «error 190: OAuthException». */
