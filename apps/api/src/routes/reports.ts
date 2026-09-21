@@ -1,12 +1,14 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   getDb, withTenant, conversations, conversationWindows, messages, aiRuns,
-  tenantChannels, contacts, channelIdentities, botConfigs, subscriptions, plans,
+  tenantChannels, contacts, channelIdentities, botConfigs, subscriptions, plans, tenants,
+  auditLog, withPlatform,
   eq, and, desc, isNull, sql,
 } from '@aibot/db';
 import { capabilitiesFor, getAdapter, type ChannelKind } from '@aibot/channels';
-import { open as decrypt } from '@aibot/crypto';
+import { open as decrypt, seal, fingerprint, publicId } from '@aibot/crypto';
 import { requireAuth, tenantOf } from '../auth.js';
+import { AppError, ErrorCode } from '@aibot/shared';
 
 /** الشهر بتوقيت المستأجر — نافذةٌ تُفتح آخر الشهر تُفوتَر على شهر فتحها. */
 function period(tz = 'Asia/Amman'): string {
@@ -202,6 +204,136 @@ export async function registerReports(app: FastifyInstance) {
       };
     });
   });
+
+  /**
+   * ★ ربط قناة — والقاعدة التي يفرضها: **لا يُحفظ سرٌّ قبل أن يُثبت أنّه يعمل.**
+   *
+   * سببها مباشر: توكنٌ مكسورٌ محفوظٌ في القاعدة يُنتج **بوتاً صامتاً** لا عطلاً
+   * ظاهراً — القناة تقول «موصولة»، والشاشات خضراء، ولا رسالة تصل. وذاك أسوأ
+   * ما يقع لعميل. فنفحص عند ميتا أوّلاً، ولا نكتب شيئاً إن فشل الفحص.
+   *
+   * وما يُطلب أربع قيمٍ فقط — وهي حدّ ما يحتاجه واتساب BYO:
+   * معرّف الرقم · التوكن · App Secret · (اختياريّاً) معرّف WABA.
+   * وتوكن التحقّق **نولّده نحن** فلا يخترعه العميل ولا نطلبه منه.
+   */
+  interface ConnectBody {
+    phoneNumberId?: string; token?: string; appSecret?: string; wabaId?: string;
+  }
+
+  async function connect(tenantId: string, b: ConnectBody, reply: FastifyReply) {
+    if (!b.phoneNumberId || !b.token || !b.appSecret) {
+      throw new AppError(
+        ErrorCode.VALIDATION,
+        'معرّف الرقم والتوكن وApp Secret مطلوبة — وكلّها من لوحتك عند ميتا.',
+        400,
+      );
+    }
+
+    /* ① الفحص عند ميتا **قبل** أيّ كتابة، وخارج أيّ معاملة. */
+    const adapter = getAdapter('whatsapp_cloud');
+    const report = await adapter.healthCheck({
+      channelId: 'pending', tenantId, kind: 'whatsapp_cloud',
+      token: b.token, externalAccountId: b.phoneNumberId,
+      config: b.wabaId ? { wabaId: b.wabaId } : {},
+    }).catch((e) => ({
+      level: 'unreachable' as const, tokenValid: false, webhookSubscribed: null,
+      qualityRating: null, messagingTier: null, issues: [(e as Error).message], detail: {},
+    }));
+
+    if (!report.tokenValid) {
+      return reply.code(422).send({
+        error: 'لم نحفظ شيئاً — التوكن لا يعمل.',
+        issues: report.issues,
+        hint: 'الأشيع أنّه توكنٌ مؤقّت عمره 24 ساعة. أنشئ توكن «مستخدم نظام» بلا انتهاء.',
+      });
+    }
+
+    /* ② الكتابة بعد الإثبات. وتوكن التحقّق يبقى كما هو إن وُجد، فلا يُبطِل
+          تجديدُ توكنٍ ويبهوكاً مضبوطاً عند ميتا. */
+    const detail = ((report.detail as Record<string, unknown>).phone ?? {}) as Record<string, string>;
+    const saved = await withTenant(getDb(), tenantId, async (tx) => {
+      /* `tenants` جدولٌ عامّ خارج RLS بصلاحيّة قراءةٍ لدور التطبيق — ومنه
+         `publicId` الذي يبني مسار الويبهوك. وهو ليس في مطالبات التوكن عمداً:
+         التوكن يحمل ما يُصرّح به لا ما يُعرَض. */
+      const t = (await tx.select({ pid: tenants.publicId }).from(tenants)
+        .where(eq(tenants.id, tenantId)).limit(1))[0];
+      const cur = (await tx.select().from(tenantChannels).where(and(
+        eq(tenantChannels.tenantId, tenantId), eq(tenantChannels.kind, 'whatsapp_cloud'),
+      )).limit(1))[0];
+
+      const sealedToken = seal(b.token!);
+      const sealedSecret = seal(b.appSecret!);
+      const values = {
+        tenantId, kind: 'whatsapp_cloud' as const,
+        externalAccountId: b.phoneNumberId!,
+        displayName: [detail.verified_name, detail.display_phone_number].filter(Boolean).join(' ') || null,
+        config: b.wabaId ? { wabaId: b.wabaId } : (cur?.config ?? {}),
+        tokenEnc: sealedToken.enc,
+        tokenFingerprint: fingerprint(b.token!),
+        appSecretEnc: sealedSecret.enc,
+        keyVersion: sealedToken.keyVersion,
+        verifyToken: cur?.verifyToken ?? publicId().slice(0, 20),
+        status: 'connected' as const,
+        qualityRating: report.qualityRating,
+        messagingTier: report.messagingTier,
+        lastCheckedAt: new Date(),
+        lastError: report.issues[0] ?? null,
+        connectedAt: cur?.connectedAt ?? new Date(),
+      };
+
+      const [row] = cur
+        ? await tx.update(tenantChannels).set(values).where(eq(tenantChannels.id, cur.id)).returning()
+        : await tx.insert(tenantChannels).values(values).returning();
+      return { ...row!, tenantPublicId: t?.pid ?? '' };
+    });
+
+    return {
+      id: saved.id,
+      displayName: saved.displayName,
+      tokenFingerprint: saved.tokenFingerprint,
+      qualityRating: saved.qualityRating,
+      webhookSubscribed: report.webhookSubscribed,
+      issues: report.issues,
+      /* ما يلصقه العميل في ميتا — يُعاد هنا لأنّه لا يُخزَّن في مكانٍ يراه. */
+      webhookUrl: `${process.env.PUBLIC_URL ?? 'https://aibot.masaros.net'}/api/webhooks/wa/${saved.tenantPublicId}`,
+      verifyToken: saved.verifyToken,
+    };
+  }
+
+  /** العميل يربط قناته بنفسه. */
+  app.post<{ Body: ConnectBody }>(
+    '/channel/connect',
+    { preHandler: requireAuth({ settings: true }) },
+    async (req, reply) => connect(tenantOf(req), req.body ?? {}, reply),
+  );
+
+  /**
+   * ومالك المنصّة يربطها **لعميلٍ يسمّيه صراحةً** — لا بالانتحال.
+   *
+   * ★ الانتحال قراءةٌ فقط، وذاك قرارٌ صحيح يُصان: لو سمحنا له بالكتابة صار
+   *   لدينا مسارٌ يكتب في بيانات عميلٍ بهويّةٍ مستعارة، فيصير سجلّ التدقيق
+   *   كاذباً. فالمسار هنا صريحٌ ومسجَّل، والمستأجر في العنوان لا في التوكن.
+   *   وُجد لأنّ معالج التهيئة يحتاجه: المالك يربط القناة أوّل مرّةٍ مع العميل
+   *   على مكالمة — وهذا واقع BYO.
+   */
+  app.post<{ Params: { id: string }; Body: ConnectBody }>(
+    '/console/tenants/:id/channel/connect',
+    { preHandler: requireAuth({ console: true }) },
+    async (req, reply) => {
+      const out = await connect(req.params.id, req.body ?? {}, reply);
+      if (reply.sent) return out;
+      await withPlatform(getDb(), 'تدقيق: ربط قناةٍ لعميل من لوحة المالك', (tx) =>
+        tx.insert(auditLog).values({
+          tenantId: req.params.id,
+          actorUserId: req.auth!.sub,
+          action: 'channel.connect',
+          entity: 'tenant_channel',
+          entityId: (out as { id: string }).id,
+          ip: req.ip,
+        }));
+      return out;
+    },
+  );
 
   /**
    * ★ اختبار اتّصالٍ **حقيقيّ** بميتا — لا فحصُ صفٍّ في قاعدتنا.

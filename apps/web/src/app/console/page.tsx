@@ -1,7 +1,10 @@
 'use client';
 
+import { useState } from 'react';
 import { useApi, fmt } from '@/lib/useApi';
 import { Loading, ErrorBox, Empty } from '@/components/Shell';
+import { Onboarding } from '@/components/Onboarding';
+import { Button } from '@/components/ui';
 
 interface Row {
   id: string;
@@ -25,6 +28,7 @@ const HEALTH: Record<string, { dot: string; label: string }> = {
 
 export default function TenantsPage() {
   const { data, loading, error, reload } = useApi<{ items: Row[] }>('/console/tenants');
+  const [wizard, setWizard] = useState(false);
 
   if (loading) return <Loading rows={5} />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
@@ -35,6 +39,12 @@ export default function TenantsPage() {
 
   return (
     <>
+      {wizard && (
+        <Onboarding
+          onClose={() => setWizard(false)}
+          onDone={() => { setWizard(false); void reload(); }}
+        />
+      )}
       <div className="vh">
         <div>
           <h1>العملاء</h1>
@@ -43,7 +53,7 @@ export default function TenantsPage() {
             هذا الترتيب هو الشاشة كلّها.
           </p>
         </div>
-        <div className="sp"><button className="btn pri" disabled title="معالج التهيئة قيد البناء — يُنشأ العميل بسكربت حتّى ذلك">+ عميل جديد</button></div>
+        <div className="sp"><Button variant="primary" onClick={() => setWizard(true)}>+ عميل جديد</Button></div>
       </div>
 
       <div className="tiles">
@@ -60,7 +70,7 @@ export default function TenantsPage() {
         <Empty
           title="لا عملاء بعد"
           hint="أنشئ أوّل مستأجر — وابدأ ببوتك أنت: بياناتك، ومخاطرتك، وأصدق اختبارٍ ممكن."
-          action={<button className="btn pri" disabled title="معالج التهيئة قيد البناء — يُنشأ العميل بسكربت حتّى ذلك">+ عميل جديد</button>}
+          action={<Button variant="primary" onClick={() => setWizard(true)}>+ عميل جديد</Button>}
         />
       ) : (
         <div className="tw">

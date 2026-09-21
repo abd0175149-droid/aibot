@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import {
-  getDb, withTenant, botConfigs, botVersions, botTools, knowledgeSources, aiRuns,
-  kbChunks, eq, and, desc, sql,
+  getDb, withTenant, withPlatform, botConfigs, botVersions, botTools, knowledgeSources, aiRuns,
+  kbChunks, auditLog, eq, and, desc, sql,
 } from '@aibot/db';
 import { AppError, ErrorCode } from '@aibot/shared';
 import { seal } from '@aibot/crypto';
@@ -48,8 +48,12 @@ export async function registerBot(app: FastifyInstance) {
    * التضمين للطابور، والنسخة القديمة تخدم حتّى تجهز الجديدة. فلا محادثةٌ
    * جارية ترى معرفةً نصفَ مضمَّنة.
    */
-  app.post<{ Body: { note?: string } }>('/bot/publish', { preHandler: auth }, async (req) => {
-    const tenantId = tenantOf(req);
+  /**
+   * النشر — مُستخرَجٌ بمعرّف مستأجرٍ صريح ليُستدعى من مسار العميل **ومن معالج
+   * التهيئة في لوحة المالك** بلا نسخ منطق. نسخُ منطق النشر كان سيُنتج مسارَين
+   * يتباعدان مع أوّل تعديلٍ على وضع المعرفة.
+   */
+  async function publishVersion(tenantId: string, actorUserId: string, note: string | null) {
     return withTenant(getDb(), tenantId, async (tx) => {
       const cfg = (await tx.select().from(botConfigs).where(eq(botConfigs.tenantId, tenantId)).limit(1))[0];
       const draft = (cfg?.draft ?? {}) as Record<string, unknown>;
@@ -76,9 +80,9 @@ export async function registerBot(app: FastifyInstance) {
         knowledgeMode: mode,
         knowledgeBudget: (draft.knowledgeBudget ?? {}) as object,
         embedStatus: mode === 'full' ? 'skipped' : 'pending',
-        publishedBy: req.auth!.sub,
+        publishedBy: actorUserId,
         publishedAt: new Date(),
-        note: req.body?.note ?? null,
+        note,
       }).returning();
 
       // النسخة الجديدة تُنشر فوراً في وضع full، وتنتظر التضمين في غيره
@@ -91,7 +95,58 @@ export async function registerBot(app: FastifyInstance) {
 
       return { version: ver, knowledgeMode: mode, kbTokens, embedding: mode !== 'full' };
     });
-  });
+  }
+
+  app.post<{ Body: { note?: string } }>('/bot/publish', { preHandler: auth }, async (req) =>
+    publishVersion(tenantOf(req), req.auth!.sub, req.body?.note ?? null));
+
+  /**
+   * ★ بذرُ بوتٍ لعميلٍ من لوحة المالك — الخطوتان ٣ و٤ في معالج التهيئة.
+   *
+   * ولماذا مسارٌ صريحٌ لا انتحال: الانتحال **قراءةٌ فقط** وذاك قرارٌ يُصان،
+   * فلو سُمح له بالكتابة صار لدينا مسارٌ يكتب في بيانات عميلٍ بهويّةٍ مستعارة
+   * وصار سجلّ التدقيق كاذباً. هنا المستأجر في العنوان، والفعل مسجَّلٌ باسم
+   * فاعلٍ حقيقيّ، والعميل يراه في سجلّه.
+   *
+   * وهو **بذرٌ لا استبدال**: يرفض إن كان للعميل نسخةٌ منشورةٌ أصلاً، فلا يمسح
+   * معالجُ تهيئةٍ فُتح بالخطأ شخصيّةَ عميلٍ يعمل.
+   */
+  app.post<{ Params: { id: string }; Body: { persona?: string; knowledgeBase?: string; note?: string } }>(
+    '/console/tenants/:id/bot/seed',
+    { preHandler: requireAuth({ console: true }) },
+    async (req) => {
+      const tenantId = req.params.id;
+      const persona = String(req.body?.persona ?? '').trim();
+      const knowledgeBase = String(req.body?.knowledgeBase ?? '').trim();
+      if (!persona || !knowledgeBase) {
+        throw new AppError(ErrorCode.VALIDATION, 'الشخصيّة والمعرفة مطلوبتان', 400);
+      }
+
+      await withTenant(getDb(), tenantId, async (tx) => {
+        const cfg = (await tx.select().from(botConfigs).where(eq(botConfigs.tenantId, tenantId)).limit(1))[0];
+        if (!cfg) throw new AppError(ErrorCode.VALIDATION, 'لا إعداداتَ بوتٍ لهذا العميل', 404);
+        if (cfg.publishedVersionId) {
+          throw new AppError(
+            ErrorCode.VALIDATION,
+            'لهذا العميل نسخةٌ منشورةٌ بالفعل — عدّلها من شاشة بوته لا من معالج التهيئة.',
+            409,
+          );
+        }
+        await tx.update(botConfigs).set({ draft: { persona, knowledgeBase } })
+          .where(eq(botConfigs.tenantId, tenantId));
+      });
+
+      const out = await publishVersion(tenantId, req.auth!.sub, req.body?.note ?? 'أوّل نشرٍ من معالج التهيئة');
+
+      await withPlatform(getDb(), 'تدقيق: بذر بوتٍ لعميل من لوحة المالك', (tx) =>
+        tx.insert(auditLog).values({
+          tenantId, actorUserId: req.auth!.sub,
+          action: 'bot.seed', entity: 'bot_version', entityId: out.version!.id, ip: req.ip,
+        }));
+
+      return out;
+    },
+  );
 
   app.get('/bot/versions', { preHandler: requireAuth() }, async (req) => {
     const tenantId = tenantOf(req);
