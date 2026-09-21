@@ -3,7 +3,23 @@
 import Link from 'next/link';
 import { useApi, fmt } from '@/lib/useApi';
 import { useSession } from '@/lib/session';
-import { Loading, ErrorBox } from '@/components/Shell';
+import {
+  PageHead, Grid, Stack, Row, Card, Stat, Meter, Pill, Dot, Note,
+  Button, Skeleton, ErrorBox, KV, KVRow,
+} from '@/components/ui';
+
+/**
+ * رئيسيّة العميل — «نبض اليوم».
+ *
+ * ★ القرار الذي أُعيد التصميم من أجله: **رقمٌ بطوليٌّ واحد.** كانت الشاشة ستّة
+ *   أرقامٍ متساوية الوزن، فلا تقول أيّها يهمّ — وصاحب المطعم يفتحها ثلاثين
+ *   ثانيةً وسط الخدمة. فالرقم البطوليّ يجيب سؤاله الأوّل وحده:
+ *     «في شيء يحتاجني؟» إن كان هناك، وإلّا «كم أنهى البوت بنفسه؟»
+ *   أي أنّ البطوليّ **يتبدّل بالحالة** لا بالتصنيف.
+ *
+ * ★ والعتبات صارت ظاهرة: 80% تحذير · 95% خطير · 100% حرج. بلا هذا يُفاجأ
+ *   العميل بسقفه، وهي أشيع شكوى في هذا النوع من المنتجات.
+ */
 
 interface Overview {
   conversationsToday: number;
@@ -27,6 +43,14 @@ interface Gap {
 
 const CHANNEL_LABEL: Record<string, string> = { whatsapp_cloud: 'واتساب', instagram: 'إنستجرام' };
 
+const OVERAGE: Record<string, string> = {
+  handoff_only:
+    'البوت توقّف، والرسائل ما زالت تصل وتُوسَم «يحتاج تدخّلاً». فريقك يردّ يدويّاً بلا حدّ — '
+    + 'لا زبونٌ يُترك بلا ردّ، ولا فاتورةٌ مفاجئة.',
+  block: 'البوت يرسل رسالةً واحدة مهذّبة ثمّ يصمت.',
+  bill: 'البوت يستمرّ، والتجاوز يُسجَّل ويُفوتَر.',
+};
+
 export default function HomePage() {
   const { me } = useSession();
   const hasTenant = Boolean(me?.tenant);
@@ -34,131 +58,122 @@ export default function HomePage() {
   const gaps = useApi<Gap[]>(hasTenant ? '/bot/knowledge/gaps' : null);
 
   // مالك المنصّة يُحوَّل إلى /console من Shell — هذا فقط لتفادي وميضٍ
-  if (!hasTenant) return <Loading rows={4} />;
-  if (loading) return <Loading rows={4} />;
+  if (!hasTenant || loading) return <Skeleton rows={5} />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
   if (!data) return null;
 
   const pct = data.windowsLimit ? data.windowsUsed / data.windowsLimit : 0;
   const atCap = pct >= 1;
+  const needs = data.needsAttention > 0;
 
   return (
-    <>
-      <div className="vh">
-        <div>
-          <h1>الرئيسيّة</h1>
-          <p>نبض اليوم</p>
-        </div>
-      </div>
+    <Stack gap="lg">
+      <PageHead
+        title="الرئيسيّة"
+        sub="نبض اليوم — والرقم الكبير هو ما يستحقّ انتباهك الآن."
+        actions={(
+          <Row gap="sm">
+            <Dot tone={atCap ? 'crit' : data.botEnabled ? 'ok' : 'neutral'} />
+            <span className="muted-p">
+              {atCap ? 'البوت متوقّف — السقف' : data.botEnabled ? 'البوت يعمل' : 'البوت مطفأ'}
+            </span>
+          </Row>
+        )}
+      />
 
       {atCap && (
-        <div className="note c">
-          <b>بلغتَ سقف الباقة لهذا الشهر.</b>{' '}
-          {data.overagePolicy === 'handoff_only'
-            ? 'البوت توقّف، والرسائل ما زالت تصل وتُوسَم «يحتاج تدخّلاً». فريقك يردّ يدويّاً بلا حدّ — لا زبونٌ يُترك بلا ردّ، ولا فاتورةٌ مفاجئة.'
-            : data.overagePolicy === 'block'
-              ? 'البوت يرسل رسالةً واحدة مهذّبة ثمّ يصمت.'
-              : 'البوت يستمرّ، والتجاوز يُسجَّل ويُفوتَر.'}{' '}
+        <Note tone="crit">
+          <b>بلغتَ سقف الباقة لهذا الشهر.</b> {OVERAGE[data.overagePolicy] ?? OVERAGE.bill}{' '}
           <Link href="/app/usage">شاهد الاستهلاك</Link>
-        </div>
+        </Note>
       )}
 
-      <div className="tiles">
-        <div className="tl">
-          <span className="v">{fmt.num(data.conversationsToday)}</span>
-          <span className="k">محادثة اليوم</span>
-        </div>
-        <div className="tl">
-          <span className="v">{fmt.num(data.botReplies)}</span>
-          <span className="k">ردّ بوت</span>
-        </div>
-        <div className={`tl ${atCap ? 'bad' : pct >= 0.8 ? 'hot' : ''}`}>
-          <span className="v">{fmt.num(data.windowsUsed)}<small> / {fmt.num(data.windowsLimit)}</small></span>
-          <span className="k">
-            نوافذ الشهر
-            <span className={`meter ${atCap ? 'crit' : pct >= 0.8 ? 'warn' : ''}`}>
-              <i style={{ width: `${Math.min(pct * 100, 100)}%` }} />
-            </span>
-          </span>
-        </div>
-        <div className="tl good">
-          <span className="v">{fmt.pct(data.selfResolvedRate)}</span>
-          <span className="k">أنهاها البوت بلا موظّف</span>
-        </div>
-        <div className="tl">
-          <span className="v">{(data.medianLatencyMs / 1000).toFixed(1)}<small> ث</small></span>
-          <span className="k">وسيط زمن الردّ</span>
-        </div>
-        <div className={`tl ${data.needsAttention ? 'bad' : ''}`}>
-          <span className="v">{fmt.num(data.needsAttention)}</span>
-          <span className="k">تحتاج تدخّلاً الآن</span>
-        </div>
-      </div>
+      {/* ★ البطوليّ يتبدّل بالحالة: ما يحتاجك أوّلاً، وإلّا ما يطمئنك. */}
+      <Grid min={220}>
+        {needs ? (
+          <Stat hero value={fmt.num(data.needsAttention)} label="محادثة تحتاج تدخّلك الآن" tone="crit" />
+        ) : (
+          <Stat hero value={fmt.pct(data.selfResolvedRate)} label="أنهاها البوت بلا موظّف" />
+        )}
+        <Stat value={fmt.num(data.conversationsToday)} label="محادثة اليوم" />
+        <Stat value={fmt.num(data.botReplies)} label="ردّ بوت" />
+        <Stat
+          value={fmt.num(data.windowsUsed)}
+          unit={`/ ${fmt.num(data.windowsLimit)}`}
+          label="نوافذ الشهر"
+          meter={{ pct }}
+        />
+        <Stat value={(data.medianLatencyMs / 1000).toFixed(1)} unit="ث" label="وسيط زمن الردّ" />
+        {needs && <Stat value={fmt.pct(data.selfResolvedRate)} label="أنهاها البوت بلا موظّف" tone="ok" />}
+      </Grid>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-        <div className="card">
-          <h2>حالة بوتك</h2>
-          <dl className="kv">
-            <dt>البوت</dt>
-            <dd>
-              {atCap ? <span className="pill crit">متوقّف — السقف</span>
-                : data.botEnabled ? <span className="pill ok">يعمل</span>
-                  : <span className="pill nt">مطفأ</span>}
-            </dd>
+      {/* العتبات مكتوبةٌ لا مُستنتَجة — فلا يُفاجأ أحدٌ بفاتورة */}
+      {!atCap && pct >= 0.8 && (
+        <Note tone={pct >= 0.95 ? 'crit' : 'warn'}>
+          <b>استهلكتَ {fmt.pct(pct)} من نوافذ الشهر.</b>{' '}
+          {pct >= 0.95
+            ? 'بقي أقلّ من 5٪. عند بلوغ السقف: '
+            : 'عند بلوغ السقف: '}
+          {OVERAGE[data.overagePolicy] ?? OVERAGE.bill}
+        </Note>
+      )}
+
+      <Grid min={320}>
+        <Card title="حالة قنواتك">
+          <KV>
+            <KVRow k="البوت">
+              {atCap ? <Pill tone="crit" label="متوقّف — السقف" />
+                : data.botEnabled ? <Pill tone="ok" label="يعمل" />
+                  : <Pill tone="neutral" label="مطفأ" />}
+            </KVRow>
             {data.channels.map((c) => (
-              <div key={c.kind} style={{ display: 'contents' }}>
-                <dt>{CHANNEL_LABEL[c.kind] ?? c.kind}</dt>
-                <dd>
-                  <span className={`dot ${c.status === 'connected' ? 'ok' : c.status === 'error' ? 'crit' : 'off'}`} />{' '}
-                  {c.displayName ?? (c.status === 'connected' ? 'موصول' : 'غير موصول')}
-                </dd>
-              </div>
+              <KVRow key={c.kind} k={CHANNEL_LABEL[c.kind] ?? c.kind}>
+                <Row gap="xs">
+                  <Dot tone={c.status === 'connected' ? 'ok' : c.status === 'error' ? 'crit' : 'neutral'} />
+                  <span>{c.displayName ?? (c.status === 'connected' ? 'موصول' : 'غير موصول')}</span>
+                </Row>
+              </KVRow>
             ))}
             {!data.channels.length && (
-              <>
-                <dt>القنوات</dt>
-                <dd><Link href="/app/channels">لم تربط قناةً بعد</Link></dd>
-              </>
+              <KVRow k="القنوات">
+                <Link href="/app/channels">لم تربط قناةً بعد — ابدأ من هنا</Link>
+              </KVRow>
             )}
-          </dl>
-        </div>
+          </KV>
+        </Card>
 
-        <div className="card">
-          <h2>فرصة تحسين — لا عطل</h2>
-          {gaps.loading && <div className="skel" style={{ height: 40 }} />}
+        <Card
+          title="فرصة تحسين — لا عطل"
+          actions={gaps.data?.length ? <Button size="sm" onClick={() => { location.href = '/app/bot?tab=kb'; }}>افتح المعرفة</Button> : undefined}
+        >
+          {gaps.loading && <Skeleton rows={2} height={18} />}
+
           {!gaps.loading && !gaps.data?.length && (
-            <p style={{ fontSize: 12.5, color: 'var(--muted)', margin: 0 }}>
-              لا أسئلة عجز عنها بوتك هذا الشهر. 🌿
-            </p>
+            <p className="muted-p">لا أسئلة عجز عنها بوتك هذا الشهر. 🌿</p>
           )}
+
           {!!gaps.data?.length && (
-            <>
-              <p style={{ fontSize: 12.5, color: 'var(--ink-2)', margin: '0 0 10px' }}>
+            <Stack gap="sm">
+              <p className="muted-p">
                 <b>{gaps.data.length}</b> سؤالاً عجز عنها بوتك. أضِفها لمعرفته وسترتفع نسبة ما يحلّه بنفسه.
               </p>
               {gaps.data.slice(0, 3).map((g) => (
-                <div key={g.query} style={{
-                  background: 'var(--surface-2)', borderRadius: 5, padding: '7px 10px',
-                  fontSize: 11.5, marginBottom: 6, lineHeight: 1.6,
-                }}>
-                  «{g.query}» — سُئل {g.times} مرّات
-                  <br />
-                  <span className="mono" style={{ color: g.retrieved === 0 ? 'var(--crit)' : 'var(--amber)' }}>
-                    {g.diagnosis}
-                  </span>
+                <div key={g.query} className="gap-row">
+                  <span>«{g.query}» — سُئل <span className="num">{g.times}</span> مرّات</span>
+                  {/* التمييز هو القيمة: «بحث ولم يجد» ≠ «وجد ولم يُجب» */}
+                  <Pill tone={g.retrieved === 0 ? 'crit' : 'warn'} label={g.diagnosis} />
                 </div>
               ))}
-              <Link className="btn sm" href="/app/bot?tab=kb">افتح المعرفة</Link>
-            </>
+            </Stack>
           )}
-        </div>
-      </div>
+        </Card>
+      </Grid>
 
-      <div className="note">
+      <Note>
         <b>تمييزٌ يوفّر عليك أسبوعاً.</b> «بحث ولم يجد» يعني أنّ المعلومة ناقصةٌ من معرفتك —
         أضِفها. و«وجد ولم يُجب» يعني أنّها موجودةٌ والمشكلة في شخصيّة البوت — راسلنا.
         بلا هذا التمييز تضيف محتوًى لمشكلةٍ ليست فيه.
-      </div>
-    </>
+      </Note>
+    </Stack>
   );
 }
