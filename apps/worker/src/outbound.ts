@@ -5,6 +5,7 @@ import {
 import { getAdapter, degradeChoices, canRender, type ChannelKind } from '@aibot/channels';
 import type { OutboundMessage } from '@aibot/shared';
 import { open as decrypt } from '@aibot/crypto';
+import { emitToTenant } from './events.js';
 
 /**
  * ★ طبقة الإرسال — ولا مسار آخر إلى Graph API في هذا النظام.
@@ -152,6 +153,24 @@ export async function sendOutbound(job: SendJob): Promise<{ messageId: string; e
         ? { botPausedUntil: new Date(Date.now() + 30 * 60_000), needsAttention: false }
         : {}),
     }).where(eq(conversations.id, job.conversationId));
+
+    /* ★ البثّ بعد الكتابة: ردّ البوت وردّ الموظّف يظهران لحظةَ إرسالهما
+       بدل انتظار تحديثٍ يدويّ. والحدث خارج ما يُرجَع لأنّ من ينتظر النتيجة
+       هو الطابور لا الشاشة. */
+    emitToTenant(job.tenantId, 'message:new', {
+      conversationId: job.conversationId,
+      message: {
+        id: messageId,
+        direction: 'out',
+        source: job.source === 'bot' ? 'bot' : job.source === 'agent' ? 'agent' : 'system',
+        type: msg.kind === 'choices' ? 'interactive' : msg.kind,
+        body: 'body' in msg ? msg.body : null,
+        payload: msg,
+        status: 'sent',
+        createdAt: new Date().toISOString(),
+      },
+    });
+    emitToTenant(job.tenantId, 'conversation:update', { id: job.conversationId });
 
     return { messageId, externalId: sent.externalId };
   });

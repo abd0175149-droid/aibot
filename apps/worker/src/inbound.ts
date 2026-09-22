@@ -2,6 +2,7 @@ import {
   getDb, withTenant, contacts, channelIdentities, conversations, messages,
   conversationWindows, tenantChannels, eq, and, isNull, sql,
 } from '@aibot/db';
+import { emitToTenant } from './events.js';
 import { capabilitiesFor, type ChannelKind, type ParsedWebhook } from '@aibot/channels';
 
 export interface InboundJob {
@@ -84,16 +85,47 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
         })
         .where(eq(conversations.id, conv.id));
 
+      /* ★ البثّ اللحظيّ — الجزء الذي كان مفقوداً كلّيّاً.
+         الشاشة تستمع لـ`message:new` منذ اليوم الأوّل ولم يبثّه أحد، فرسالة
+         الزبون لا تظهر حتّى يُحدّث الموظّف الصفحة. والبثّ **بعد** الكتابة
+         عمداً: لا نُعلن رسالةً قد تُلغى بتراجع المعاملة. */
+      emitToTenant(job.tenantId, 'message:new', {
+        conversationId: conv.id,
+        message: {
+          id: inserted[0]!.id,
+          direction: 'in',
+          source: 'customer',
+          type: m.type,
+          body: m.text,
+          payload: { buttonPayload: m.buttonPayload, mediaId: m.mediaId },
+          status: null,
+          createdAt: m.at.toISOString(),
+        },
+      });
+      emitToTenant(job.tenantId, 'conversation:update', { id: conv.id });
+
       /* ⑤ جدولة الردّ بتأخيرٍ ومعرّفٍ ثابت — دمج الرسائل المتتالية. */
       const { enqueueReply } = await import('./enqueue.js');
       await enqueueReply(conv.id);
     }
 
+    /* حالات التسليم: كانت تُكتب بلا بثّ، فعلامات ✓ و✓✓ و«فشلت» تتجمّد على
+       ما جُلب عند فتح الشاشة. */
     for (const s of job.parsed.statuses) {
-      await tx
+      const [row] = await tx
         .update(messages)
         .set({ status: s.status, errorCode: s.errorCode, errorMessage: s.errorMessage })
-        .where(and(eq(messages.channelId, job.channelId), eq(messages.externalId, s.externalId)));
+        .where(and(eq(messages.channelId, job.channelId), eq(messages.externalId, s.externalId)))
+        .returning({ id: messages.id, conversationId: messages.conversationId });
+      if (row) {
+        emitToTenant(job.tenantId, 'message:status', {
+          conversationId: row.conversationId,
+          id: row.id,
+          status: s.status,
+          errorCode: s.errorCode,
+          errorMessage: s.errorMessage,
+        });
+      }
     }
   });
 

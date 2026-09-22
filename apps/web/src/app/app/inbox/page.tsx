@@ -55,6 +55,8 @@ interface Msg {
     buttonPayload?: string | null;
   } | null;
   status: string | null;
+  errorCode?: string | null;
+  errorMessage?: string | null;
   createdAt: string;
 }
 
@@ -120,9 +122,25 @@ export default function InboxPage() {
   useSocket({
     'message:new': (p: { conversationId: string; message: Msg }) => {
       if (p.conversationId === active) {
-        thread.setData((t) => (t ? { ...t, items: [...t.items, p.message] } : t));
+        thread.setData((t) => {
+          if (!t) return t;
+          // الحدث قد يسبق ردّ الطلب أو يتأخّر عنه — فالمعرّف يمنع التكرار
+          if (t.items.some((m) => m.id && m.id === p.message.id)) return t;
+          return { ...t, items: [...t.items, p.message] };
+        });
       }
       void list.reload();
+    },
+    /* ★ حالة التسليم كانت تتجمّد على ما جُلب: العامل يكتبها من ويبهوك
+       الحالات بلا بثّ. الآن ✓ ثمّ ✓✓ ثمّ «قُرئت» تتبدّل أمام الموظّف. */
+    'message:status': (p: { conversationId: string; id: string; status: string; errorMessage?: string | null }) => {
+      if (p.conversationId !== active) return;
+      thread.setData((t) => (t ? {
+        ...t,
+        items: t.items.map((m) => (m.id === p.id
+          ? { ...m, status: p.status, errorMessage: p.errorMessage ?? null }
+          : m)),
+      } : t));
     },
     'conversation:update': () => void list.reload(),
   });
