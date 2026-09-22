@@ -19,6 +19,18 @@
  *     node --import tsx ops/set-password.ts
  *
  * وإن تُرك `NEW_PASSWORD` فارغاً وُلِّدت كلمةٌ قويّة وطُبعت **مرّةً واحدة**.
+ *
+ * ★ `FORCE_CHANGE=0` يُلغي الحدّ ② وحده، ولا يُقبل إلّا مع `NEW_PASSWORD`.
+ *
+ *   علّةُ الحدّ ② أنّ الكلمة المولَّدة هنا **يعرفها المشغّل** — فهي سرٌّ مشترك
+ *   لا سرٌّ خاصّ، ويجب أن تُستبدل. وحين يُملي صاحبُ الحساب كلمته بنفسه تسقط
+ *   العلّة: لا يوجد سرٌّ مشترك يُستبدل، والإجبار يصير حلقةً مغلقة — لأنّ
+ *   `/auth/password` يرفض أن تكون الجديدة نفس القديمة، فلا يستطيع صاحبه
+ *   الإبقاء على ما اختاره للتوّ.
+ *
+ *   ولذلك الشرط `supplied &&`: كلمةٌ مولَّدةٌ عشوائيّاً تُجبَر دائماً مهما
+ *   قيل في البيئة. والحدّان ① و③ لا يُعطَّلان بحالٍ: الجلسات تسقط، والأثر
+ *   يُسجَّل، ويُسجَّل معه أنّ الإجبار أُلغي ومن ألغاه.
  */
 import { randomBytes, scrypt as _scrypt } from 'node:crypto';
 import { promisify } from 'node:util';
@@ -58,13 +70,17 @@ async function main(): Promise<void> {
   const plain = supplied || generate();
   const hash = await hashPassword(plain);
 
+  /* كلمةٌ مولَّدةٌ يعرفها المشغّل ⇒ تُجبَر على التغيير دائماً، ولا يُلتفت
+     إلى `FORCE_CHANGE`. وكلمةٌ أملاها صاحب الحساب ⇒ القرار له. */
+  const forceChange = supplied ? process.env.FORCE_CHANGE !== '0' : true;
+
   const db = getDb();
   const out = await withPlatform(db, 'تعيين كلمة مرورٍ لحسابٍ بأمر المشغّل', async (tx) => {
     const user = (await tx.select().from(users).where(eq(users.email, email)).limit(1))[0];
     if (!user) return null;
 
     await tx.update(users)
-      .set({ passwordHash: hash, mustChangePassword: true })
+      .set({ passwordHash: hash, mustChangePassword: forceChange })
       .where(eq(users.id, user.id));
 
     // ② كلّ الجلسات تسقط — بما فيها جلسةُ من كان داخلاً بالكلمة القديمة
@@ -80,7 +96,7 @@ async function main(): Promise<void> {
       action: 'user.password_set_by_operator',
       entity: 'user',
       entityId: user.id,
-      diff: { generated: !supplied, sessionsRevoked: killed.length },
+      diff: { generated: !supplied, forceChange, sessionsRevoked: killed.length },
     });
 
     return { name: user.name, role: user.role, sessions: killed.length };
@@ -93,7 +109,7 @@ async function main(): Promise<void> {
 
   console.log(`✔ ${out.name} · ${out.role} · ${email}`);
   console.log(`  كلمة المرور: ${plain}`);
-  console.log(`  أُبطلت ${out.sessions} جلسة · ويجب تغييرها عند أوّل دخول`);
+  console.log(`  أُبطلت ${out.sessions} جلسة${forceChange ? ' · ويجب تغييرها عند أوّل دخول' : ' · تعمل كما هي'}`);
   console.log('  ⚠️ تُعرض هنا مرّةً واحدة ولا تُخزَّن نصّاً في أيّ مكان.');
 }
 
