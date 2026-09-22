@@ -1,5 +1,6 @@
 import './globals.css';
 import './components.css';
+import './inbox.css';
 import type { ReactNode } from 'react';
 import type { Metadata, Viewport } from 'next';
 import { SessionProvider } from '@/lib/session';

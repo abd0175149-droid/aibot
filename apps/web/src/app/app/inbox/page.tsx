@@ -1,31 +1,35 @@
 'use client';
 
-import { useEffect, useRef, useState, type FormEvent } from 'react';
-import { useApi, useToast, fmt } from '@/lib/useApi';
-import { post, idempotencyKey, ApiError } from '@/lib/api';
+import {
+  Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent,
+} from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { useApi, useToast, fmt, AR_LOCALE } from '@/lib/useApi';
+import { api, post, idempotencyKey, ApiError } from '@/lib/api';
 import { useCan } from '@/lib/session';
 import { useSocket } from '@/lib/socket';
-import {
-  Row, Stack, Pill, Dot, Note, Button, Skeleton, Empty, ErrorBox, KV, KVRow,
-} from '@/components/ui';
+import { Pill, Dot, Note, Button, Skeleton, Empty, ErrorBox } from '@/components/ui';
 
 /**
- * الإنبوكس — الشاشة التي يقضي فيها العميل وقته.
+ * الإنبوكس.
  *
- * ثلاثة قراراتٍ أُعيد التصميم من أجلها:
+ * ★ العطل الذي كان يُفقد الشاشة قيمتها كلّها — ورآه المستخدم قبلي:
+ *   **لا تمرير في الحوار.** `.thread` كان `flex: 1; overflow-y: auto` داخل
+ *   عمودٍ مرن، و`min-height` الافتراضيّ لعنصرٍ مرن هو `auto` — أي أنّه
+ *   **يرفض أن يصغر عن محتواه**. فلا يفيض شيءٌ أبداً، و`overflow` لا يشتغل،
+ *   ويقصّه الأب بـ`overflow: hidden`. والأسوأ أنّ **المُنشئ وشريط التدخّل
+ *   يُدفعان خارج الصندوق فيختفيان تماماً** — شاشةُ ردٍّ بلا حقل كتابة.
+ *   والحلّ بنيويّ لا ترقيعيّ: `Shell` يثبّت هذه الشاشة بارتفاعٍ حقيقيّ،
+ *   وكلّ عمودٍ مُمرِّرٍ يحمل `min-height: 0` صريحة.
  *
- * ★ ① **الهاتف أوّلاً.** صاحب المطعم يردّ من هاتفه وسط الخدمة. ثلاثة أعمدةٍ
- *     مضغوطةٍ على شاشةٍ بعرض 360px ليست إنبوكساً بل ألغاز. فعلى الهاتف لوحٌ
- *     واحدٌ يُبدَّل (قائمة ⟷ محادثة ⟷ بطاقة)، وثلاثة أعمدةٍ على الحاسوب وحده.
+ * ★ وستّ قدراتٍ يقدّمها الخادم اليوم ولم تكن الشاشة تلمسها:
+ *   البحث (`q`) · التصفيح بالمؤشّر (`cursor`) · رسائل أقدم (`before`) ·
+ *   مدّة إسكاتٍ يختارها الموظّف · حدود القناة (`maxTextLen` — والخادم
+ *   **يقصّ** الزائد بصمت فكان الموظّف لا يعلم أنّ رسالته بُترت) · وحالة
+ *   القناة (كان يردّ على قناةٍ مقطوعة بلا إشارة).
  *
- * ★ ② **ضغطة الزبون تظهر كضغطة.** كان الضغط يُعرض نصّاً — «أكّد» — فيقرأ
- *     الموظّف حواراً لا يفهمه. وهذا بالضبط ما أخفى عن الفريق يوماً كاملاً أنّ
- *     نمط زرّ التأكيد نصفُ نمط: الأزرار تُرسَل والضغط يصل ولا ينفّذ شيئاً، ثمّ
- *     يقول البوت «تم تسجيل طلبك» وهو لم يُسجَّل. لو كان الضغط ظاهراً كضغطةٍ
- *     على إجراءٍ باسمه لانكشف العطل من أوّل نظرة.
- *
- * ★ ③ **المصادر الأربعة تُفصَل بالشكل لا باللون وحده.** زبون · بوت · موظّف ·
- *     نظام — ولكلٍّ موضعٌ وعلامةٌ ونصّ. اللون وحده لا يصل إلى ٨٪ من الرجال.
+ * ★ والمحادثة المفتوحة في العنوان (`?c=`): فزرّ الرجوع في أندرويد وحركة
+ *   الحافّة في آيفون تُغلقان الحوار — وهو أوّل ما تفعله اليد بلا تفكير.
  */
 
 interface Conv {
@@ -53,9 +57,9 @@ interface Msg {
   payload: {
     options?: Array<{ id: string; title: string }>;
     buttonPayload?: string | null;
+    mediaId?: string | null;
   } | null;
   status: string | null;
-  errorCode?: string | null;
   errorMessage?: string | null;
   createdAt: string;
 }
@@ -63,6 +67,15 @@ interface Msg {
 interface Thread {
   items: Msg[];
   window: { expiresAt: string | null; open: boolean; billedAt: string | null };
+}
+
+interface ConvList { items: Conv[]; nextCursor: string | null }
+
+interface ChannelCaps {
+  kind: string;
+  status: string;
+  lastError: string | null;
+  capabilities: { maxTextLen: number; windowHours: number; quickReplies: number; buttons: number };
 }
 
 const CH: Record<string, { label: string; tone: 'brand' | 'violet' }> = {
@@ -73,13 +86,12 @@ const CH: Record<string, { label: string; tone: 'brand' | 'violet' }> = {
 const FILTERS = [
   { id: '', label: 'الكلّ' },
   { id: 'attn', label: 'يحتاج تدخّلاً' },
-  { id: 'unread', label: 'غير مقروء' },
   { id: 'whatsapp_cloud', label: 'واتساب' },
   { id: 'instagram', label: 'إنستجرام' },
 ] as const;
 
-const STATUS: Record<string, string> = {
-  queued: 'في الطابور', sent: '✓', delivered: '✓✓', read: '✓✓ قُرئت', failed: 'فشلت',
+const DELIVERY: Record<string, string> = {
+  queued: 'في الطابور', sent: '✓', delivered: '✓✓', read: '✓✓ قُرئت', failed: 'لم تصل',
 };
 
 const SOURCE: Record<string, { label: string; mark: string }> = {
@@ -87,6 +99,30 @@ const SOURCE: Record<string, { label: string; mark: string }> = {
   agent: { label: 'موظّف', mark: '◆' },
   template: { label: 'قالب', mark: '▤' },
 };
+
+/** مدد الإسكات — الخادم يقبل أيّ عدد دقائق، والشاشة كانت تُثبّت ٣٠. */
+const PAUSES = [
+  { m: 30, label: 'نصف ساعة' },
+  { m: 180, label: 'ثلاث ساعات' },
+  { m: 1440, label: 'حتّى الغد' },
+] as const;
+
+/**
+ * ★ رسائل الوسائط كانت تُرسَم **فقاعةً فارغة بتوقيتٍ وحده**: `type` مجلوبٌ
+ *   ومُعلَنٌ ولا يُستعمَل، و`body` يكون `null` لكلّ وسيط. فزبونٌ يرسل صورة
+ *   قائمةٍ أو تسجيلاً صوتيّاً يُنتج فراغاً — والموظّف يظنّ النظام معطوباً.
+ *   لا نستطيع عرض الوسيط بعد (لا نقطة تنزيل)، و**قولُ ما وصل أصدق من فراغ**.
+ */
+const MEDIA: Record<string, string> = {
+  image: 'صورة', audio: 'تسجيل صوتيّ', video: 'مقطع مرئيّ',
+  document: 'ملفّ', location: 'موقع', story_reply: 'ردٌّ على ستوري',
+  unsupported: 'نوعٌ لا تدعمه القناة',
+};
+
+function initial(name: string): string {
+  const t = name.trim();
+  return t ? [...t][0]!.toUpperCase() : '؟';
+}
 
 /** ما يُعرَض للموظّف عن ضغطةِ زرٍّ — لا «أكّد» عارية. */
 function pressLabel(payload: string): { verb: string; action: string } {
@@ -97,42 +133,87 @@ function pressLabel(payload: string): { verb: string; action: string } {
   return { verb: 'اختار', action: payload };
 }
 
-type Pane = 'list' | 'thread' | 'card';
+/** يومٌ مقروء لفاصل الحوار — «اليوم» و«أمس» ثمّ تاريخ. */
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const n = new Date();
+  const days = Math.floor(
+    (new Date(n.getFullYear(), n.getMonth(), n.getDate()).getTime()
+      - new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()) / 86400000,
+  );
+  if (days === 0) return 'اليوم';
+  if (days === 1) return 'أمس';
+  return new Intl.DateTimeFormat(AR_LOCALE, { day: 'numeric', month: 'long' }).format(d);
+}
 
-export default function InboxPage() {
+function InboxScreen() {
   const can = useCan();
+  const router = useRouter();
+  const params = useSearchParams();
   const { toast, node: toastNode } = useToast();
+
+  const active = params.get('c');
   const [filter, setFilter] = useState<string>('');
-  const [active, setActive] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [query, setQuery] = useState('');
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
-  /** اللوح الظاهر على الهاتف. على الحاسوب لا أثر له — الثلاثة معروضة. */
-  const [pane, setPane] = useState<Pane>('list');
+  const [extra, setExtra] = useState<Conv[]>([]);
+  const [older, setOlder] = useState<Msg[]>([]);
+  const [atBottom, setAtBottom] = useState(true);
+  const [pauseOpen, setPauseOpen] = useState(false);
 
-  const qs = filter === 'attn' ? '?needsAttention=true'
-    : filter === 'unread' ? '?unread=true'
-      : filter ? `?channel=${filter}` : '';
+  const bodyRef = useRef<HTMLDivElement>(null);
 
-  const list = useApi<{ items: Conv[] }>(`/conversations${qs}`, [filter]);
+  /* تهدئة البحث: الخادم يدعم `q` منذ البداية ولم تستعمله الشاشة إطلاقاً. */
+  useEffect(() => {
+    const t = setTimeout(() => setQuery(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
+  const qs = useMemo(() => {
+    const p = new URLSearchParams();
+    if (filter === 'attn') p.set('needsAttention', 'true');
+    else if (filter) p.set('channel', filter);
+    if (query) p.set('q', query);
+    const s = p.toString();
+    return s ? `?${s}` : '';
+  }, [filter, query]);
+
+  const list = useApi<ConvList>(`/conversations${qs}`, [qs]);
   const thread = useApi<Thread>(active ? `/conversations/${active}/messages` : null, [active]);
-  const threadRef = useRef<HTMLDivElement>(null);
+  const chans = useApi<{ items: ChannelCaps[] }>('/channel');
 
-  // التحديث الحيّ يكتب في الكاش مباشرةً — لا يُعيد الجلب.
-  // إنبوكسٌ بعشر محادثاتٍ نشطة يُرهق الشبكة لو أعاد الجلب مع كلّ حدث.
+  useEffect(() => { setExtra([]); }, [qs]);
+  useEffect(() => { setOlder([]); setDraft(''); setAtBottom(true); }, [active]);
+
+  const items = useMemo(() => [...(list.data?.items ?? []), ...extra], [list.data, extra]);
+  const conv = items.find((c) => c.id === active) ?? null;
+  const msgs = useMemo(() => [...older, ...(thread.data?.items ?? [])], [older, thread.data]);
+
+  const caps = chans.data?.items.find((c) => c.kind === conv?.channelKind);
+  const maxLen = caps?.capabilities.maxTextLen ?? 4096;
+  const win = thread.data?.window;
+  const remaining = win?.expiresAt ? fmt.remaining(win.expiresAt) : null;
+  const paused = Boolean(conv?.botPausedUntil && new Date(conv.botPausedUntil) > new Date());
+
+  const open = useCallback((id: string | null) => {
+    // العنوان يحمل المحادثة: زرّ الرجوع وحركة الحافّة يُغلقان الحوار
+    router.push(id ? `/app/inbox?c=${id}` : '/app/inbox');
+    if (id) void post(`/conversations/${id}/read`).catch(() => undefined);
+  }, [router]);
+
   useSocket({
     'message:new': (p: { conversationId: string; message: Msg }) => {
       if (p.conversationId === active) {
         thread.setData((t) => {
           if (!t) return t;
-          // الحدث قد يسبق ردّ الطلب أو يتأخّر عنه — فالمعرّف يمنع التكرار
           if (t.items.some((m) => m.id && m.id === p.message.id)) return t;
           return { ...t, items: [...t.items, p.message] };
         });
       }
       void list.reload();
     },
-    /* ★ حالة التسليم كانت تتجمّد على ما جُلب: العامل يكتبها من ويبهوك
-       الحالات بلا بثّ. الآن ✓ ثمّ ✓✓ ثمّ «قُرئت» تتبدّل أمام الموظّف. */
     'message:status': (p: { conversationId: string; id: string; status: string; errorMessage?: string | null }) => {
       if (p.conversationId !== active) return;
       thread.setData((t) => (t ? {
@@ -145,34 +226,54 @@ export default function InboxPage() {
     'conversation:update': () => void list.reload(),
   });
 
+  /* التمرير للأحدث — ولا يُقفز إن كان الموظّف يقرأ أعلى الحوار. */
   useEffect(() => {
-    if (!active && list.data?.items.length) setActive(list.data.items[0]!.id);
-  }, [list.data, active]);
+    const el = bodyRef.current;
+    if (el && atBottom) el.scrollTop = el.scrollHeight;
+  }, [msgs.length, atBottom]);
 
-  useEffect(() => {
-    const el = threadRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [thread.data?.items.length]);
-
-  const conv = list.data?.items.find((c) => c.id === active) ?? null;
-  const win = thread.data?.window;
-  const remaining = win?.expiresAt ? fmt.remaining(win.expiresAt) : null;
-  const paused = Boolean(conv?.botPausedUntil && new Date(conv.botPausedUntil) > new Date());
-
-  function openConv(id: string) {
-    setActive(id);
-    setPane('thread');
-    void post(`/conversations/${id}/read`).catch(() => undefined);
+  function onBodyScroll() {
+    const el = bodyRef.current;
+    if (!el) return;
+    setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
   }
 
-  async function send(e: FormEvent) {
-    e.preventDefault();
+  async function loadMoreConvs() {
+    const cursor = list.data?.nextCursor;
+    if (!cursor) return;
+    try {
+      const more = await api<ConvList>(
+        `/conversations${qs ? `${qs}&` : '?'}cursor=${encodeURIComponent(cursor)}`,
+      );
+      setExtra((x) => [...x, ...more.items]);
+      list.setData((d) => (d ? { ...d, nextCursor: more.nextCursor } : d));
+    } catch { toast('تعذّر جلب المزيد'); }
+  }
+
+  async function loadOlderMsgs() {
+    const first = msgs[0];
+    if (!first || !active) return;
+    try {
+      const more = await api<Thread>(
+        `/conversations/${active}/messages?before=${encodeURIComponent(first.createdAt)}`,
+      );
+      setOlder((o) => [...more.items, ...o]);
+    } catch { toast('تعذّر جلب الأقدم'); }
+  }
+
+  async function send(e?: FormEvent) {
+    e?.preventDefault();
     const text = draft.trim();
     if (!text || !active || sending) return;
+    if (text.length > maxLen) {
+      toast(`أطول من حدّ القناة (${maxLen} محرفاً) — والخادم يقصّ الزائد بصمت.`);
+      return;
+    }
     setSending(true);
     try {
       await post(`/conversations/${active}/messages`, { text }, { 'idempotency-key': idempotencyKey() });
       setDraft('');
+      setAtBottom(true);
       toast('ردّك أوقف البوت تلقائيّاً — بلا أن تضغط شيئاً');
       await thread.reload();
       await list.reload();
@@ -183,251 +284,266 @@ export default function InboxPage() {
     }
   }
 
-  async function toggleBot(pauseMinutes?: number) {
+  function onKey(e: KeyboardEvent<HTMLTextAreaElement>) {
+    // Enter يُرسل، وShift+Enter سطرٌ جديد — فلا يُفقد ردٌّ من فقرتين
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); }
+  }
+
+  async function setBot(pauseMinutes?: number) {
     if (!active) return;
+    setPauseOpen(false);
     await post(`/conversations/${active}/bot`, pauseMinutes != null ? { pauseMinutes } : { enabled: true });
     await list.reload();
     toast(pauseMinutes != null ? 'تولّيتَ المحادثة — البوت توقّف' : 'أُعيد البوت للعمل');
   }
 
+  /** المحادثة التالية المحتاجة تدخّلاً — انتقالٌ بلا عودةٍ إلى القائمة. */
+  const nextWaiting = items.find((c) => c.id !== active && c.needsAttention) ?? null;
+  const channelDown = Boolean(caps && caps.status === 'error');
+
   return (
-    <>
-      <div className="vh">
-        <div>
-          <h1>الإنبوكس</h1>
-          <p>
-            {can.settings
-              ? 'تدخّلك يوقف البوت تلقائيّاً، ومؤقّت النافذة ظاهرٌ قبل أن تكتب.'
-              : 'تقرأ وتردّ وتوسم. الإعدادات والفوترة لمالك الحساب.'}
-          </p>
-        </div>
-      </div>
+    <div className="ibx" data-pane={active ? 'thread' : 'list'}>
+      {toastNode}
 
-      {list.error && <ErrorBox message={list.error} onRetry={list.reload} />}
-
-      {/* مبدِّل اللوح — يظهر على الهاتف وحده */}
-      <div className="pane-switch" role="tablist" aria-label="أقسام الإنبوكس">
-        {([['list', 'المحادثات'], ['thread', 'الحوار'], ['card', 'الزبون']] as const).map(([id, label]) => (
-          <button
-            key={id} type="button" role="tab" className="tab"
-            aria-selected={pane === id} onClick={() => setPane(id)}
-            disabled={id !== 'list' && !conv}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      <div className={`inbox p-${pane}`}>
-        {/* ── القائمة ── */}
-        <div className="ibcol c-list">
-          <div className="ibhead">
-            <Row gap="xs">
-              {FILTERS.map((f) => (
-                <button
-                  key={f.id} type="button" className="chipf"
-                  aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </Row>
-          </div>
-
-          <div className="convs">
-            {list.loading && <div className="convs-load"><Skeleton rows={4} height={34} /></div>}
-
-            {!list.loading && !list.data?.items.length && (
-              <Empty
-                title="لا محادثات"
-                hint={filter
-                  ? 'لا محادثة تطابق هذا المرشّح. بدّله لترى غيرها.'
-                  : 'ستظهر هنا أوّل ما يراسلك زبون — خلال ثانيتين من وصول رسالته.'}
-              />
-            )}
-
-            {list.data?.items.map((c) => (
-              <button key={c.id} type="button" className="conv" aria-current={c.id === active}
-                onClick={() => openConv(c.id)}>
-                <span className="r1">
-                  <Pill tone={CH[c.channelKind]?.tone ?? 'neutral'} mark={false}
-                    label={CH[c.channelKind]?.label ?? c.channelKind} />
-                  <span className="nm" dir="auto">{c.contactName ?? c.displayHandle ?? c.handle}</span>
-                  <span className="tm">{fmt.when(c.lastMessageAt)}</span>
-                </span>
-                <span className="pv" dir="auto">{c.lastMessagePreview ?? '—'}</span>
-                <span className="r3">
-                  {c.needsAttention && <Pill tone="crit" label="يحتاج تدخّلاً" />}
-                  {c.unreadCount > 0 && <Pill tone="brand" label={`${c.unreadCount} جديد`} />}
-                  {c.tags.map((t) => <Pill key={t} tone="neutral" label={t} mark={false} />)}
-                </span>
+      {/* ══════ لوح القائمة ══════ */}
+      <section className="ibx-list" aria-label="المحادثات">
+        <header className="ibx-lhead">
+          <input
+            className="ibx-search" type="search" value={search} dir="auto"
+            placeholder="ابحث باسمٍ أو رقمٍ أو نصّ رسالة…"
+            aria-label="بحث في المحادثات"
+            onChange={(e) => setSearch(e.target.value)}
+          />
+          <div className="ibx-chips" role="group" aria-label="مرشّحات">
+            {FILTERS.map((f) => (
+              <button key={f.id} type="button" className="chipf"
+                aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
+                {f.label}
               </button>
             ))}
           </div>
+        </header>
+
+        <div className="ibx-body">
+          {list.loading && <div className="ibx-pad"><Skeleton rows={5} height={52} /></div>}
+          {list.error && <div className="ibx-pad"><ErrorBox message={list.error} onRetry={list.reload} /></div>}
+
+          {!list.loading && !list.error && !items.length && (
+            <div className="ibx-pad">
+              <Empty
+                title={query ? 'لا نتيجة' : 'لا محادثات'}
+                hint={query
+                  ? `لا محادثة تطابق «${query}». البحث يشمل الاسم والرقم ونصّ آخر رسالة.`
+                  : filter
+                    ? 'لا محادثة تطابق هذا المرشّح. بدّله لترى غيرها.'
+                    : 'ستظهر هنا أوّل ما يراسلك زبون — خلال ثانيتين من وصول رسالته.'}
+              />
+            </div>
+          )}
+
+          {items.map((c) => {
+            const name = c.contactName ?? c.displayHandle ?? c.handle;
+            return (
+              <button
+                key={c.id} type="button" className="ibx-row" aria-current={c.id === active}
+                data-state={c.needsAttention ? 'attn' : c.unreadCount ? 'unread' : 'calm'}
+                onClick={() => open(c.id)}
+              >
+                <span className="ibx-edge" aria-hidden="true" />
+                <span className={`ibx-av ${CH[c.channelKind]?.tone ?? 'neutral'}`} aria-hidden="true">
+                  {initial(name)}
+                  {c.unreadCount > 0 && <i className="ibx-badge">{c.unreadCount}</i>}
+                </span>
+                <span className="ibx-main">
+                  <span className="ibx-name" dir="auto">{name}</span>
+                  <span className="ibx-prev" dir="auto">{c.lastMessagePreview ?? '—'}</span>
+                </span>
+                <span className="ibx-meta">
+                  <span className="ibx-time">{fmt.when(c.lastMessageAt)}</span>
+                  {c.needsAttention && <span className="ibx-attn">يحتاج تدخّلاً</span>}
+                </span>
+              </button>
+            );
+          })}
+
+          {list.data?.nextCursor && (
+            <div className="ibx-pad">
+              <Button onClick={() => void loadMoreConvs()}>حمّل محادثاتٍ أقدم</Button>
+            </div>
+          )}
         </div>
+      </section>
 
-        {/* ── الحوار ── */}
-        <div className="ibcol c-thread">
-          {!conv ? (
+      {/* ══════ لوح الحوار ══════ */}
+      <section className="ibx-thread" aria-label="الحوار">
+        {!conv ? (
+          <div className="ibx-pad">
             <Empty title="اختر محادثة" hint="اختر من القائمة لترى الحوار كما رآه الزبون." />
-          ) : (
-            <>
-              <div className="ibhead">
-                <Row gap="sm">
-                  <strong dir="auto">{conv.contactName ?? conv.displayHandle ?? conv.handle}</strong>
-                  <span className="mono handle">{conv.handle}</span>
-                  <Pill tone={CH[conv.channelKind]?.tone ?? 'neutral'} mark={false}
-                    label={CH[conv.channelKind]?.label ?? conv.channelKind} />
-                  <span className="grow" />
-                  {/* ★ المؤقّت ظاهرٌ دائماً — لا يُترك الموظّف يكتب ثمّ تُرفض رسالته */}
-                  <Pill tone={win?.open ? 'ok' : 'warn'}
-                    label={win?.open ? `تبقّى ${remaining ?? '—'}` : 'النافذة مغلقة'} />
-                </Row>
+          </div>
+        ) : (
+          <>
+            <header className="ibx-thead">
+              <button type="button" className="ibx-back" onClick={() => open(null)} aria-label="رجوع للقائمة">
+                ⟩
+              </button>
+              <span className="ibx-tname" dir="auto">
+                {conv.contactName ?? conv.displayHandle ?? conv.handle}
+              </span>
+              <span className="mono ibx-thandle">{conv.handle}</span>
+              <Pill tone={CH[conv.channelKind]?.tone ?? 'neutral'} mark={false}
+                label={CH[conv.channelKind]?.label ?? conv.channelKind} />
+              <span className="ibx-grow" />
+              <Pill tone={win?.open ? 'ok' : 'warn'}
+                label={win?.open ? `تبقّى ${remaining ?? '—'}` : 'النافذة مغلقة'} />
+            </header>
+
+            {channelDown && (
+              <div className="ibx-pad">
+                <Note tone="crit">
+                  <b>قناة {CH[conv.channelKind]?.label} معطّلة الآن.</b>{' '}
+                  {caps?.lastError ?? 'راجع صفحة القنوات.'} وأيّ ردٍّ ترسله قد لا يصل.
+                </Note>
               </div>
+            )}
 
-              <div className="thread" ref={threadRef}>
-                {thread.loading && <Skeleton rows={3} height={44} />}
+            <div className="ibx-body" ref={bodyRef} onScroll={onBodyScroll}>
+              {thread.loading && <div className="ibx-pad"><Skeleton rows={4} height={40} /></div>}
+              {thread.error && (
+                <div className="ibx-pad"><ErrorBox message={thread.error} onRetry={thread.reload} /></div>
+              )}
 
-                {thread.data?.items.map((m) => {
-                  if (m.source === 'system') return <div className="bub sys" key={m.id} dir="auto">{m.body}</div>;
+              {!thread.loading && !thread.error && msgs.length >= 50 && (
+                <div className="ibx-pad">
+                  <Button size="sm" onClick={() => void loadOlderMsgs()}>رسائل أقدم</Button>
+                </div>
+              )}
 
-                  /* ★ ضغطةُ زرٍّ تُعرض كضغطةٍ على إجراءٍ باسمه، لا كنصٍّ عارٍ. */
-                  const press = m.direction === 'in' ? m.payload?.buttonPayload : null;
-                  if (press) {
-                    const { verb, action } = pressLabel(press);
-                    return (
-                      <div className="bub press" key={m.id} dir="auto">
-                        <span className="press-v">{verb}</span>
-                        <span className="press-a mono">{action}</span>
+              {msgs.map((m, i) => {
+                const prev = msgs[i - 1];
+                const newDay = !prev || dayLabel(prev.createdAt) !== dayLabel(m.createdAt);
+                const press = m.direction === 'in' ? m.payload?.buttonPayload : null;
+                const media = !m.body && MEDIA[m.type] ? MEDIA[m.type] : null;
+                const src = m.direction === 'in' ? null : SOURCE[m.source] ?? SOURCE.bot!;
+                const cls = m.direction === 'in' ? 'in' : m.source === 'agent' ? 'agent' : 'bot';
+
+                return (
+                  <div key={m.id || `${i}-${m.createdAt}`} className="ibx-msg">
+                    {newDay && <div className="ibx-day"><span>{dayLabel(m.createdAt)}</span></div>}
+
+                    {m.source === 'system' ? (
+                      <div className="bub sys" dir="auto">{m.body}</div>
+                    ) : press ? (
+                      <div className="bub press" dir="auto">
+                        <span className="press-v">{pressLabel(press).verb}</span>
+                        <span className="press-a mono">{pressLabel(press).action}</span>
                         <span className="mt">{fmt.clock(m.createdAt)} · ضغطة زرّ</span>
                       </div>
-                    );
-                  }
-
-                  const src = m.direction === 'in' ? null : SOURCE[m.source] ?? SOURCE.bot!;
-                  const cls = m.direction === 'in' ? 'in' : m.source === 'agent' ? 'agent' : 'bot';
-                  /* ★ `dir="auto"` على كلّ نصٍّ لم نكتبه نحن.
-                     كان `{m.body}` خامّاً داخل حاضنٍ مفروضٍ RTL — ورسائل زبائن
-                     المطاعم والعيادات مختلطةٌ بطبيعتها: «iPhone 15 بكم؟»، رابط،
-                     رمز صنف، «OK تمام». ورسالةٌ تبدأ بلاتينيّ تأخذ اتجاه الحاضن
-                     لا اتجاهها، فتقفز نقطتها وأقواسها إلى الحافّة الخطأ.
-                     أداةٌ وظيفتها **قراءة رسائل الزبون** كانت تعرضها بترتيبٍ خاطئ. */
-                  return (
-                    <div className={`bub ${cls}`} key={m.id} dir="auto">
-                      {src && (
-                        <span className="src">
-                          <span aria-hidden="true">{src.mark}</span> {src.label}
+                    ) : (
+                      <div className={`bub ${cls}`} dir="auto">
+                        {src && (
+                          <span className="src"><span aria-hidden="true">{src.mark}</span> {src.label}</span>
+                        )}
+                        {media ? <span className="ibx-media">📎 {media}</span> : m.body}
+                        {!!m.payload?.options?.length && (
+                          <span className="chips">
+                            {m.payload.options.map((o) => <span className="c" key={o.id}>{o.title}</span>)}
+                            <span className="chips-n">أُرسلت كأزرار — والزبون يضغط ولا يكتب</span>
+                          </span>
+                        )}
+                        <span className="mt">
+                          {fmt.clock(m.createdAt)}
+                          {m.direction === 'out' && m.status ? ` · ${DELIVERY[m.status] ?? m.status}` : ''}
                         </span>
-                      )}
-                      {m.body}
-                      {!!m.payload?.options?.length && (
-                        <span className="chips">
-                          {m.payload.options.map((o) => (
-                            <span className="c" key={o.id}>{o.title}</span>
-                          ))}
-                          <span className="chips-n">أُرسلت كأزرار — والزبون يضغط ولا يكتب</span>
-                        </span>
-                      )}
-                      <span className="mt">
-                        {fmt.clock(m.createdAt)}
-                        {m.direction === 'out' && m.status ? ` · ${STATUS[m.status] ?? m.status}` : ''}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
+                        {/* سببُ الفشل كان مجلوباً ولا يُعرض: «فشلت» بلا سبب */}
+                        {m.status === 'failed' && m.errorMessage && (
+                          <span className="ibx-err">{m.errorMessage}</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
-              {/* ★ حالتان لا لبس بينهما: الغموض هنا = موظّفٌ وبوتٌ يتحدّثان معاً */}
-              <div className="takeover">
+            {/* ══════ الرصيف: كلّ فعلٍ متكرّر هنا ══════ */}
+            <div className="ibx-dock">
+              <div className="ibx-take">
                 <Dot tone={paused ? 'warn' : conv.botEnabled ? 'ok' : 'neutral'} />
                 <strong>{paused ? 'تولّيتَ المحادثة' : conv.botEnabled ? 'البوت يردّ' : 'البوت متوقّف'}</strong>
                 <span className="muted-p">
                   {paused
                     ? `يعود ${fmt.when(conv.botPausedUntil)}`
-                    : conv.botEnabled ? 'وسيتوقّف تلقائيّاً لحظة ما تردّ' : ''}
+                    : conv.botEnabled ? 'ويتوقّف لحظة ما تردّ' : ''}
                 </span>
-                <span className="grow" />
-                <Button size="sm" disabled={can.readOnly} reason="حسابك للقراءة فقط"
-                  onClick={() => void toggleBot(paused ? undefined : 30)}>
-                  {paused ? 'أعِد البوت الآن' : 'تولّيتُ المحادثة'}
-                </Button>
+                <span className="ibx-grow" />
+                {paused ? (
+                  <Button size="sm" disabled={can.readOnly} reason="حسابك للقراءة فقط"
+                    onClick={() => void setBot()}>أعِد البوت</Button>
+                ) : (
+                  <span className="ibx-pause">
+                    <Button size="sm" disabled={can.readOnly} reason="حسابك للقراءة فقط"
+                      onClick={() => setPauseOpen((v) => !v)}>تولّيتُ المحادثة ▾</Button>
+                    {pauseOpen && (
+                      <span className="ibx-menu" role="menu">
+                        {PAUSES.map((p) => (
+                          <button key={p.m} type="button" role="menuitem" onClick={() => void setBot(p.m)}>
+                            {p.label}
+                          </button>
+                        ))}
+                      </span>
+                    )}
+                  </span>
+                )}
               </div>
 
               {win?.open === false ? (
                 <div className="locked">
-                  <strong>لا يمكن الإرسال — نافذة الـ24 ساعة مغلقة.</strong> تُفتح من جديد حين
-                  يُرسل الزبون رسالة. عطّلنا حقل الكتابة <strong>قبل</strong> أن تكتب، فلا تُرفض
-                  رسالةٌ بعد كتابتها.
+                  <strong>
+                    لا يمكن الإرسال — نافذة الـ{caps?.capabilities.windowHours ?? 24} ساعة مغلقة.
+                  </strong>{' '}
+                  تُفتح من جديد حين يُرسل الزبون رسالة. عطّلنا حقل الكتابة <strong>قبل</strong> أن
+                  تكتب، فلا تُرفض رسالةٌ بعد كتابتها.
                 </div>
               ) : (
-                <form className="composer" onSubmit={send}>
-                  <input
-                    id="inbox-draft" value={draft} onChange={(e) => setDraft(e.target.value)}
-                    placeholder="اكتب ردّك…" disabled={sending || can.readOnly} aria-label="نصّ الردّ"
+                <form className="ibx-comp" onSubmit={send}>
+                  <textarea
+                    id="ibx-draft" className="ibx-ta" value={draft} dir="auto" rows={2}
+                    placeholder="اكتب ردّك… (Enter يُرسل · Shift+Enter سطرٌ جديد)"
+                    aria-label="نصّ الردّ" disabled={sending || can.readOnly}
+                    onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey}
                   />
-                  <Button type="submit" variant="primary" size="sm" busy={sending}
-                    disabled={!draft.trim() || can.readOnly} reason="حسابك للقراءة فقط">
-                    إرسال
-                  </Button>
+                  <div className="ibx-send">
+                    {draft.length > maxLen * 0.8 && (
+                      <span className={`num ibx-count${draft.length > maxLen ? ' over' : ''}`}>
+                        {draft.length} / {maxLen}
+                      </span>
+                    )}
+                    <Button type="submit" variant="primary" size="sm" busy={sending}
+                      disabled={!draft.trim() || can.readOnly} reason="حسابك للقراءة فقط">
+                      إرسال
+                    </Button>
+                  </div>
                 </form>
               )}
-            </>
-          )}
-        </div>
 
-        {/* ── بطاقة الزبون ── */}
-        <div className="ibcol c-card">
-          <div className="pane">
-            {conv ? (
-              <Stack gap="md">
-                <div>
-                  <div className="ph">بطاقة الزبون</div>
-                  <strong dir="auto">{conv.contactName ?? '—'}</strong>
-                  <div className="mono handle">{conv.handle}</div>
-                </div>
+              {nextWaiting && (
+                <button type="button" className="ibx-next" onClick={() => open(nextWaiting.id)}>
+                  ⟩ التالي المنتظر: {nextWaiting.contactName ?? nextWaiting.handle}
+                  {' · '}{fmt.when(nextWaiting.lastMessageAt)}
+                </button>
+              )}
+            </div>
+          </>
+        )}
+      </section>
+    </div>
+  );
+}
 
-                <div>
-                  <div className="ph">هويّاته عبر القنوات</div>
-                  <Row gap="xs">
-                    <Pill tone={CH[conv.channelKind]?.tone ?? 'neutral'} mark={false}
-                      label={CH[conv.channelKind]?.label ?? conv.channelKind} />
-                    <span className="mono handle">{conv.handle}</span>
-                  </Row>
-                </div>
-
-                <div>
-                  <div className="ph">الوسوم</div>
-                  <Row gap="xs">
-                    {conv.tags.length
-                      ? conv.tags.map((t) => <Pill key={t} tone="neutral" label={t} mark={false} />)
-                      : <span className="muted-p">لا وسوم</span>}
-                  </Row>
-                </div>
-
-                <KV>
-                  <KVRow k="النافذة">
-                    {win?.open ? `مفتوحة — تبقّى ${remaining ?? '—'}` : 'مغلقة'}
-                  </KVRow>
-                  <KVRow k="فُوتِرت">
-                    {win?.billedAt ? fmt.when(win.billedAt) : 'لا — لم يردّ أحدٌ بعد'}
-                  </KVRow>
-                </KV>
-
-                {!can.settings && (
-                  <Note>
-                    <b>مقفلٌ عليك:</b> إعدادات البوت · المعرفة · الفوترة · حذف جهة الاتّصال.
-                    اطلبها من مالك الحساب.
-                  </Note>
-                )}
-              </Stack>
-            ) : (
-              <p className="muted-p">اختر محادثةً لترى بطاقة زبونها.</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {toastNode}
-    </>
+export default function InboxPage() {
+  return (
+    <Suspense fallback={<Skeleton rows={6} />}>
+      <InboxScreen />
+    </Suspense>
   );
 }

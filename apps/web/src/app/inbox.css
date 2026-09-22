@@ -1,0 +1,285 @@
+/*
+ * الإنبوكس.
+ *
+ * ★★★ العطل الذي وُلد منه هذا الملفّ — والمستخدم رآه قبلنا: **لا تمرير**.
+ *
+ *   `.thread` كان `flex: 1; overflow-y: auto` داخل عمودٍ مرن. و`min-height`
+ *   الافتراضيّ لعنصرٍ مرن هو **`auto`** — أي أنّه يرفض أن يصغر عن محتواه.
+ *   فالعمود ينمو بطول الرسائل، ولا يفيض شيءٌ أبداً، فـ`overflow-y: auto` لا
+ *   يشتغل ولا يظهر شريط تمرير. ثمّ يقصّه `.inbox` بـ`overflow: hidden`.
+ *   والأسوأ: **المُنشئ وشريط التدخّل يُدفعان خارج الصندوق فيختفيان** — شاشةُ
+ *   ردٍّ بلا حقل كتابة.
+ *
+ *   ولذلك قاعدةٌ صريحة في كلّ ملفّ هذا: **كلّ حاوٍ مُمرِّرٍ في شبكةٍ أو عمودٍ
+ *   مرن يحمل `min-height: 0`.** ولا يُترك للافتراض.
+ *
+ * ★ والارتفاع لم يعد مخمَّناً. كان `calc(100vh - 150px)` — رقمٌ يخمّن ارتفاع
+ *   الترويسة والحشو ويكذب مع أوّل تغيير. الآن `Shell` يضع `.pinned` على هذه
+ *   الشاشة وحدها: الصفحة لا تمرّ، والشبكة تملأ ما بقي بـ`minmax(0, 1fr)`.
+ */
+
+/* ══════════════ الشاشة المثبَّتة ══════════════ */
+/* ★ `min-height: 0` هنا ليس زينة: `.shell` تحمل `min-height: 100vh`، و`100vh`
+   على الهاتف **يشمل شريط العنوان** الذي ينزلق. فلو بقي، لصار أدنى ارتفاعٍ
+   للهيكل أطولَ من الشاشة الفعليّة، فتمرّ الصفحةُ نفسها ويهرب الرصيف (وفيه حقل
+   الكتابة) تحت الحافّة. و`100dvh` هو الارتفاع الحقيقيّ الآن. */
+.shell.pinned {
+  min-height: 0; height: 100dvh; overflow: hidden;
+  grid-template-rows: minmax(0, 1fr);
+}
+
+/* ★ عمودٌ مرن لا شبكةُ صفوفٍ مُعدّة. السبب: `main` يحمل ابناً **شرطيّاً**
+   (لافتةُ الانتحال). فلو كتبنا `grid-template-rows: auto minmax(0, 1fr)`
+   لسقط الإنبوكس — وهو الابن الوحيد عادةً — في الصفّ `auto`، فيأخذ ارتفاع
+   محتواه، ولا يفيض، ولا يمرّ: نفس العطل بعينه من بابٍ آخر. */
+.main.pinned {
+  padding: 0; display: flex; flex-direction: column;
+  min-height: 0; overflow: hidden;
+}
+/* سقف العرض العامّ لا يسري هنا: الإنبوكس يملأ الشاشة */
+.main.pinned > * { max-width: none; flex: none; }
+.main.pinned > .note { margin: 10px 12px 0; }
+.main.pinned > .ibx { flex: 1 1 auto; min-height: 0; }
+/* `100vh` في `.side` يتجاوز ارتفاع الهيكل الحقيقيّ فيُخرج ذيلها */
+.shell.pinned .side { height: 100%; }
+
+@media (max-width: 700px) {
+  /* شريط التنقّل صفٌّ بارتفاع محتواه، والإنبوكس يأخذ ما بقي — لا أكثر */
+  .shell.pinned { grid-template-rows: auto minmax(0, 1fr); }
+  .shell.pinned .side { padding-block: 4px; }
+}
+
+/* ══════════════ الشبكة ══════════════ */
+.ibx {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-height: 0;
+  overflow: hidden;
+  background: var(--surface);
+}
+
+/* على الهاتف لوحٌ واحد — واللوح **نتيجةُ حالة** لا تبويبٌ يُدار */
+.ibx-list, .ibx-thread {
+  display: flex; flex-direction: column;
+  min-height: 0; min-width: 0; overflow: hidden;
+}
+.ibx[data-pane='thread'] .ibx-list { display: none; }
+.ibx[data-pane='list'] .ibx-thread { display: none; }
+
+/* ★ الحاوي المُمرِّر الوحيد في كلّ لوح */
+.ibx-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.ibx-pad { padding: 14px; }
+.ibx-thread .ibx-body > .ibx-pad { padding: 0 0 12px; }
+.ibx-grow { margin-inline-start: auto; }
+
+/* ══════════════ رأس القائمة ══════════════ */
+.ibx-lhead {
+  flex: none; padding: 10px 12px; border-bottom: 1px solid var(--rule);
+  background: var(--surface-2); display: flex; flex-direction: column; gap: 8px;
+}
+.ibx-search {
+  width: 100%; min-height: 44px; border-radius: 8px;
+  border: 1px solid var(--rule-strong); background: var(--surface);
+  padding: 0 12px; font-size: var(--t-body); color: var(--ink);
+}
+.ibx-search::placeholder { color: var(--muted); }
+/* المرشّحات صفٌّ واحدٌ يُمرَّر — والالتفاف يغيّر ارتفاع الرأس فتقفز القائمة */
+.ibx-chips {
+  display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.ibx-chips::-webkit-scrollbar { display: none; }
+
+/* ══════════════ صفّ المحادثة ══════════════ */
+/* أعمدةٌ ثابتة الإحداثيّات: العين تنزل رأسيّاً ولا تبحث أفقيّاً. */
+.ibx-row {
+  display: grid;
+  grid-template-columns: 4px 40px minmax(0, 1fr) auto;
+  gap: 10px; align-items: center;
+  width: 100%; min-height: 68px; padding-block: 8px; padding-inline: 0;
+  text-align: start; border-bottom: 1px solid var(--rule-soft);
+  background: var(--surface); color: inherit;
+}
+.ibx-row:hover { background: var(--surface-2); }
+.ibx-row[aria-current='true'] { background: var(--brand-wash); }
+
+/* شريط الحافّة: يُقرأ بالطرف البصريّ قبل قراءة حرف */
+.ibx-edge { align-self: stretch; border-radius: 0 3px 3px 0; background: transparent; }
+.ibx-row[data-state='attn'] .ibx-edge { background: var(--crit); }
+.ibx-row[data-state='unread'] .ibx-edge { background: var(--brand); }
+
+/* الشِّعار الحرفيّ: مرساةٌ بصريّة، وحلقته تقول القناة بلا شارةٍ تأكل عرضاً */
+.ibx-av {
+  position: relative; width: 40px; height: 40px; border-radius: 50%;
+  display: grid; place-items: center; flex: none;
+  font-size: 15px; font-weight: 600;
+  background: var(--surface-2); color: var(--ink-2);
+  border: 2px solid var(--rule);
+}
+.ibx-av.brand { border-color: var(--brand); color: var(--brand-ink); background: var(--brand-wash); }
+.ibx-av.violet { border-color: var(--violet); color: var(--violet-ink); background: var(--violet-wash); }
+.ibx-badge {
+  position: absolute; inset-block-start: -4px; inset-inline-start: -4px;
+  min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
+  background: var(--brand); color: var(--signal-on);
+  font-size: 11px; font-style: normal; line-height: 18px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.ibx-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ibx-name {
+  font-size: var(--t-body); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ibx-prev {
+  font-size: var(--t-sm); color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ibx-meta {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
+  flex: none; padding-inline-end: 12px;
+}
+.ibx-time { font-size: var(--t-label); color: var(--muted); white-space: nowrap; }
+.ibx-attn {
+  font-size: var(--t-label); font-weight: 600; color: var(--crit);
+  background: var(--crit-wash); border-radius: 999px; padding: 1px 8px; white-space: nowrap;
+}
+
+/* ══════════════ رأس الحوار ══════════════ */
+.ibx-thead {
+  flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; border-bottom: 1px solid var(--rule); background: var(--surface-2);
+}
+.ibx-tname { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ibx-thandle { font-size: var(--t-label); color: var(--muted); }
+.ibx-back {
+  min-width: 44px; min-height: 44px; border-radius: 8px; flex: none;
+  color: var(--ink-2); font-size: 18px; line-height: 1;
+}
+.ibx-back:hover { background: var(--surface-3); }
+
+/* ══════════════ الحوار ══════════════ */
+.ibx-thread .ibx-body { background: var(--bg); padding: 14px; }
+.ibx-msg { display: flex; flex-direction: column; align-items: stretch; }
+.ibx-day {
+  display: flex; align-items: center; gap: 10px;
+  margin: 14px 0 8px; color: var(--muted); font-size: var(--t-label);
+}
+.ibx-day::before, .ibx-day::after {
+  content: ''; flex: 1; height: 1px; background: var(--rule);
+}
+.ibx-media { display: inline-block; font-style: italic; color: var(--ink-2); }
+.ibx-err {
+  display: block; margin-top: 5px; font-size: var(--t-label);
+  color: var(--crit); line-height: 1.5;
+}
+
+/* ══════════════ الرصيف — كلّ فعلٍ متكرّر هنا ══════════════ */
+.ibx-dock {
+  flex: none; border-top: 1px solid var(--rule); background: var(--surface);
+  /* على الهاتف: يبقى فوق شريط النظام */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.ibx-take {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  padding: 8px 12px; border-bottom: 1px solid var(--rule-soft);
+  font-size: var(--t-sm); background: var(--surface-2);
+}
+.ibx-pause { position: relative; display: inline-flex; }
+.ibx-menu {
+  position: absolute; inset-block-end: calc(100% + 6px); inset-inline-end: 0;
+  display: flex; flex-direction: column; min-width: 150px; z-index: 20;
+  background: var(--surface); border: 1px solid var(--rule-strong);
+  border-radius: 8px; box-shadow: var(--shadow); overflow: hidden;
+}
+.ibx-menu button {
+  padding: 11px 14px; text-align: start; font-size: var(--t-sm);
+  color: var(--ink-2); min-height: 44px;
+}
+.ibx-menu button:hover { background: var(--brand-wash); color: var(--brand-ink); }
+
+.ibx-comp { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px; }
+.ibx-ta {
+  flex: 1; min-width: 0; resize: none;
+  min-height: 46px; max-height: 160px;
+  border: 1px solid var(--rule-strong); border-radius: 10px;
+  padding: 11px 13px; background: var(--surface);
+  font-size: var(--t-body); line-height: 1.6; color: var(--ink);
+}
+.ibx-ta::placeholder { color: var(--muted); }
+.ibx-ta:disabled { background: var(--surface-2); }
+.ibx-send { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
+.ibx-count { font-size: var(--t-label); color: var(--muted); }
+.ibx-count.over { color: var(--crit); font-weight: 600; }
+
+/* انتقالٌ للتالي بلا عودةٍ إلى القائمة */
+.ibx-next {
+  display: block; width: 100%; min-height: 44px;
+  padding: 10px 14px; text-align: start;
+  border-top: 1px solid var(--rule-soft); background: var(--brand-wash);
+  color: var(--brand-ink); font-size: var(--t-sm); font-weight: 500;
+}
+.ibx-next:hover { filter: brightness(.97); }
+
+/* ══════════════ الحاسوب يرث الهاتف ══════════════ */
+/* لا انعكاس ولا تخطيطٌ ثانٍ: نفس العلامة ونفس الأصناف، واستعلامٌ واحد
+   يُظهر اللوحين معاً. وفي RTL المسار الأوّل هو الأيمن — فالقائمة يميناً
+   بترتيب الشبكة لا بحيلة. */
+@media (min-width: 860px) {
+  .ibx { grid-template-columns: 340px minmax(0, 1fr); }
+  .ibx-thread .ibx-body > *,
+  .ibx-take, .ibx-comp, .ibx-next { max-width: 860px; margin-inline: auto; }
+  .ibx[data-pane='thread'] .ibx-list,
+  .ibx[data-pane='list'] .ibx-thread { display: flex; }
+  .ibx-thread { border-inline-start: 1px solid var(--rule); }
+  .ibx-back { display: none; }
+}
+
+/* ══════════════ الفقاعات ══════════════ */
+/* ثلاثة أصواتٍ لا صوتان: الزبون (محاذاة البداية)، البوت (نهاية، فيروزيّ)،
+   والموظّف (نهاية، بنفسجيّ). والبنفسجيّ لا الكهرمانيّ عمداً: الكهرمانيّ في
+   هذه المنصّة يعني **تحذيراً**، وتدخّلُ موظّفٍ ليس تحذيراً. */
+.bub {
+  position: relative; max-width: min(78%, 560px);
+  padding: 9px 13px; border-radius: 13px;
+  font-size: var(--t-sm); line-height: 1.7;
+  word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap;
+}
+.ibx-msg + .ibx-msg { margin-top: 7px; }
+/* الحوار عمودٌ مرن فتعمل المحاذاة الذاتيّة، والفاصل اليوميّ يأخذ العرض كلّه */
+.bub.in     { align-self: flex-start; background: var(--surface); border: 1px solid var(--rule-strong); border-start-start-radius: 3px; }
+.bub.bot    { align-self: flex-end;   background: var(--brand-wash);  border: 1px solid var(--brand);  border-start-end-radius: 3px; }
+.bub.agent  { align-self: flex-end;   background: var(--violet-wash); border: 1px solid var(--violet); border-start-end-radius: 3px; }
+.bub.sys {
+  align-self: center; max-width: 88%; text-align: center;
+  background: transparent; border: 1px dashed var(--rule-strong);
+  color: var(--muted); font-size: var(--t-label); border-radius: 7px; padding: 6px 12px;
+}
+
+/* ★ ضغطةُ زرٍّ تُعرض كضغطةٍ على إجراءٍ باسمه — لا كنصٍّ عارٍ.
+   عرضُها نصّاً هو ما أخفى يوماً كاملاً أنّ نمط التأكيد كان نصفَ نمط. */
+.bub.press {
+  align-self: flex-start; white-space: normal;
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  background: var(--surface); border: 1px solid var(--brand);
+  border-start-start-radius: 3px;
+}
+.press-v { font-weight: 600; color: var(--brand-ink); background: var(--brand-wash); border-radius: 5px; padding: 1px 8px; }
+.press-a { font-size: var(--t-label); color: var(--muted); }
+.bub.press .mt { width: 100%; }
+
+/* 12px أرضيّةٌ صلبة: الفرق بين ح وخ وج نقطةٌ بعرض بكسل، ودونها تندمج */
+.src { display: block; font-size: var(--t-label); font-weight: 600; margin-bottom: 3px; }
+.bub.bot   .src { color: var(--brand-ink); }
+.bub.agent .src { color: var(--violet-ink); }
+.mt { display: block; font-size: var(--t-label); color: var(--muted); margin-top: 4px; }
+
+/* الأزرار المُرسلة: تُعرض كأزرارٍ لأنّها وصلت الزبون أزراراً */
+.chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+.chips .c {
+  border: 1px solid var(--brand); color: var(--brand-ink); background: var(--surface);
+  border-radius: 6px; padding: 3px 10px; font-size: var(--t-label); white-space: nowrap;
+}
+.chips-n { display: block; width: 100%; font-size: var(--t-label); color: var(--muted); margin-top: 4px; line-height: 1.5; }
+
+@media (max-width: 560px) { .bub { max-width: 86%; } }

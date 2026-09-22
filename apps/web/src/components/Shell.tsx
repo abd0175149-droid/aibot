@@ -49,6 +49,16 @@ export function Shell({
 
   const visible = nav.filter((n) => !n.needs || me.permissions[n.needs]);
 
+  /**
+   * ★ شاشةٌ مثبَّتة: الصفحة نفسها لا تمرّ، والتمرير داخل ألواحها وحدها.
+   *
+   * العطل الذي وُلد منه هذا: الإنبوكس كان يخمّن ارتفاعه بـ
+   * `calc(100vh - 150px)` داخل حاوٍ بحشو، فينتج **تمريران متداخلان** —
+   * وأسوأ: المُنشئ وشريط التدخّل يُدفعان خارج الصندوق فيختفيان تماماً.
+   * والتثبيت يُلغي السبب من أصله: لا ارتفاعَ يُخمَّن ولا حشوَ يُطرح.
+   */
+  const pinned = path === '/app/inbox';
+
   /* ★ بندٌ نشطٌ **واحد**. كان الشرط `path === href || path.startsWith(href + '/')`،
      و`/app/inbox` يبدأ بـ`/app/` — فكان بندان يُوسمان aria-current معاً،
      ويُضاءان معاً. الصحيح أطول بادئةٍ مطابقة وحدها. */
@@ -63,7 +73,7 @@ export function Shell({
   }
 
   return (
-    <div className="shell">
+    <div className={`shell${pinned ? ' pinned' : ''}`}>
       <nav className="side" aria-label="القائمة">
         <div className="brand">
           <b>AiBot</b>
@@ -92,7 +102,7 @@ export function Shell({
         </div>
       </nav>
 
-      <main className="main">
+      <main className={`main${pinned ? ' pinned' : ''}`}>
         {me.impersonating && (
           <Note tone="warn">
             <b>انتحال نشط — قراءةٌ فقط.</b> كلّ فعلٍ كاتبٍ مرفوض، والجلسة 30 دقيقة،

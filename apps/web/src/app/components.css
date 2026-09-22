@@ -263,10 +263,8 @@ td.n, th.n { white-space: nowrap; }
 }
 .gap-row > span:first-child { min-width: 0; flex: 1; }
 
-/* ══════════════ الإنبوكس ══════════════ */
-/* مبدِّل اللوح: الهاتف وحده. على الحاسوب الثلاثة معروضةٌ فلا معنى له. */
-.pane-switch { display: none; }
-
+/* ══════════════ مرشّحاتٌ مشتركة ══════════════ */
+/* الإنبوكس وصفحة الحوادث كلتاهما تُرشّحان بأزرارٍ مضغوطة */
 .chipf {
   font-size: var(--t-label); padding: 3px 10px; border-radius: 999px;
   border: 1px solid var(--rule); background: var(--surface); color: var(--muted);
@@ -276,47 +274,14 @@ td.n, th.n { white-space: nowrap; }
   border-color: var(--brand); background: var(--brand-wash);
   color: var(--brand-ink); font-weight: 600;
 }
-.convs-load { padding: 12px; }
-.grow { margin-inline-start: auto; }
-.handle { font-size: 10.5px; color: var(--muted); }
-.ibhead .row { flex-wrap: wrap; }
 
-/* ★ ضغطةُ زرٍّ تُعرض كضغطةٍ على إجراءٍ باسمه — لا كنصٍّ عارٍ.
-   عرضُها نصّاً هو ما أخفى يوماً كاملاً أنّ نمط التأكيد كان نصفَ نمط. */
-.bub.press {
-  align-self: flex-start;
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  background: var(--surface); border: 1px solid var(--brand);
-  border-start-start-radius: 2px;
-}
-.press-v {
-  font-weight: 600; color: var(--brand-ink);
-  background: var(--brand-wash); border-radius: 5px; padding: 1px 8px;
-}
-.press-a { font-size: 11px; color: var(--muted); }
-.bub.press .mt { width: 100%; }
-
-.chips-n {
-  display: block; width: 100%; font-size: 10px; color: var(--muted);
-  margin-top: 4px; line-height: 1.5;
+/* شريطُ منعٍ — الإنبوكس وصفحة البوت كلتاهما تعرضانه */
+.locked {
+  padding: 11px 13px; border-top: 1px solid var(--crit);
+  background: var(--crit-wash); font-size: var(--t-sm);
+  color: var(--crit); line-height: 1.6;
 }
 
-/* ── الهاتف: لوحٌ واحدٌ يُبدَّل ── */
-@media (max-width: 700px) {
-  .pane-switch {
-    display: flex; gap: 2px; margin-bottom: 10px;
-    border-bottom: 1px solid var(--rule); overflow-x: auto;
-  }
-  .inbox { grid-template-columns: 1fr; height: auto; }
-  .inbox .ibcol { display: none; }
-  .inbox.p-list .c-list,
-  .inbox.p-thread .c-thread,
-  .inbox.p-card .c-card { display: flex; }
-  .inbox .ibcol + .ibcol { border-inline-start: none; }
-  /* ارتفاعٌ ثابتٌ للحوار فيبقى المُنشئ في المتناول بلا تمريرٍ طويل */
-  .inbox.p-thread .c-thread { height: calc(100vh - 210px); min-height: 360px; }
-  .inbox.p-list .c-list { max-height: none; }
-}
 
 /* ══════════════ سقف عرض المحتوى ══════════════ */
 /* ★ بلا سقف، تتمدّد خمس بطاقاتٍ صغيرة المحتوى على شاشةٍ بعرض 1900 بكسل فتصير

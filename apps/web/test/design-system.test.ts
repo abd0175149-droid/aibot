@@ -23,6 +23,22 @@ import { join, relative } from 'node:path';
  */
 
 const ROOT = join(__dirname, '..', 'src');
+
+/**
+ * ★ أوراق الأنماط تُشتقّ من `layout.tsx` ولا تُكتب يدويّاً.
+ *
+ *   كانت مكتوبةً يدويّاً `['globals.css', 'components.css']` في موضعين، فلمّا
+ *   أُضيف `inbox.css` بقي الحارسان يجهلانه: صار كلّ صنفٍ فيه «غير معرَّف» —
+ *   أي أنّ الحارس بدأ يكذب في الاتّجاهين معاً، ينفي المعرَّف ولا يمسك الميّت —
+ *   وصار كلّ توكِنٍ فيه بلا فحصٍ أصلاً. والأوراق التي يحمّلها التخطيط فعلاً
+ *   هي المصدر الوحيد للحقيقة هنا.
+ */
+const SHEETS = [...readFileSync(join(ROOT, 'app', 'layout.tsx'), 'utf8')
+  .matchAll(/^import '\.\/([\w.-]+\.css)';/gm)].map((m) => m[1]!);
+
+const CSS_ALL = SHEETS
+  .map((f) => readFileSync(join(ROOT, 'app', f), 'utf8'))
+  .join('\n');
 /* تُقبل بصيغتَي التعليق: `// style-ok:` في TS، و`{/* style-ok: *\/}` داخل JSX
    — وهي الصيغة الوحيدة الممكنة بين عناصر JSX. */
 const MARKER = /(?:\/\/|\/\*)\s*style-ok:\s*\S/;
@@ -121,9 +137,7 @@ describe('نظام التصميم — الحدّ مفروضٌ لا مرجوّ', 
 });
 
 describe('التوكِنات — الثيمات الثلاث كلّها معرَّفة', () => {
-  const css = ['globals.css', 'components.css']
-    .map((f) => readFileSync(join(ROOT, 'app', f), 'utf8'))
-    .join('\n');
+  const css = CSS_ALL;
 
   it('كلّ توكِنٍ مستعمَلٍ معرَّفٌ في :root المجرّد', () => {
     /* ★ توكِنٌ معرَّفٌ داخل media أو [data-theme] وحده = العطل الكلاسيكيّ:
@@ -165,10 +179,6 @@ describe('التوكِنات — الثيمات الثلاث كلّها معرَ
  * فيبدو «مكسوراً» بلا أن يفشل شيء. وهذا بالضبط ما حدث حين تعايشت مفردتان
  * للأصناف (‏`.btn.pri` القديمة مع `.btn.primary` الجديدة).
  */
-const CSS_ALL = ['globals.css', 'components.css']
-  .map((f) => readFileSync(join(ROOT, 'app', f), 'utf8'))
-  .join('\n');
-
 /** كلّ صنفٍ معرَّفٍ في أيّ قاعدةٍ أو حالة. */
 const DEFINED = new Set(
   [...CSS_ALL.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)].map((m) => m[1]!),
@@ -178,6 +188,13 @@ const DEFINED = new Set(
 const EXTERNAL = new Set(['sr-only']);
 
 describe('لا صنفَ ميّت — الصنف غير المعرَّف يسقط بلا نمطٍ بلا أن يفشل شيء', () => {
+  it('الحارس يقرأ كلّ ورقةٍ يحمّلها التخطيط', () => {
+    // بلا هذا الفحص، ورقةٌ تُنسى تجعل الحارس يمرّ على كلّ شيءٍ صامتاً
+    expect(SHEETS).toContain('globals.css');
+    expect(SHEETS).toContain('components.css');
+    expect(SHEETS).toContain('inbox.css');
+  });
+
   it('كلّ صنفٍ مستعمَلٍ في JSX معرَّفٌ في CSS', () => {
     const used = new Map();
     for (const { rel, src } of files) {
@@ -192,7 +209,7 @@ describe('لا صنفَ ميّت — الصنف غير المعرَّف يسقط
     const missing = [...used].map(([c, f]) => `${c} (${f})`);
     expect(
       missing,
-      'صنفٌ مستعمَلٌ غير معرَّفٍ في globals.css ولا components.css — '
+      'صنفٌ مستعمَلٌ غير معرَّفٍ في أيّ ورقةٍ يحمّلها التخطيط — '
       + 'العنصر يُرسم بلا نمطٍ إطلاقاً ولا يفشل شيء.',
     ).toEqual([]);
   });
