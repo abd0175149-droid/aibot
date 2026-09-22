@@ -31,15 +31,14 @@ const MARKER = /(?:\/\/|\/\*)\s*style-ok:\s*\S/;
  * سقف الملفّات القديمة، مأخوذٌ من الواقع لحظة بناء طبقة المكوّنات.
  * القاعدة: **ينزل ولا يصعد.** وحذف مدخلٍ هنا يعني أنّ الملفّ هُوجر تماماً.
  */
-const LEGACY: Record<string, number> = {
-  'app/(legal)/privacy/page.tsx': 2,
-  'app/(legal)/terms/page.tsx': 2,
-  'app/app/bot/page.tsx': 13,
-  'app/app/layout.tsx': 1,
-  'app/console/incidents/page.tsx': 11,
-  'app/console/margin/page.tsx': 13,
-  'app/console/page.tsx': 3,
-};
+/**
+ * ★ فارغٌ الآن — **كلّ شاشةٍ في المنتج مهاجَرة**، من 101 نمطٍ مضمَّن إلى صفر.
+ *
+ * والجدول يبقى موجوداً لا يُحذف: هو آليّة الترحيل التدريجيّ إن دخلت شاشةٌ
+ * قديمةٌ يوماً. وفراغه يعني أنّ البوّابة الأولى (ملفٌّ جديد = صفر) تسري
+ * على **كلّ** ملفّ بلا استثناء.
+ */
+const LEGACY: Record<string, number> = {};
 
 function walk(dir: string): string[] {
   const out: string[] = [];
@@ -155,5 +154,51 @@ describe('التوكِنات — الثيمات الثلاث كلّها معرَ
     const states = [...css.matchAll(/--(?:ok|warn|serious|crit):\s*(#[0-9a-f]{6})/gi)]
       .map((m) => m[1]!.toLowerCase());
     expect(states).not.toContain(brand);
+  });
+});
+
+/**
+ * ★ حارس الصنف الميّت.
+ *
+ * بلا Tailwind ولا أنواعٍ على `className`، صنفٌ يُكتب خطأً — أو يبقى بعد حذف
+ * نسخةٍ قديمة من CSS — **لا يرمي ولا يُحذّر**: العنصر يُرسم بلا نمطٍ إطلاقاً،
+ * فيبدو «مكسوراً» بلا أن يفشل شيء. وهذا بالضبط ما حدث حين تعايشت مفردتان
+ * للأصناف (‏`.btn.pri` القديمة مع `.btn.primary` الجديدة).
+ */
+const CSS_ALL = ['globals.css', 'components.css']
+  .map((f) => readFileSync(join(ROOT, 'app', f), 'utf8'))
+  .join('\n');
+
+/** كلّ صنفٍ معرَّفٍ في أيّ قاعدةٍ أو حالة. */
+const DEFINED = new Set(
+  [...CSS_ALL.matchAll(/\.(-?[_a-zA-Z][\w-]*)/g)].map((m) => m[1]!),
+);
+
+/** أصنافٌ تأتي من مكتبةٍ أو من الخارج ولا تُعرَّف عندنا. */
+const EXTERNAL = new Set(['sr-only']);
+
+describe('لا صنفَ ميّت — الصنف غير المعرَّف يسقط بلا نمطٍ بلا أن يفشل شيء', () => {
+  it('كلّ صنفٍ مستعمَلٍ في JSX معرَّفٌ في CSS', () => {
+    const used = new Map();
+    for (const { rel, src } of files) {
+      if (rel.startsWith('app/') === false && rel.startsWith('components/') === false) continue;
+      // حرفيّات className فقط — لا تعابير القوالب المركَّبة
+      for (const m of src.matchAll(/className="([^"{}]+)"/g)) {
+        for (const c of m[1]!.split(/\s+/).filter(Boolean)) {
+          if (!DEFINED.has(c) && !EXTERNAL.has(c)) used.set(c, rel);
+        }
+      }
+    }
+    const missing = [...used].map(([c, f]) => `${c} (${f})`);
+    expect(
+      missing,
+      'صنفٌ مستعمَلٌ غير معرَّفٍ في globals.css ولا components.css — '
+      + 'العنصر يُرسم بلا نمطٍ إطلاقاً ولا يفشل شيء.',
+    ).toEqual([]);
+  });
+
+  it('الماسح يمسك الشكل فعلاً', () => {
+    expect(DEFINED.has('stat')).toBe(true);
+    expect(DEFINED.has('this-class-does-not-exist')).toBe(false);
   });
 });

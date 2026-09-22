@@ -268,17 +268,33 @@ export function DangerButton({ children, confirmWord, onConfirm, disabled }: {
 
 /* ══════════════ الحقول ══════════════ */
 
-export function Field({ label, hint, error, children, id }: {
+export function Field({ label, hint, error, children, id, labelless }: {
   label: string; hint?: string; error?: string; children: ReactNode; id: string;
+  /**
+   * ★ المحتوى ليس عنصراً قابلاً للوسم (عرضٌ للقراءة، مجموعةٌ من الأزرار…).
+   *
+   * `<label for>` لا يرتبط إلّا بـinput/textarea/select/button/meter/progress.
+   * فوسمٌ يشير إلى `div` **معطَّلٌ تماماً**: لا نقرةً تنقل التركيز، ولا القارئ
+   * الصوتيّ يربط الاسم بالمحتوى — يقرأ نصّاً عارياً بلا عنوان. وهنا نستعمل
+   * عنواناً حقيقيّاً ونربطه بالمجموعة بـ`aria-labelledby`.
+   */
+  labelless?: boolean;
 }) {
+  const head = (
+    <>
+      {label}
+      {hint && <span className="hint">{hint}</span>}
+    </>
+  );
   return (
     <div className="field">
-      {/* label مرتبطٌ بـid — لا placeholder بديلاً عن الوسم */}
-      <label htmlFor={id}>
-        {label}
-        {hint && <span className="hint">{hint}</span>}
-      </label>
-      {children}
+      {labelless
+        ? <span className="field-h" id={`${id}-lbl`}>{head}</span>
+        /* label مرتبطٌ بـid — لا placeholder بديلاً عن الوسم */
+        : <label htmlFor={id}>{head}</label>}
+      {labelless
+        ? <div role="group" aria-labelledby={`${id}-lbl`}>{children}</div>
+        : children}
       {error && <span className="field-e" role="alert">{error}</span>}
     </div>
   );
@@ -297,17 +313,24 @@ export function Input({ id, value, onChange, type = 'text', placeholder, dir, di
   );
 }
 
-export function TextArea({ id, value, onChange, rows, placeholder, count }: {
+export function TextArea({ id, value, onChange, rows, placeholder, count, dir }: {
   id: string; value: string; onChange: (v: string) => void;
   rows?: number; placeholder?: string;
   /** عدّادٌ حيّ — يلوّن عند الاقتراب من الحدّ لا بعد تجاوزه */
   count?: { used: number; limit: number; unit: string };
+  /**
+   * ★ `dir="auto"` على حقلٍ يكتب فيه المستخدم.
+   *   و`dir` سِمةٌ لا يعوّضها CSS، ولا يُغني وضعها على الحاوي: نصّ `textarea`
+   *   يُقاس من **قيمته** لا من أبيه. وبلا هذا يُرسم النصّ نفسه بترتيبَين:
+   *   ترتيبٍ في العرض للقراءة (الذي يحمل `dir="auto"`) وترتيبٍ آخر في الحقل.
+   */
+  dir?: 'auto' | 'ltr' | 'rtl';
 }) {
   const pct = count ? count.used / count.limit : 0;
   return (
     <>
       <textarea
-        id={id} className="ta" value={value} rows={rows} placeholder={placeholder}
+        id={id} className="ta" value={value} rows={rows} placeholder={placeholder} dir={dir}
         onChange={(e) => onChange(e.target.value)}
       />
       {count && (

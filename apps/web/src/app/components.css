@@ -68,7 +68,7 @@
    19px، وتوكِنٌ ثمّ 24px حرفيّ)، فالقيمة الحقيقيّة لا تُعرف إلّا بقراءة
    الملفّ كاملاً. تعريفٌ واحد. */
 .stat {
-  background: var(--surface); border: 1px solid var(--rule);
+  background: var(--surface); border: 1px solid var(--rule-strong);
   border-radius: var(--radius); padding: 11px 13px;
   display: flex; flex-direction: column; gap: 3px; min-width: 0;
 }
@@ -123,7 +123,7 @@ td.n, th.n { white-space: nowrap; }
 .btn.md { padding: 7px 14px; font-size: var(--t-sm); }
 /* هدف لمسٍ ≥ 44px حيث يُستعمل بإصبع — الإنبوكس يُدار من الهاتف */
 @media (pointer: coarse) {
-  .btn { min-height: 40px; }
+  .btn { min-height: 44px; }
   .btn.md { min-height: 44px; }
 }
 
@@ -393,3 +393,370 @@ a.stat.hero:hover { background: var(--brand-wash); filter: brightness(1.04); }
   font-size: var(--t-label); line-height: 1.55; color: var(--muted);
   max-width: 34ch; text-wrap: pretty;
 }
+
+/* ══════════════ قشرة لوحة العميل — عدّاد السقف (app/app/layout.tsx) ══════════════ */
+/* ★ لماذا صنفٌ جديد ولم يكفِ مكوّن: العدّاد ليس بطاقة رقمٍ بل **سطرُ قشرة**.
+   `Stat` لوحٌ بحافةٍ وفِلٍّ يكسر شريطاً بعرض 210px، ويصير على الهاتف بطاقةً
+   داخل شريط تنقّل. وكان العدّاد `div` بنمطٍ مضمَّن وشريطاً مرسوماً بيده — أي
+   ثالثَ تعريفٍ لـ`.meter` في المشروع.
+   وهو **رابطٌ** لا نصّ: الرقم الذي يقول «قاربتَ السقف» ولا يُوصِل إلى تفصيله
+   يُشخّص ولا يُعالج — وهو أوّل ما يُبحث عنه عند بلوغ السقف.
+   ويعمل في تخطيطَين: عمودٌ في الشريط الجانبيّ على الحاسوب، وصفٌّ ملتفٌّ داخل
+   شريط التنقّل الأفقيّ على الهاتف. */
+.cap {
+  display: flex; flex-direction: column; justify-content: center; gap: 5px;
+  align-self: stretch;          /* .side-foot يحاذي الأبناء إلى البداية، فيُمدّ صراحةً */
+  min-height: 44px;             /* هدف اللمس — والقشرة أوّل ما يُلمس على الهاتف */
+  padding: 5px 8px; margin-inline: -8px;  /* يبقى داخل حاشية الذيل (16px) بلا إزاحةٍ بصريّة */
+  border-radius: var(--radius);
+  color: var(--ink-2); text-decoration: none;
+  font-size: var(--t-sm); line-height: 1.5;
+  transition: background .13s, color .13s;
+}
+.cap:hover { background: var(--surface-3); color: var(--ink); }
+.cap-h { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.cap-n { font-weight: 600; color: var(--ink); }
+.cap-u { color: var(--muted); }
+/* السهم علامةُ وِجهةٍ لا زينة — ويتبع اتّجاه القراءة فيقع في نهاية السطر */
+.cap-go { margin-inline-start: auto; color: var(--brand-ink); }
+/* الشريط جاهزٌ من `Meter` — يُلغى هامشه العلويّ فقط لأنّ الفراغ من التخطيط هنا */
+.cap .meter { margin-top: 0; }
+/* الهيكل والخطأ يحتاجان عرضاً: الأبناء بلا عرضٍ ذاتيٍّ ينكمشون إلى صفرٍ في عمودٍ يحاذي البداية */
+.cap-load { align-self: stretch; min-width: 90px; }
+.cap-err {
+  display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  color: var(--muted); font-size: var(--t-label); line-height: 1.55; max-width: 26ch;
+}
+
+@media (max-width: 700px) {
+  /* الذيل صفٌّ ملتفّ — فالعدّاد يصير كتلةً أفقيّةً مرتفعةً عن الشريط بسطحها
+     وحده (لا حافة): الارتفاع خطوةُ لمعانٍ في هذا النظام لا خطٌّ مرسوم. */
+  .cap {
+    flex-direction: row; align-items: center; gap: 8px;
+    align-self: auto; flex: none; margin-inline: 0;
+    background: var(--surface);
+  }
+  /* ★ الالتفاف مسموحٌ على الهاتف: `nowrap` يُنتج تمريراً أفقيّاً خفيّاً على 360px */
+  .cap-h { flex-wrap: wrap; }
+  .cap .meter { width: 56px; flex: none; }
+  .cap-go { margin-inline-start: 0; }
+  .cap-load { align-self: auto; width: 90px; }
+  .cap-err { flex-direction: row; align-items: center; max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) { .cap { transition: none; } }
+
+/* ══════════════ الخصوصيّة والشروط — نصٌّ طويل يُقرأ ══════════════ */
+/* ★ هاتان الصفحتان تعيشان **خارج القشرة**: لا شريط جانبيّ ولا `.main`، فلا
+   يسري عليهما سقف العرض ولا الحشو. فتحملان قياسهما بنفسهما، وإلّا التصقتا
+   بحافّة الشاشة على الهاتف وتمدّدتا إلى 1900 بكسل على الحاسوب.
+
+   والمقياس الحاكم هنا واحدٌ لا خمسة: **طول السطر**. */
+
+.legal { max-width: 1060px; margin: 0 auto; padding: 0 16px 80px; }
+
+/* ── شريطٌ رقيق: الوثيقة تُفتح من رابطٍ خارجيّ (مراجعة ميتا، تذييل عرضٍ،
+      رسالة بريد) فلا قشرة حولها. وبلا طريقٍ للعودة تصير الصفحة مصيدة. ── */
+.legal-bar {
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  padding: 10px 0; margin-bottom: 26px; border-bottom: 1px solid var(--rule);
+}
+.legal-bar b { font-size: var(--t-h2); font-weight: 700; }
+.legal-bar nav { margin-inline-start: auto; display: flex; gap: 4px; flex-wrap: wrap; }
+/* هدف لمسٍ ≥44px: ثلاثة روابطَ متجاورةٍ بسطرٍ واحدٍ رقيق لا تُنقر بإصبع */
+.legal-bar a {
+  display: inline-flex; align-items: center; min-height: 44px;
+  padding: 0 12px; border-radius: 7px;
+  font-size: var(--t-sm); color: var(--ink-2); text-decoration: none;
+}
+.legal-bar a:hover { background: var(--surface-2); color: var(--ink); }
+.legal-bar a[aria-current='page'] {
+  background: var(--brand-wash); color: var(--brand-ink); font-weight: 600;
+}
+
+/* ── الترويسة: تدرّجٌ طباعيٌّ يبدأ من هنا ── */
+.legal-h { margin-bottom: 26px; }
+.legal-k { margin: 0 0 7px; font-size: var(--t-label); color: var(--muted); }
+.legal-h h1 { margin: 0; font-size: var(--t-display); font-weight: 700; line-height: 1.35; }
+.legal-lead {
+  margin: 11px 0 0; max-width: 56ch;
+  font-size: 15px; line-height: 1.8; color: var(--ink-2); text-wrap: pretty;
+}
+/* ★ تاريخ آخر تحديث ليس زينة: الوثيقة القانونيّة بلا تاريخٍ لا يُعرف أيّ
+   نسخةٍ قرأها العميل — و`<time>` يجعله مقروءاً للآلة أيضاً. */
+.legal-upd {
+  display: inline-flex; align-items: baseline; gap: 7px; margin: 18px 0 0;
+  padding: 4px 12px; border-radius: 999px;
+  background: var(--surface-2); font-size: var(--t-label); color: var(--muted);
+}
+.legal-upd time { color: var(--ink-2); font-weight: 600; }
+
+/* ── الهيكل: الهاتف مقاسٌ أوّل — عمودٌ واحدٌ والفهرس فوق النصّ ── */
+.legal-body { display: grid; gap: 28px; }
+
+/* ── الفهرس ── */
+.legal-toc { min-width: 0; }
+.legal-toc h2 {
+  margin: 0 0 9px; font-size: var(--t-label); font-weight: 600; color: var(--muted);
+}
+.legal-toc ol {
+  margin: 0; padding: 0; list-style: none;
+  display: flex; flex-wrap: wrap; gap: 6px;
+}
+.legal-toc a {
+  /* عنصرٌ تفاعليّ ⟵ --rule-strong (مطلب 1.4.11 لا ذوق) */
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px;
+  padding: 6px 12px; border: 1px solid var(--rule); border-radius: 999px;
+  font-size: var(--t-sm); line-height: 1.45; color: var(--ink-2); text-decoration: none;
+}
+.legal-toc a:hover { border-color: var(--brand); background: var(--brand-wash); color: var(--brand-ink); }
+.legal-toc-n { flex: none; font-size: var(--t-label); color: var(--muted); }
+
+/* ── النصّ ── */
+.legal-doc { min-width: 0; }
+/* الرابط يهبط إلى العنوان لا إلى ما تحته */
+.legal-s { scroll-margin-block-start: 20px; }
+.legal-s + .legal-s { margin-top: 34px; padding-top: 30px; border-top: 1px solid var(--rule-soft); }
+.legal-s-h {
+  display: flex; gap: 11px; align-items: baseline; max-width: 34ch;
+  margin: 0 0 13px; font-size: var(--t-h1); font-weight: 600; line-height: 1.5;
+}
+.legal-s-n {
+  flex: none; min-width: 26px; padding: 1px 6px; text-align: center;
+  border-radius: 6px; background: var(--brand-wash);
+  font-size: var(--t-sm); font-weight: 600; color: var(--brand-ink); line-height: 1.8;
+}
+
+/* ★ **القياس الحاكم**: 55–65 محرفاً لا 75. و`ch` في العربيّة أضيق من
+   المحرف الفعليّ (وحدته عرض الصفر اللاتينيّ)، فـ72ch التي كانت هنا تُقرأ
+   نحو تسعين محرفاً — وعندها تفقد العين بداية السطر التالي في كلّ قفزة،
+   وهو أثقل ما يُتعب في قراءة وثيقةٍ طويلة. */
+.legal-doc p, .legal-doc li { max-width: 60ch; }
+.legal-doc p {
+  /* 15px لا 14: سلَّم الواجهة مضبوطٌ للوحاتٍ كثيفة، والنصّ الطويل يُقرأ أكبر */
+  margin: 0 0 14px; font-size: 15px; line-height: 1.9;
+  color: var(--ink-2); text-wrap: pretty;
+}
+.legal-doc p:last-child { margin-bottom: 0; }
+/* التشديد يرتفع إلى حبر النصّ الكامل — فالمهمّ أظهر لا أثقل وزناً فقط */
+.legal-doc strong { color: var(--ink); font-weight: 600; }
+.legal-doc a { color: var(--brand-ink); text-underline-offset: 3px; }
+
+.legal-doc ul {
+  margin: 0 0 14px; padding: 0; list-style: none;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.legal-doc li {
+  position: relative; padding-inline-start: 19px;
+  font-size: 15px; line-height: 1.85; color: var(--ink-2); text-wrap: pretty;
+}
+/* نقطةٌ بلون الخطّ القويّ لا بلون العلامة: الأساس محجوزٌ للفعل والعنصر النشط */
+.legal-doc li::before {
+  content: ""; position: absolute;
+  inset-inline-start: 4px; inset-block-start: 13px;
+  width: 5px; height: 5px; border-radius: 50%; background: var(--rule-strong);
+}
+
+/* الملاحظة داخل نصٍّ طويل: تتّسع للقراءة ولا تتمدّد على عرض العمود كلّه */
+.legal-doc .note { max-width: 62ch; margin: 18px 0; font-size: 14px; line-height: 1.8; }
+
+/* ── الذيل: الوثيقة التالية — وثيقةٌ طويلةٌ تنتهي بلا مخرجٍ تُقرأ مقطوعة ── */
+.legal-f { margin-top: 40px; padding-top: 22px; border-top: 1px solid var(--rule); }
+.legal-next {
+  display: inline-flex; flex-direction: column; gap: 2px;
+  min-height: 44px; justify-content: center;
+  padding: 8px 14px; border: 1px solid var(--rule); border-radius: var(--radius);
+  text-decoration: none; color: var(--ink);
+}
+.legal-next:hover { border-color: var(--brand); background: var(--surface-2); }
+.legal-next span { font-size: var(--t-label); color: var(--muted); }
+.legal-next b { font-size: var(--t-sm); font-weight: 600; color: var(--brand-ink); }
+
+/* ── الحاسوب: الفهرس عمودٌ لاصقٌ إلى يسار النصّ ── */
+@media (min-width: 900px) {
+  .legal { padding: 0 28px 96px; }
+  .legal-h h1 { font-size: 30px; }
+  .legal-body { grid-template-columns: minmax(0, 1fr) 236px; gap: 46px; align-items: start; }
+  /* ★ الفهرس **أوّلاً في DOM** — فهو تنقّلٌ داخل الصفحة يسبق نصّها للقارئ
+     الصوتيّ ولمن يتنقّل بالمفتاح. والشبكة وحدها تنقله بصريّاً إلى العمود
+     الثاني (وهو اليسار في RTL)، فلا يتعارض الترتيبان. */
+  .legal-toc { grid-column: 2; grid-row: 1; position: sticky; inset-block-start: 20px; }
+  .legal-doc { grid-column: 1; grid-row: 1; }
+  .legal-toc ol { flex-direction: column; flex-wrap: nowrap; gap: 1px; }
+  .legal-toc a {
+    width: 100%; min-height: 34px; padding: 5px 12px;
+    border: 0; border-radius: 0; border-inline-start: 2px solid var(--rule-soft);
+  }
+  .legal-toc a:hover { background: transparent; border-inline-start-color: var(--brand); }
+}
+
+/* ── الطباعة على ورق: وثيقةٌ قانونيّة تُطبع وتُوقَّع ── */
+@media print {
+  .legal-bar, .legal-toc, .legal-f { display: none; }
+  .legal { max-width: none; padding: 0; }
+  .legal-body { display: block; }
+  .legal-doc p, .legal-doc li { max-width: none; }
+  .legal-s { break-inside: avoid; }
+}
+
+/* ══════════════ لوحة الهامش ══════════════ */
+/* ★ **محورٌ واحد لا اثنان.** الإيراد والكلفة بنفس الوحدة (د.أ)، فكلّ الأشرطة
+   على مقياسٍ واحدٍ مشترك — أعلى قيمةٍ في الشاشة. ومحورٌ ثانٍ بمقياسٍ آخر هو
+   بالضبط ما يجعل عميلاً خاسراً يبدو رابحاً: شريط كلفةٍ قصيرٌ لأنّ مقياسه
+   أوسع، لا لأنّ الكلفة أقلّ.
+   ★ والوسم ملتصقٌ بسلسلته في العمود الأوّل — لا مفتاحٌ بعيدٌ يُحفَظ ثمّ يُنسى
+   بين الشريط ومعناه. */
+.mg-row { padding: 14px 0; border-top: 1px solid var(--rule-soft); }
+.mg-row:first-child { border-top: 0; padding-top: 2px; }
+.mg-name { font-weight: 600; font-size: var(--t-body); min-width: 0; overflow-wrap: anywhere; }
+
+/* ثلاثة أعمدة: الوسم · الشريط · القيمة. والشريط وحده يتمدّد، فالأرقام
+   تبقى متراصفةً عموديّاً بين الصفَّين فيُقرأ الفرق بلا حساب. */
+.mg-bars {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center; gap: 6px 9px; margin-top: 9px;
+}
+.mg-lbl { font-size: var(--t-label); color: var(--ink-2); white-space: nowrap; }
+.mg-val { font-size: var(--t-label); color: var(--ink-2); white-space: nowrap; }
+
+/* ★ `var()` لا يعمل داخل سمات SVG — فالتعبئة بصنفٍ لا بسمة `fill`، وإلّا
+   خرج اللون من التوكِنات وسقط في الثيم الداكن. */
+.mg-bar { display: block; width: 100%; height: 9px; }
+.mg-bar .trk { fill: var(--surface-3); }
+.mg-bar .rev { fill: var(--brand); }
+/* سلسلةٌ ثانية من غير ألوان الحالة: الحالة محجوزةٌ للمعنى (سليم/تحذير/حرج)
+   فلا تصير لون سلسلةٍ في رسم. */
+.mg-bar .cst { fill: var(--violet); }
+
+.mg-axis {
+  font-size: var(--t-label); color: var(--muted);
+  margin: 0 0 4px; line-height: 1.7;
+}
+.mg-flags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 8px; align-items: center; }
+.mg-why { font-size: var(--t-label); color: var(--muted); line-height: 1.6; max-width: 62ch; }
+
+/* شريحةُ الشهر: سلسلةُ آلةٍ («2025-09») تحتاج عزلاً اتجاهيّاً — بلاه ترتفع
+   الشرطة المحيَّدة بين رقمَين إلى RTL فتُقرأ «09-2025». و`Pill` لا يوفّر العزل. */
+.mg-period {
+  display: inline-flex; align-items: center;
+  font-size: var(--t-label); font-weight: 500;
+  padding: 2px 9px; border-radius: 999px; line-height: 1.75;
+  color: var(--muted); background: var(--surface-2);
+}
+
+/* ══════════════ لوحة المالك — جدول العملاء (console/page) ══════════════ */
+/* سبعة أعمدةٍ على 360px تجعل كلّ خليّةٍ أضيق من كلمة. فالخلايا المركَّبة
+   تُكدَّس رأسيّاً بأدنى عرضٍ مصرَّح، وحاوية `Table` تمرّر أفقيّاً بشريطٍ ظاهر
+   لا خفيّ. (وزنُ العمود قرارُ تخطيطٍ لا تنسيقُ عنصر، فلا محلّ له في JSX.) */
+.tn-name { display: flex; flex-direction: column; gap: 3px; min-width: 11ch; }
+.tn-name strong { font-weight: 600; line-height: 1.45; }
+/* الباقة تحت الاسم لا بجانبه: سطرٌ ثانٍ يكسب العمود ولا يقطع الاسم */
+.tn-sub {
+  display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+  font-size: var(--t-label); color: var(--muted); line-height: 1.6;
+}
+/* عمود السقف: الرقم ثمّ الشريط تحته بعرض الخليّة. وأرضيّةُ عرضٍ للشريط —
+   شريطٌ بعرض 20px لا يُقرأ مقياساً بل خطأً في الرسم. */
+.tn-cap { display: block; min-width: 10ch; }
+.tn-cap .meter { min-width: 66px; }
+.tn-margin { display: flex; flex-direction: column; gap: 2px; min-width: 7ch; }
+/* تعليقٌ خافتٌ داخل خليّة — يحلّ محلّ `.muted-p` الذي هو صنف فقرةٍ لا مدًى */
+.tn-dim {
+  display: block; font-size: var(--t-label); color: var(--muted);
+  line-height: 1.55; white-space: normal;
+}
+/* آخر حادثة: العنوان سطرٌ واحدٌ يُقصّ بنقاط — وإلّا فتح العمود على سطرٍ طويل
+   يدفع بقيّة الجدول خارج الشاشة. */
+.tn-inc { display: flex; flex-direction: column; gap: 2px; min-width: 13ch; max-width: 26ch; }
+.tn-inc-t {
+  font-size: var(--t-label); color: var(--ink-2); line-height: 1.55;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* شريحةُ الشهر («2025-09») سلسلةُ آلةٍ تحتاج عزلاً اتجاهيّاً، و`Pill` لا
+   يوفّره — فصنفٌ خاصٌّ بهذه الشاشة بدل تعديل صنفٍ قائمٍ لشاشةٍ أخرى. */
+.tn-period {
+  display: inline-flex; align-items: center;
+  font-size: var(--t-label); font-weight: 500;
+  padding: 2px 9px; border-radius: 999px; line-height: 1.75;
+  color: var(--muted); background: var(--surface-2);
+}
+
+/* ══════════════ شاشة الحوادث (console/incidents) ══════════════ */
+/* ★ لماذا أصنافٌ خاصّة هنا: البطاقة في هذه الشاشة تحمل **حدّاً ملوّناً بالشدّة**
+   على حافّة البداية — وهو ما يجعل السيل يُمسح بالعين وحدها الثالثة فجراً قبل
+   قراءة كلمة. و`Card` لا تأخذ نبرة، فلا سبيل إلى الحدّ بمكوّنٍ قائم إلّا
+   بنمطٍ مضمَّن — وهو ممنوع. واللون لا يقف وحده: مع كلّ حدٍّ شارةٌ بنصّها. */
+.inc {
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-inline-start: 3px solid var(--rule-strong);
+  border-radius: var(--radius);
+  padding: 13px 15px;
+  display: flex; flex-direction: column; gap: 10px;
+  min-width: 0;
+}
+.inc.crit { border-inline-start-color: var(--crit); }
+.inc.warn { border-inline-start-color: var(--warn); }
+.inc.info { border-inline-start-color: var(--rule-strong); }
+/* المحلولة تبقى مقروءةً وتُقرأ «منتهية» — الإخفاء يكسر المراجعة بعد الإصلاح */
+.inc.done { background: var(--surface-2); }
+
+.inc-t { font-size: var(--t-h2); font-weight: 600; line-height: 1.55; margin: 0; text-wrap: pretty; }
+
+/* خطوات المعالجة — أهمّ كتلةٍ في الشاشة، فتُرفع عن الخلفيّة لتُرى أوّلاً */
+.inc-run { background: var(--surface-2); border-radius: 6px; padding: 10px 12px; }
+.inc.done .inc-run { background: var(--surface); }
+.inc-run b { font-size: var(--t-sm); }
+.inc-run ol {
+  margin: 5px 0 0; padding-inline-start: 19px;
+  font-size: var(--t-sm); color: var(--ink-2); line-height: 1.8;
+}
+.inc-run li + li { margin-top: 3px; }
+
+.inc-d > summary { color: var(--muted); font-size: var(--t-sm); }
+.inc-d[open] > summary { margin-bottom: 8px; }
+
+/* شريط المرشّحات: وسمٌ نصّيٌّ لكلّ مجموعةٍ — لا رموزٌ تُخمَّن */
+.inc-fl { font-size: var(--t-label); color: var(--muted); flex: none; min-width: 3.4em; }
+.inc-ften { max-width: 320px; }
+
+/* ★ هدف لمسٍ ≥44px: هذه الشاشة تُفتح من الهاتف قبل الحاسوب — من السرير.
+   و`.chipf` مقاسُ سطحِ مكتب، فتُكبَّر داخل هذه الشاشة وحدها. */
+@media (pointer: coarse) {
+  .inc-filters .chipf { min-height: 44px; padding-inline: 14px; }
+  .inc-d > summary { min-height: 44px; display: flex; align-items: center; }
+}
+
+/* ══════════════ شاشة البوت ══════════════ */
+
+/* ★ ① الفرق يُقرأ بخطّ النصّ لا بالمونو.
+   `.diff` تفرض «IBM Plex Mono» — وهو **بلا تغطيةٍ عربيّة إطلاقاً**. وما يُقارَن
+   في هذه الشاشة شخصيّةُ البوت ومعرفته: نصٌّ عربيٌّ كتبه العميل. فلو بقي على
+   المونو سقط كلّ سطرٍ صامتاً إلى خطّ النظام — عائلةٌ أخرى ووزنٌ آخر وارتفاع
+   سينٍ آخر، وعلى كلّ منصّةٍ بشكلٍ مختلف. والقاعدة الأصليّة لا تُمسّ: فرقُ JSON
+   في مكانٍ آخر يبقى مونو، وهنا وحده تعود العائلة إلى خطّ النصّ.
+   والسقف الرأسيّ لأنّ معرفةً من ألف سطرٍ تدفع زرّ النشر خارج الشاشة — والزرّ
+   هو المقصود من المعاينة. */
+.bot-diff { max-height: 34vh; overflow: auto; border-radius: 6px; }
+.bot-diff .diff { font-family: inherit; font-size: var(--t-sm); line-height: 1.8; }
+
+/* عنوانٌ يقول **أيّ** نصٍّ يُقارَن — فرقٌ بلا عنوانٍ يُقرأ ولا يُفهم. */
+.bot-diff-h { display: block; font-size: var(--t-label); color: var(--muted); margin-bottom: 5px; }
+
+/* ★ ② عرضٌ للقراءة بدل حقلٍ معطَّل.
+   حقلٌ يقبل الكتابة ثمّ لا يُحفظ يُفقد العمل صامتاً، والرماديّ المعطَّل يُقرأ
+   «المنتج معطوب». فما لا يُعدَّل يُعرض نصّاً مقروءاً، والسبب مرسومٌ على الزرّ.
+   و`div` لا `pre`: `pre` مشمولٌ بقاعدة المونو في globals، وهذا نصٌّ عربيّ. */
+.bot-ro {
+  white-space: pre-wrap; word-break: break-word;
+  background: var(--surface-2); border: 1px solid var(--rule-strong);
+  border-radius: 6px; padding: 12px 14px;
+  font-size: var(--t-body); line-height: 1.8;
+  max-height: 40vh; overflow: auto;
+}
+.bot-ro:empty::after { content: "لم يُكتب نصٌّ بعد."; color: var(--muted); }
+
+/* مفتاح الأداة: سلسلةُ آلةٍ يناديها النموذج — يُقرأ مع `.mono` ويبقى خافتاً. */
+.bot-toolkey { font-size: var(--t-label); color: var(--muted); }
+
+/* وسمُ حقلٍ لا يلفّ عنصراً قابلاً للوسم — نفس مظهر label بلا سِمةٍ ميّتة */
+.field-h { display: block; font-size: var(--t-sm); font-weight: 500; margin-bottom: 5px; }
