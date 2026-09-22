@@ -5,6 +5,8 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useSession } from '@/lib/session';
 import { post, setToken } from '@/lib/api';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { Skeleton, Note, Button } from '@/components/ui';
 
 export interface NavItem {
   href: string;
@@ -39,20 +41,20 @@ export function Shell({
     return (
       <div className="shell">
         <nav className="side" aria-label="القائمة" />
-        <main className="main">
-          <div className="skel" style={{ width: 200, height: 22, marginBottom: 18 }} />
-          <div className="tiles">
-            {[0, 1, 2, 3].map((i) => (
-              <div className="tl" key={i}><div className="skel" style={{ width: 70, height: 24 }} /></div>
-            ))}
-          </div>
-        </main>
+        <main className="main"><Skeleton rows={5} /></main>
       </div>
     );
   }
   if (!me) return null;
 
   const visible = nav.filter((n) => !n.needs || me.permissions[n.needs]);
+
+  /* ★ بندٌ نشطٌ **واحد**. كان الشرط `path === href || path.startsWith(href + '/')`،
+     و`/app/inbox` يبدأ بـ`/app/` — فكان بندان يُوسمان aria-current معاً،
+     ويُضاءان معاً. الصحيح أطول بادئةٍ مطابقة وحدها. */
+  const activeHref = visible
+    .filter((n) => path === n.href || path.startsWith(n.href + '/'))
+    .sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null;
 
   async function logout() {
     await post('/auth/logout').catch(() => undefined);
@@ -71,27 +73,31 @@ export function Shell({
         {visible.map((n) => (
           <Link
             key={n.href} href={n.href} className="navi"
-            aria-current={path === n.href || path.startsWith(n.href + '/') ? 'page' : undefined}
+            aria-current={n.href === activeHref ? 'page' : undefined}
           >
-            <span aria-hidden="true" style={{ width: 16, textAlign: 'center' }}>{n.icon}</span>
+            <span aria-hidden="true" className="navi-i">{n.icon}</span>
             <span>{n.label}</span>
             {n.badge ? <span className="bdg">{n.badge}</span> : null}
           </Link>
         ))}
 
+        {/* ★ كان هذا الذيل كلّه `display:none` تحت 700px — ومعه **زرّ الخروج
+            الوحيد في التطبيق** وعدّاد السقف واسم الحساب. أي أنّه لم تكن هناك
+            طريقةُ خروجٍ من الهاتف إطلاقاً. صار يبقى ظاهراً ويلتفّ. */}
         <div className="side-foot">
           {footer}
-          <div style={{ marginTop: 8 }}>{me.user.name}</div>
-          <button className="btn sm" style={{ marginTop: 8 }} onClick={logout}>خروج</button>
+          <ThemeToggle compact />
+          <div className="side-user">{me.user.name}</div>
+          <Button size="sm" onClick={() => void logout()}>خروج</Button>
         </div>
       </nav>
 
       <main className="main">
         {me.impersonating && (
-          <div className="note w" style={{ marginTop: 0 }}>
+          <Note tone="warn">
             <b>انتحال نشط — قراءةٌ فقط.</b> كلّ فعلٍ كاتبٍ مرفوض، والجلسة 30 دقيقة،
             والأمر مسجَّلٌ <b>ويراه العميل في سجلّه</b>.
-          </div>
+          </Note>
         )}
         {children}
       </main>
@@ -99,36 +105,10 @@ export function Shell({
   );
 }
 
-/** الحالات الثلاث التي يجب أن يملكها كلّ عنصر بيانات. */
-export function Loading({ rows = 3 }: { rows?: number }) {
-  return (
-    <div className="card" aria-busy="true" aria-live="polite">
-      {Array.from({ length: rows }).map((_, i) => (
-        <div className="skel" key={i} style={{ marginBottom: 10, width: `${100 - i * 12}%` }} />
-      ))}
-    </div>
-  );
-}
-
-export function Empty({ title, hint, action }: { title: string; hint?: string; action?: ReactNode }) {
-  return (
-    <div className="card">
-      <div className="empty">
-        <b>{title}</b>
-        {hint}
-        {action && <div className="act">{action}</div>}
-      </div>
-    </div>
-  );
-}
-
-export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {
-  return (
-    <div className="note c" role="alert">
-      {message}
-      {onRetry && (
-        <button className="btn sm" style={{ marginInlineStart: 10 }} onClick={onRetry}>أعِد المحاولة</button>
-      )}
-    </div>
-  );
-}
+/**
+ * ★ الحالات الثلاث كانت مُعرَّفةً **مرّتين بمنطقين مختلفين**: هنا داخل بطاقة
+ *   وبـ`.note c`، وفي `ui/index.tsx` بلا بطاقة وبـ`.errbox`. فالخطأ في شاشةٍ
+ *   صندوقٌ أحمر بعنوان وفي أخرى شريطٌ مائل، ولا يعرف المستخدم أنّهما الشيء
+ *   نفسه. التعريف الآن واحد، وهذه إعادةُ تصديرٍ تُبقي الاستيرادات القديمة عاملة.
+ */
+export { Skeleton as Loading, Empty, ErrorBox } from '@/components/ui';

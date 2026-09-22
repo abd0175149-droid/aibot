@@ -86,19 +86,29 @@ export function Dot({ tone = 'neutral' }: { tone?: Tone }) {
  * رقمٌ في بطاقة. `hero` واحدٌ في الشاشة على الأكثر — والستّة المتساوية
  * لا تقول أيّها يهمّ.
  */
-export function Stat({ value, label, unit, tone, hero, meter }: {
+export function Stat({ value, label, unit, tone, hero, meter, href }: {
   value: string | number; label: string; unit?: string; tone?: Tone; hero?: boolean;
   meter?: { pct: number; tone?: Tone };
+  /**
+   * ★ وجهة الرقم. كان `Stat` لا يقبل رابطاً ولا معالجاً، فلم تكن **بطاقةٌ
+   *   واحدة في المنتج كلّه** تؤدّي إلى تفصيلها: «محادثة تحتاج تدخّلك» نصٌّ
+   *   لا رابط، والنوافذ لا تفتح الاستهلاك، والفجوات لا تفتح المعرفة.
+   *   كلّ لوحةٍ كانت تُشخّص ولا تُوصِل — ترى المشكلة ولا تصل إليها.
+   */
+  href?: string;
 }) {
-  return (
-    <div className={`stat${hero ? ' hero' : ''}${tone ? ` t-${tone}` : ''}`}>
+  const cls = `stat${hero ? ' hero' : ''}${tone ? ` t-${tone}` : ''}${href ? ' link' : ''}`;
+  const body = (
+    <>
       <span className="stat-v">
         {value}{unit && <small>{unit}</small>}
       </span>
       <span className="stat-k">{label}</span>
       {meter && <Meter pct={meter.pct} tone={meter.tone} />}
-    </div>
+    </>
   );
+  // رابطٌ حقيقيّ لا div بمعالج: يُفتح في تبويبٍ جديد، ويُقرأ رابطاً للقارئ الصوتيّ
+  return href ? <a className={cls} href={href}>{body}</a> : <div className={cls}>{body}</div>;
 }
 
 /** عتباتٌ ظاهرة: ٨٠٪ تحذير و٩٥٪ خطير و١٠٠٪ حرج — فلا يُفاجأ أحدٌ بسقف. */

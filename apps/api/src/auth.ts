@@ -2,7 +2,7 @@ import { createHmac, randomBytes, scrypt as _scrypt, timingSafeEqual } from 'nod
 import { promisify } from 'node:util';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AppError, ErrorCode, type Role } from '@aibot/shared';
-import { getDb, withPlatform, users, sessions, tenants, eq, and, isNull, gt, sql } from '@aibot/db';
+import { getDb, withPlatform, users, sessions, tenants, auditLog, eq, and, ne, isNull, gt, sql } from '@aibot/db';
 import { sha256 } from '@aibot/crypto';
 
 const scrypt = promisify(_scrypt) as (p: string, s: Buffer, l: number) => Promise<Buffer>;
@@ -230,6 +230,70 @@ export async function registerAuth(app: FastifyInstance) {
     const access = signAccess({ sub: user.id, tid: user.tenantId, role: user.role, sid: rotated.sessionId });
     return reply.header('set-cookie', refreshCookie(rotated.refresh)).send({ access });
   });
+
+  /**
+   * تغيير كلمة السرّ.
+   *
+   * ★ وُجد لأنّ `mustChangePassword` كان يُكتب عند إنشاء الحساب ويُرسَل عند
+   *   الدخول و**لا تُقرأ في أيّ مكان** — فمن أُنشئ له حسابٌ بكلمةٍ مؤقّتة
+   *   يدخل بها ويبقى عليها إلى الأبد. وهي كلمةٌ يعرفها من أنشأ الحساب،
+   *   ومرّت في نصٍّ صريح على شاشةٍ وربّما في رسالة.
+   *
+   * وأربعة حدود:
+   *  ① الكلمة القديمة مطلوبةٌ دائماً — حتّى للمؤقّتة. توكنٌ مسروقٌ لا يكفي
+   *    لخطف الحساب نهائيّاً؛ السارق يحتاج الكلمة أيضاً.
+   *  ② طولٌ أدنى 10 محارف. والتعقيد المفروض يُنتج كلماتٍ أسوأ تُكتب على ورقة.
+   *  ③ الجديدة لا تساوي القديمة — وإلّا «غيّرها» بلا تغيير وسقط العلم.
+   *  ④ **كلّ الجلسات الأخرى تُبطَل** بعد التغيير. تغييرُ كلمةِ سرٍّ لا يُخرج
+   *    المتسلّل هو تغييرٌ شكليّ. وجلستك الحاليّة تبقى فلا تُطرَد من فعلك أنت.
+   */
+  app.post<{ Body: { current?: string; next?: string } }>(
+    '/auth/password',
+    { preHandler: requireAuth() },
+    async (req) => {
+      const current = String(req.body?.current ?? '');
+      const next = String(req.body?.next ?? '');
+
+      if (next.length < 10) {
+        throw new AppError(ErrorCode.VALIDATION, 'كلمة السرّ الجديدة عشرة محارف على الأقلّ.', 400);
+      }
+      if (next === current) {
+        throw new AppError(ErrorCode.VALIDATION, 'الكلمة الجديدة نفس القديمة.', 400);
+      }
+
+      const db = getDb();
+      const me = (await withPlatform(db, 'مصادقة: قراءة المستخدم لتغيير كلمته',
+        (tx) => tx.select().from(users).where(eq(users.id, req.auth!.sub)).limit(1)))[0];
+      if (!me) throw new AppError(ErrorCode.UNAUTHORIZED, 'لا مستخدم', 401);
+
+      if (!(await verifyPassword(current, me.passwordHash))) {
+        throw new AppError(ErrorCode.VALIDATION, 'كلمة السرّ الحاليّة غير صحيحة.', 400);
+      }
+
+      const hash = await hashPassword(next);
+      await withPlatform(db, 'مصادقة: حفظ كلمة سرٍّ جديدة وإبطال الجلسات الأخرى', async (tx) => {
+        await tx.update(users)
+          .set({ passwordHash: hash, mustChangePassword: false })
+          .where(eq(users.id, me.id));
+
+        // كلّ جلسةٍ عدا الحاليّة تُبطَل — فتغيير الكلمة يُخرج المتسلّل فعلاً
+        await tx.update(sessions)
+          .set({ revokedAt: new Date() })
+          .where(and(
+            eq(sessions.userId, me.id),
+            ne(sessions.id, req.auth!.sid),
+            isNull(sessions.revokedAt),
+          ));
+
+        await tx.insert(auditLog).values({
+          tenantId: me.tenantId, actorUserId: me.id,
+          action: 'user.password_change', entity: 'user', entityId: me.id, ip: req.ip,
+        });
+      });
+
+      return { ok: true };
+    },
+  );
 
   app.post('/auth/logout', { preHandler: requireAuth() }, async (req, reply) => {
     await revokeSession(req.auth!.sid);

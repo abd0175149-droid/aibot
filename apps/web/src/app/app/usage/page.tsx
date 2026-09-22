@@ -1,8 +1,10 @@
 'use client';
 
-import { useApi, fmt } from '@/lib/useApi';
+import { useState } from 'react';
+import { useApi, useToast, fmt } from '@/lib/useApi';
+import { download, ApiError } from '@/lib/api';
 import {
-  PageHead, Grid, Stack, Stat, Pill, Note, Skeleton, ErrorBox, Table, Empty, type Column,
+  PageHead, Grid, Stack, Stat, Pill, Note, Skeleton, ErrorBox, Table, Empty, Button, type Column,
 } from '@/components/ui';
 
 /**
@@ -47,6 +49,19 @@ const CH: Record<string, { label: string; tone: 'brand' | 'violet' }> = {
 
 export default function UsagePage() {
   const { data, loading, error, reload } = useApi<Usage>('/usage');
+  const { toast, node: toastNode } = useToast();
+  const [exporting, setExporting] = useState(false);
+
+  async function exportCsv() {
+    setExporting(true);
+    try {
+      await download('/usage/windows.csv', `aibot-windows-${data?.period ?? 'export'}.csv`);
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'تعذّر التصدير');
+    } finally {
+      setExporting(false);
+    }
+  }
 
   if (loading) return <Skeleton rows={5} />;
   if (error) return <ErrorBox message={error} onRetry={reload} />;
@@ -76,13 +91,14 @@ export default function UsagePage() {
 
   return (
     <Stack gap="lg">
+      {toastNode}
       <PageHead
         title="الاستهلاك"
         sub="هذا هو جدول النوافذ نفسه الذي تُفوتَر عليه — لا ملخّصاً مشتقّاً منه."
         actions={(
           <>
             <Pill tone="neutral" label={data.period} mark={false} />
-            <a className="btn quiet sm" href="/api/usage/windows.csv" download>تصدير CSV</a>
+            <Button size="sm" busy={exporting} onClick={() => void exportCsv()}>تصدير CSV</Button>
           </>
         )}
       />

@@ -332,3 +332,56 @@ td.n, th.n { white-space: nowrap; }
 /* حافةٌ أوضح بين البطاقة والأرضيّة في الداكن — كانتا متقاربتَين فذابت الحدود */
 :root:not([data-theme='light']) .stat,
 :root[data-theme='dark'] .stat { border-color: var(--rule); }
+
+/* ══════════════ مفتاح النمط ══════════════ */
+/* ثلاث حالاتٍ ظاهرة لا زرٌّ يدور: الزرّ الدوّار يُخفي أين أنت ويجعل الوصول
+   إلى «النظام» تخميناً. والمجموعة أصغر من أن تكلّف مساحة. */
+.theme-sw {
+  display: inline-flex; gap: 2px; padding: 2px;
+  background: var(--surface-2); border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+.theme-opt {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 4px 10px; border-radius: 999px;
+  font-size: var(--t-label); color: var(--muted);
+  white-space: nowrap; transition: background .13s, color .13s;
+}
+.theme-opt:hover { color: var(--ink); }
+.theme-opt[aria-checked="true"] {
+  background: var(--surface); color: var(--brand-ink);
+  font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+}
+.theme-mark { font-size: 12px; line-height: 1; }
+.theme-sw.compact .theme-label { display: none; }
+.theme-sw.compact .theme-opt { padding: 5px 9px; }
+/* على الهاتف تظهر التسميات: الرموز وحدها تُخمَّن، والمساحة متاحة هناك */
+@media (max-width: 700px) {
+  .theme-sw.compact .theme-label { display: inline; }
+}
+@media (prefers-reduced-motion: reduce) { .theme-opt { transition: none; } }
+
+/* ══════════════ القشرة ══════════════ */
+.navi-i { width: 16px; text-align: center; flex: none; }
+.side-user { font-size: var(--t-label); color: var(--muted); }
+.side-foot {
+  display: flex; flex-direction: column; gap: 8px; align-items: flex-start;
+}
+
+/* ★ الذيل كان display:none تحت 700px — ومعه زرّ الخروج الوحيد في التطبيق.
+   يبقى الآن ظاهراً ويلتفّ أفقيّاً ضمن الشريط. */
+@media (max-width: 700px) {
+  .side-foot {
+    display: flex; flex-direction: row; flex-wrap: wrap; align-items: center;
+    margin-top: 0; margin-inline-start: auto;
+    padding: 0; border-top: 0; gap: 6px;
+  }
+  .side-foot .side-user { display: none; }
+  .brand { display: none; }
+}
+
+/* بطاقة رقمٍ قابلة للنقر — الرقم يُوصِل لا يُشخّص فقط */
+a.stat { text-decoration: none; color: inherit; transition: border-color .13s, background .13s; }
+a.stat:hover { border-color: var(--brand); background: var(--surface-2); }
+a.stat.hero:hover { background: var(--brand-wash); filter: brightness(1.04); }
+@media (prefers-reduced-motion: reduce) { a.stat { transition: none; } }

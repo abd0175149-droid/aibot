@@ -3,6 +3,7 @@ import './components.css';
 import type { ReactNode } from 'react';
 import type { Metadata, Viewport } from 'next';
 import { SessionProvider } from '@/lib/session';
+import { ThemeProvider, THEME_BOOT_SCRIPT } from '@/lib/theme';
 
 export const metadata: Metadata = {
   title: 'AiBot — منصّة بوتات ذكيّة',
@@ -14,9 +15,10 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   viewportFit: 'cover',
+  // يطابق --bg في كلّ ثيم — شريط المتصفّح على الهاتف يستعمله
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f1f3f2' },
-    { media: '(prefers-color-scheme: dark)', color: '#0b1110' },
+    { media: '(prefers-color-scheme: light)', color: '#f3f6f7' },
+    { media: '(prefers-color-scheme: dark)', color: '#091114' },
   ],
 };
 
@@ -25,6 +27,11 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     // RTL أصليّ على الجذر — لا انعكاسٌ لتصميمٍ إنجليزيّ
     <html lang="ar" dir="rtl" suppressHydrationWarning>
       <head>
+        {/* ★ قبل أوّل رسم: يقرأ الاختيار المحفوظ ويكتب data-theme.
+            متزامنٌ عمداً وليس مكوّن React — React يعمل بعد الرسم الأوّل،
+            فتكون ومضة الثيم قد وقعت. ولهذا وُضع suppressHydrationWarning
+            على <html> أصلاً: بصمةُ استعدادٍ لسكربتٍ لم يُكتب حتّى الآن. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_BOOT_SCRIPT }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
         <link
@@ -33,7 +40,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         />
       </head>
       <body>
-        <SessionProvider>{children}</SessionProvider>
+        <ThemeProvider>
+          <SessionProvider>{children}</SessionProvider>
+        </ThemeProvider>
       </body>
     </html>
   );

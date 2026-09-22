@@ -39,8 +39,6 @@ const LEGACY: Record<string, number> = {
   'app/console/incidents/page.tsx': 11,
   'app/console/margin/page.tsx': 13,
   'app/console/page.tsx': 3,
-  'app/login/page.tsx': 3,
-  'components/Shell.tsx': 8,
 };
 
 function walk(dir: string): string[] {

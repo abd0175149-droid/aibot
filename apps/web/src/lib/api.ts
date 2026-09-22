@@ -96,6 +96,42 @@ export const patch = <T>(p: string, body: unknown) =>
   api<T>(p, { method: 'PATCH', body: JSON.stringify(body) });
 export const del = <T>(p: string) => api<T>(p, { method: 'DELETE' });
 
+/**
+ * تنزيل ملفٍّ من نقطةٍ محميّة.
+ *
+ * ★ كان التصدير وسم ‎<a href download>‎ — والمتصفّح يتنقّل إليه **بلا ترويسة
+ *   Authorization**، وتوكن الوصول يعيش في الذاكرة فقط لا في كوكي. فالنقطة
+ *   ترفض بـ401 ويرى العميل صفحة خطأٍ بدل ملفّه. زرٌّ يبدو صالحاً ولا يعمل.
+ *
+ * الحلّ: نجلب بالعميل نفسه (فيه الترويسة وتجديد التوكن عند 401)، ثمّ نُنزّل
+ * الناتج blobاً. و`revokeObjectURL` ليس تجميلاً: بلاه يبقى الملفّ في ذاكرة
+ * التبويب حتّى إغلاقه.
+ */
+export async function download(path: string, filename: string): Promise<void> {
+  const headers = new Headers();
+  if (accessToken) headers.set('authorization', `Bearer ${accessToken}`);
+  let res = await fetch(`/api${path}`, { headers, credentials: 'include' });
+
+  if (res.status === 401 && (await refresh())) {
+    const h2 = new Headers();
+    if (accessToken) h2.set('authorization', `Bearer ${accessToken}`);
+    res = await fetch(`/api${path}`, { headers: h2, credentials: 'include' });
+  }
+  if (!res.ok) {
+    throw new ApiError('DOWNLOAD_FAILED', `تعذّر التنزيل (${res.status})`, res.status);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 /** مفتاح تكرارٍ لكلّ إرسال: ضغطتان لا ترسلان رسالتين. */
 export function idempotencyKey(): string {
   return crypto.randomUUID();

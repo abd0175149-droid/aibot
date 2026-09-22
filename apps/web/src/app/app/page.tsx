@@ -106,7 +106,8 @@ export default function HomePage() {
           ③ وعند الهدوء والعيّنة الكافية: النسبة التي تطمئن. */}
       <Grid min={180}>
         {needs ? (
-          <Stat hero value={fmt.num(data.needsAttention)} label="محادثة تحتاج تدخّلك الآن" tone="crit" />
+          <Stat hero href="/app/inbox?f=attn" value={fmt.num(data.needsAttention)}
+            label="محادثة تحتاج تدخّلك الآن ←" tone="crit" />
         ) : enoughSample ? (
           <Stat hero value={fmt.pct(data.selfResolvedRate)} label="أنهاها البوت بلا موظّف" />
         ) : (
@@ -117,14 +118,17 @@ export default function HomePage() {
           />
         )}
 
-        {!needs && enoughSample && <Stat value={fmt.num(data.conversationsToday)} label="محادثة اليوم" />}
-        {needs && <Stat value={fmt.num(data.conversationsToday)} label="محادثة اليوم" />}
+        <Stat href="/app/inbox" value={fmt.num(data.conversationsToday)} label="محادثة اليوم ←" />
 
         <Stat value={fmt.num(data.botReplies)} label="ردّ بوت" />
+        {/* ★ التسمية «مُفوتَرة» لا «نوافذ الشهر»: الخادم يعدّ المُفوتَرة حصراً،
+            و«نوافذ الشهر» تُقرأ بأنّها كلّ ما فُتح — فيظنّ العميل أنّه يُفوتَر
+            على رسائل لم يردّ عليها أحد. نقاشُ فاتورةٍ مبنيٌّ في اسم. */}
         <Stat
+          href="/app/usage"
           value={fmt.num(data.windowsUsed)}
           unit={`/ ${fmt.num(data.windowsLimit)}`}
-          label={`نوافذ الشهر · ${fmt.pct(pct)}`}
+          label={`نافذة مُفوتَرة · ${fmt.pct(pct)} ←`}
           meter={{ pct }}
         />
         <Stat value={(data.medianLatencyMs / 1000).toFixed(1)} unit="ث" label="وسيط زمن الردّ" />
@@ -185,7 +189,12 @@ export default function HomePage() {
         >
           {gaps.loading && <Skeleton rows={2} height={18} />}
 
-          {!gaps.loading && !gaps.data?.length && (
+          {/* ★ فشل النداء كان يُعرض **خبراً سارّاً**: الشرط `!loading && !data?.length`
+              يصدق عند الخطأ أيضاً، فتظهر «لا أسئلة عجز عنها بوتك 🌿» بينما
+              النداء فشل. طمأنينةٌ كاذبة أسوأ من خطأٍ ظاهر. */}
+          {!gaps.loading && gaps.error && <ErrorBox message={gaps.error} onRetry={gaps.reload} />}
+
+          {!gaps.loading && !gaps.error && !gaps.data?.length && (
             <p className="muted-p">لا أسئلة عجز عنها بوتك هذا الشهر. 🌿</p>
           )}
 
