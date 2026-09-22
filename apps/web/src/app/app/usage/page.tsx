@@ -71,7 +71,8 @@ export default function UsagePage() {
   const unbilled = data.windowsOpened - data.windowsBilled;
 
   const columns: Array<Column<Window>> = [
-    { key: 'who', head: 'الزبون', cell: (w) => <span className="mono">{w.contactName ?? w.handle}</span> },
+    { key: 'who', head: 'الزبون', /* اسمٌ يكتبه الزبون — اتّجاهه من محتواه، ولا مونو عليه (بلا تغطيةٍ عربيّة) */
+      cell: (w) => <span dir="auto">{w.contactName ?? w.handle}</span> },
     {
       key: 'ch',
       head: 'القناة',

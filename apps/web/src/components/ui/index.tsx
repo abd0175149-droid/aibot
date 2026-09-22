@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import type { ReactNode, CSSProperties } from 'react';
 
 /**
@@ -202,27 +203,47 @@ export function DataView<T>({ state, empty, children, skeletonRows }: {
  * النظام معطوب لا أنّ الفعل غير متاح له الآن. وكان في الواجهة سبعة أزرارٍ
  * بلا معالجٍ إطلاقاً — تبدو صالحةً ولا تفعل شيئاً، وذاك أسوأ من غيابها.
  */
+let reasonSeq = 0;
+
 export function Button({ children, onClick, variant = 'quiet', size = 'md', disabled, reason, type = 'button', busy }: {
   children: ReactNode;
   onClick?: () => void;
   variant?: 'primary' | 'quiet' | 'danger';
   size?: 'sm' | 'md';
   disabled?: boolean;
+  /** سببُ التعطيل — يُرسَم على الشاشة، لا في `title`. */
   reason?: string;
   type?: 'button' | 'submit';
   busy?: boolean;
 }) {
-  return (
+  const showReason = Boolean(disabled && reason && !busy);
+  /* معرّفٌ مستقرّ عبر إعادة الرسم — التسلسل يزيد مرّةً لكلّ نسخةٍ لا لكلّ رسم */
+  const [rid] = useState(() => `btn-r-${(reasonSeq += 1)}`);
+
+  const btn = (
     <button
       type={type}
       className={`btn ${variant} ${size}`}
       onClick={onClick}
       disabled={disabled || busy}
-      title={disabled && reason ? reason : undefined}
+      aria-describedby={showReason ? rid : undefined}
       aria-busy={busy || undefined}
     >
       {busy ? '…' : children}
     </button>
+  );
+
+  if (!showReason) return btn;
+
+  /* ★ كان السبب يذهب إلى `title` وحده — و**لا مرورَ على الهاتف**، وهو الجهاز
+     المُعلَن أوّلاً في هذا المنتج. فستّة أزرارٍ معطَّلةٍ صامتة في شاشة القنوات
+     (وهي بالضبط شاشة «اضبطه بنفسك») تُقرأ «المنتج معطوب»، فيتّصل العميل.
+     أيّ نصٍّ إرشاديٍّ محبوسٍ في `title` هو إرشادٌ لم يُكتب. */
+  return (
+    <span className="btn-wrap">
+      {btn}
+      <span className="btn-reason" id={rid}>{reason}</span>
+    </span>
   );
 }
 

@@ -61,7 +61,19 @@ export function useToast() {
   return { toast: setMsg, node };
 }
 
-/** تنسيق موحَّد — أرقام غربيّة في كلّ مكان لأنّ الجداول تُقرأ رقميّاً. */
+/**
+ * تنسيق موحَّد.
+ *
+ * ★ **`ar-JO` وحدها تُخرج أرقاماً هنديّة** — «٣:٤٥ م» و«٢٠ أيلول» — وهو نقضٌ
+ *   مباشر لقيدٍ ثابتٍ في هذا المشروع: أرقام لاتينيّة 0-9 في كلّ مكان، لأنّ
+ *   الهنديّة تكسر المحاذاة الرقميّة في الجداول. الامتداد `-u-nu-latn` يُصلحها.
+ *
+ * ★ والإصلاح **هنا لا في مواضع الاستدعاء**: `Intl` يتسرّب من كلّ نداءٍ جديدٍ
+ *   يُكتب بعد ستّة أشهر، ونقطةُ عنقٍ واحدة تمنع ذلك بنيويّاً. ولذلك
+ *   `AR_LOCALE` ثابتٌ مصدَّر: من يحتاج `Intl` يأخذه منها.
+ */
+export const AR_LOCALE = 'ar-JO-u-nu-latn';
+
 export const fmt = {
   num: (n: number | string | null | undefined) =>
     n == null ? '—' : Number(n).toLocaleString('en-US'),
@@ -75,10 +87,10 @@ export const fmt = {
     if (mins < 1) return 'الآن';
     if (mins < 60) return `قبل ${mins} د`;
     if (mins < 1440) return `قبل ${Math.round(mins / 60)} س`;
-    return new Intl.DateTimeFormat('ar-JO', { day: 'numeric', month: 'short' }).format(d);
+    return new Intl.DateTimeFormat(AR_LOCALE, { day: 'numeric', month: 'short' }).format(d);
   },
   clock: (iso: string | null | undefined) =>
-    iso ? new Intl.DateTimeFormat('ar-JO', { hour: 'numeric', minute: '2-digit' }).format(new Date(iso)) : '',
+    iso ? new Intl.DateTimeFormat(AR_LOCALE, { hour: 'numeric', minute: '2-digit' }).format(new Date(iso)) : '',
   /** مؤقّت النافذة — يُعرض قبل أن يكتب الموظّف لا بعد أن يُرفض. */
   remaining: (iso: string | null | undefined) => {
     if (!iso) return null;

@@ -234,10 +234,10 @@ export default function InboxPage() {
                 <span className="r1">
                   <Pill tone={CH[c.channelKind]?.tone ?? 'neutral'} mark={false}
                     label={CH[c.channelKind]?.label ?? c.channelKind} />
-                  <span className="nm">{c.contactName ?? c.displayHandle ?? c.handle}</span>
+                  <span className="nm" dir="auto">{c.contactName ?? c.displayHandle ?? c.handle}</span>
                   <span className="tm">{fmt.when(c.lastMessageAt)}</span>
                 </span>
-                <span className="pv">{c.lastMessagePreview ?? '—'}</span>
+                <span className="pv" dir="auto">{c.lastMessagePreview ?? '—'}</span>
                 <span className="r3">
                   {c.needsAttention && <Pill tone="crit" label="يحتاج تدخّلاً" />}
                   {c.unreadCount > 0 && <Pill tone="brand" label={`${c.unreadCount} جديد`} />}
@@ -256,7 +256,7 @@ export default function InboxPage() {
             <>
               <div className="ibhead">
                 <Row gap="sm">
-                  <strong>{conv.contactName ?? conv.displayHandle ?? conv.handle}</strong>
+                  <strong dir="auto">{conv.contactName ?? conv.displayHandle ?? conv.handle}</strong>
                   <span className="mono handle">{conv.handle}</span>
                   <Pill tone={CH[conv.channelKind]?.tone ?? 'neutral'} mark={false}
                     label={CH[conv.channelKind]?.label ?? conv.channelKind} />
@@ -271,14 +271,14 @@ export default function InboxPage() {
                 {thread.loading && <Skeleton rows={3} height={44} />}
 
                 {thread.data?.items.map((m) => {
-                  if (m.source === 'system') return <div className="bub sys" key={m.id}>{m.body}</div>;
+                  if (m.source === 'system') return <div className="bub sys" key={m.id} dir="auto">{m.body}</div>;
 
                   /* ★ ضغطةُ زرٍّ تُعرض كضغطةٍ على إجراءٍ باسمه، لا كنصٍّ عارٍ. */
                   const press = m.direction === 'in' ? m.payload?.buttonPayload : null;
                   if (press) {
                     const { verb, action } = pressLabel(press);
                     return (
-                      <div className="bub press" key={m.id}>
+                      <div className="bub press" key={m.id} dir="auto">
                         <span className="press-v">{verb}</span>
                         <span className="press-a mono">{action}</span>
                         <span className="mt">{fmt.clock(m.createdAt)} · ضغطة زرّ</span>
@@ -288,8 +288,14 @@ export default function InboxPage() {
 
                   const src = m.direction === 'in' ? null : SOURCE[m.source] ?? SOURCE.bot!;
                   const cls = m.direction === 'in' ? 'in' : m.source === 'agent' ? 'agent' : 'bot';
+                  /* ★ `dir="auto"` على كلّ نصٍّ لم نكتبه نحن.
+                     كان `{m.body}` خامّاً داخل حاضنٍ مفروضٍ RTL — ورسائل زبائن
+                     المطاعم والعيادات مختلطةٌ بطبيعتها: «iPhone 15 بكم؟»، رابط،
+                     رمز صنف، «OK تمام». ورسالةٌ تبدأ بلاتينيّ تأخذ اتجاه الحاضن
+                     لا اتجاهها، فتقفز نقطتها وأقواسها إلى الحافّة الخطأ.
+                     أداةٌ وظيفتها **قراءة رسائل الزبون** كانت تعرضها بترتيبٍ خاطئ. */
                   return (
-                    <div className={`bub ${cls}`} key={m.id}>
+                    <div className={`bub ${cls}`} key={m.id} dir="auto">
                       {src && (
                         <span className="src">
                           <span aria-hidden="true">{src.mark}</span> {src.label}
@@ -358,7 +364,7 @@ export default function InboxPage() {
               <Stack gap="md">
                 <div>
                   <div className="ph">بطاقة الزبون</div>
-                  <strong>{conv.contactName ?? '—'}</strong>
+                  <strong dir="auto">{conv.contactName ?? '—'}</strong>
                   <div className="mono handle">{conv.handle}</div>
                 </div>
 

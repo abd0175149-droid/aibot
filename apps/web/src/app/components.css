@@ -64,17 +64,20 @@
 .dot.neutral { background: var(--muted); }
 
 /* ══════════════ الأرقام ══════════════ */
+/* ★ كانت `.stat` معرَّفةً **مرّتين** في هذا الملفّ بقيمٍ متعارضة (21px ثمّ
+   19px، وتوكِنٌ ثمّ 24px حرفيّ)، فالقيمة الحقيقيّة لا تُعرف إلّا بقراءة
+   الملفّ كاملاً. تعريفٌ واحد. */
 .stat {
-  background: var(--surface); border: 1px solid var(--rule-soft);
-  border-radius: var(--radius); padding: 13px 15px;
-  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--radius); padding: 11px 13px;
+  display: flex; flex-direction: column; gap: 3px; min-width: 0;
 }
-.stat-v { font-size: 21px; font-weight: 600; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.stat-v { font-size: 19px; font-weight: 600; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .stat-v small { font-size: 11.5px; color: var(--muted); font-weight: 400; margin-inline-start: 3px; }
 .stat-k { font-size: var(--t-label); color: var(--muted); line-height: 1.5; }
 /* رقمٌ بطوليٌّ واحدٌ في الشاشة — والستّة المتساوية لا تقول أيّها يهمّ */
 .stat.hero { background: var(--brand-wash); border-color: transparent; }
-.stat.hero .stat-v { font-size: var(--t-display); font-weight: 700; color: var(--brand-ink); }
+.stat.hero .stat-v { font-size: 24px; font-weight: 700; color: var(--brand-ink); }
 .stat.t-ok .stat-v { color: var(--ok); }
 .stat.t-warn .stat-v { color: var(--warn); }
 .stat.t-serious .stat-v { color: var(--serious); }
@@ -111,9 +114,9 @@ td.n, th.n { white-space: nowrap; }
 .errbox p { margin: 0; font-size: var(--t-sm); color: var(--ink-2); }
 
 /* ══════════════ الأفعال ══════════════ */
-.btn.primary { background: var(--brand); border-color: var(--brand); color: #fff; }
+.btn.primary { background: var(--brand); border-color: var(--brand); color: var(--signal-on); }
 .btn.primary:hover:not(:disabled) { filter: brightness(1.1); }
-.btn.quiet { background: var(--surface); border-color: var(--rule); color: var(--ink-2); }
+.btn.quiet { background: var(--surface); border-color: var(--rule-strong); color: var(--ink-2); }
 .btn.quiet:hover:not(:disabled) { background: var(--surface-2); color: var(--ink); }
 .btn.danger { background: var(--surface); border-color: var(--crit); color: var(--crit); }
 .btn.danger:hover:not(:disabled) { background: var(--crit-wash); }
@@ -155,7 +158,7 @@ td.n, th.n { white-space: nowrap; }
 /* ══════════════ التبويبات ══════════════ */
 .tab[aria-selected="true"] { color: var(--brand-ink); border-bottom-color: var(--brand); font-weight: 600; }
 .tab-b {
-  margin-inline-start: 6px; background: var(--crit); color: #fff;
+  margin-inline-start: 6px; background: var(--crit); color: var(--status-on);
   border-radius: 9px; padding: 0 6px; font-size: 10px; line-height: 16px; display: inline-block;
 }
 
@@ -324,11 +327,6 @@ td.n, th.n { white-space: nowrap; }
 
 .g180 { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
 
-/* كثافةٌ أعلى في بطاقات الأرقام: المحتوى قليلٌ فلا يستحقّ هذا الحشو */
-.stat { padding: 11px 13px; gap: 2px; }
-.stat-v { font-size: 19px; }
-.stat.hero .stat-v { font-size: 24px; }
-
 /* حافةٌ أوضح بين البطاقة والأرضيّة في الداكن — كانتا متقاربتَين فذابت الحدود */
 :root:not([data-theme='light']) .stat,
 :root[data-theme='dark'] .stat { border-color: var(--rule); }
@@ -338,7 +336,7 @@ td.n, th.n { white-space: nowrap; }
    إلى «النظام» تخميناً. والمجموعة أصغر من أن تكلّف مساحة. */
 .theme-sw {
   display: inline-flex; gap: 2px; padding: 2px;
-  background: var(--surface-2); border: 1px solid var(--rule);
+  background: var(--surface-2); border: 1px solid var(--rule-strong);
   border-radius: 999px;
 }
 .theme-opt {
@@ -352,6 +350,7 @@ td.n, th.n { white-space: nowrap; }
   background: var(--surface); color: var(--brand-ink);
   font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, .08);
 }
+/* الحدّ يفحص `color:` داخل قواعد الأزرار والشارات — وهذه مسحةٌ لا تعبئة */
 .theme-mark { font-size: 12px; line-height: 1; }
 .theme-sw.compact .theme-label { display: none; }
 .theme-sw.compact .theme-opt { padding: 5px 9px; }
@@ -385,3 +384,12 @@ a.stat { text-decoration: none; color: inherit; transition: border-color .13s, b
 a.stat:hover { border-color: var(--brand); background: var(--surface-2); }
 a.stat.hero:hover { background: var(--brand-wash); filter: brightness(1.04); }
 @media (prefers-reduced-motion: reduce) { a.stat { transition: none; } }
+
+/* ══════════════ سببُ التعطيل مرسومٌ لا مخفيّ ══════════════ */
+/* `title` لا يظهر على الهاتف — والهاتف هو الجهاز المُعلَن أوّلاً. زرٌّ معطَّلٌ
+   بلا سببٍ مرئيّ يُقرأ «المنتج معطوب» فيُنتج مكالمة دعم. */
+.btn-wrap { display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; }
+.btn-reason {
+  font-size: var(--t-label); line-height: 1.55; color: var(--muted);
+  max-width: 34ch; text-wrap: pretty;
+}

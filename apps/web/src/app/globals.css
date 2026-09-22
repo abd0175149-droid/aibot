@@ -13,15 +13,22 @@
 :root {
   /* ═══ الأسطح — رماديّاتٌ مُنحازةٌ بردٍّ خفيف نحو هوى الأساس.
          رماديٌّ خالصٌ يقرأ «غير مقصود»؛ الميل يجعل الشاشة مجموعةً واحدة. ═══ */
-  --bg: #f3f6f7;
+  /* ★ الارتفاع خطوةُ لمعانٍ مقيسة لا ظلٌّ مستعار: الأرضيّة **أغمق** من
+     السطح، فاللوح يرتفع بذاته. وهذا يُلغي بنيويّاً «البطاقة البيضاء على
+     أبيض» التي هي بصمة كلّ قالب SaaS. */
+  --bg: #e9edef;
   --surface: #ffffff;
-  --surface-2: #e9eef0;
-  --surface-3: #dbe3e6;
+  --surface-2: #dfe6e8;
+  --surface-3: #ccd6da;
   --ink: #0c1719;
   --ink-2: #35484d;
-  --muted: #61757b;
-  --rule: #ccd7db;
-  --rule-soft: #e3eaec;
+  --muted: #56686d;
+  /* ثلاث درجاتٍ للخطّ، لكلٍّ وظيفةٌ لا تُبدَّل — والأرقام نِسَبُ تباينٍ مقصودة:
+     `--rule-strong` لكلّ عنصرٍ تفاعليّ (مطلب 1.4.11 لا ذوق)،
+     `--rule` لإطار اللوح، `--rule-soft` لفاصل الصفّ. */
+  --rule-strong: #5d7076;
+  --rule: #b9c6ca;
+  --rule-soft: #d6dee1;
 
   /* ═══ الأساس: بحريٌّ عميق، لا أزرق شركاتيّ.
          «ثقة» = لونٌ واحدٌ هادئ في أقلّ من ٥٪ من البكسلات — الفعل الأساس
@@ -31,6 +38,13 @@
   --brand-wash: #e2eff3;
   /** «تقدّم»: للنموّ وحده — فرقٌ موجب، سقفٌ يرتفع. لا يُستعمل زينةً. */
   --progress: #157f56;
+
+  /* ★ حبرٌ منقلب: لون النصّ فوق تعبئةٍ ملوّنة **توكِنٌ يُقلَب مع الثيم**
+     لا `#fff` مثبَّت. كان `.btn.primary` يثبّت الأبيض، فصار «انشر»
+     و«شغّل البوت» — أهمّ زرٍّ في المنصّة — عند **2.94:1** في الداكن،
+     أي تحت حدّ النصّ الكبير. وبالتوكِن يصير 6.48:1. */
+  --signal-on: #ffffff;
+  --status-on: #ffffff;
 
   /* أسماءٌ قديمة تبقى عاملةً أثناء الترحيل التدريجيّ. الجديد يستعمل --brand. */
   --accent: var(--brand);
@@ -66,13 +80,15 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #091114; --surface: #0f1a1d; --surface-2: #16242a; --surface-3: #1e3037;
-    --ink: #e5eef0; --ink-2: #b0c2c7; --muted: #7c9097;
-    --rule: #223640; --rule-soft: #182930;
+    --bg: #070e11; --surface: #101b1f; --surface-2: #17262c; --surface-3: #21343b;
+    --ink: #e7f0f2; --ink-2: #b4c6cb; --muted: #8aa0a7;
+    --rule-strong: #57707a; --rule: #2a4049; --rule-soft: #1c2d34;
     /* الداكن **مُصمَّمٌ لا معكوس**: اللون العميق على خلفيّةٍ داكنة يختفي،
        فيُرفع لمعاناً ويُخفَض تشبّعاً. قيمةٌ أخرى تماماً لا نفس القيمة. */
     --brand: #38a3bd; --brand-ink: #6fc4d8; --brand-wash: #0f2b33;
     --progress: #3aa87a;
+    /* الحبر ينقلب: أبيضُ على أساسٍ داكنٍ فاتح = 2.94:1؛ والحبر الداكن = 6.48:1 */
+    --signal-on: #071319; --status-on: #0a0f12;
     --amber: #c79a2a; --amber-ink: #dfb659; --amber-wash: #241d0d;
     --violet: #9670cb; --violet-ink: #b795de; --violet-wash: #1d1526;
     --ok: #3fae79; --warn: #c79a2a; --serious: #d1763a; --crit: #d9564c;
@@ -82,13 +98,15 @@
   }
 }
 :root[data-theme='dark'] {
-  --bg: #091114; --surface: #0f1a1d; --surface-2: #16242a; --surface-3: #1e3037;
-  --ink: #e5eef0; --ink-2: #b0c2c7; --muted: #7c9097;
-  --rule: #223640; --rule-soft: #182930;
+  --bg: #070e11; --surface: #101b1f; --surface-2: #17262c; --surface-3: #21343b;
+  --ink: #e7f0f2; --ink-2: #b4c6cb; --muted: #8aa0a7;
+  --rule-strong: #57707a; --rule: #2a4049; --rule-soft: #1c2d34;
   /* الداكن **مُصمَّمٌ لا معكوس**: اللون العميق على خلفيّةٍ داكنة يختفي،
      فيُرفع لمعاناً ويُخفَض تشبّعاً. قيمةٌ أخرى تماماً لا نفس القيمة. */
   --brand: #38a3bd; --brand-ink: #6fc4d8; --brand-wash: #0f2b33;
   --progress: #3aa87a;
+  /* الحبر ينقلب: أبيضُ على أساسٍ داكنٍ فاتح = 2.94:1؛ والحبر الداكن = 6.48:1 */
+  --signal-on: #071319; --status-on: #0a0f12;
   --amber: #c79a2a; --amber-ink: #dfb659; --amber-wash: #241d0d;
   --violet: #9670cb; --violet-ink: #b795de; --violet-wash: #1d1526;
   --ok: #3fae79; --warn: #c79a2a; --serious: #d1763a; --crit: #d9564c;
@@ -112,12 +130,46 @@ button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; border: none; background: none; }
 a { color: var(--accent-ink); }
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
-code, .mono, .num {
+/* ═══════════════════════════════════════════════════════════════
+   عقد الطباعة العربيّة — ثلاثة بنودٍ يفرضها الاختبار لا المراجعة.
+   ═══════════════════════════════════════════════════════════════
+
+   ★ ① **المونو لا يلمس نصّاً عربيّاً أبداً.**
+     `IBM Plex Mono` **بلا تغطيةٍ عربيّة إطلاقاً**، وكان مفروضاً على
+     `.mono` و`.num` — و٢٦ استعمالاً لهما في JSX. فكلّ «بوت» و«موظّف»
+     و«قُرئت» واسم زبونٍ عربيٍّ في جدول الاستهلاك كان **يسقط صامتاً** إلى
+     خطّ النظام: عائلةٌ أخرى ووزنٌ آخر وارتفاع سينٍ آخر، وعلى كلّ منصّةٍ
+     بشكلٍ مختلف. وهذا وحده أكبر مولّدٍ لإحساس «غير مضبوط» في المنتج.
+     فصار المونو محصوراً في `code` و`pre` و`.mono` — سلاسل الآلة وحدها.
+
+   ★ ② **الأرقام تبقى معزولةً اتجاهيّاً — ولكن بخطّ النصّ.**
+     `direction: ltr; unicode-bidi: isolate` ليست تجميلاً: بلاها يُطبَّق
+     UAX#9 على `1,240 / 1,500` في فقرةٍ أساسها RTL، فتصير الشرطة المائلة
+     محيّدةً بين رقمَين فترتفع إلى R، ويُقلب الرقمان بصريّاً إلى
+     `1,500 / 1,240`. **رقمٌ مقلوبٌ لا قبيح.** فالعزل يبقى، والعائلة تصير
+     عائلة النصّ مع `tabular-nums` — فنكسب المحاذاة بلا كسر العربيّة.
+
+   ★ ③ **لا تتبّع (letter-spacing) على العربيّة أبداً.**
+     التتبّع يفكّ وصلات الحرف المتّصل فيُقرأ الاسم مقطّعاً. مسموحٌ داخل
+     `[dir="ltr"]` وحده، حيث النصّ لاتينيّ فعلاً. */
+
+code, pre, .mono {
   font-family: 'IBM Plex Mono', ui-monospace, monospace;
   direction: ltr;
   unicode-bidi: isolate;
-  font-variant-numeric: tabular-nums;
 }
+
+.num {
+  /* خطّ النصّ لا المونو — والعزل يبقى لأنّه يحمي الترتيب لا الشكل */
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+}
+
+/* ★ حدٌّ بنيويّ: العربيّة لا تُتبَّع. والاستثناء داخل مدًى لاتينيٍّ صريح. */
+:root, [lang='ar'] { letter-spacing: normal; }
+[dir='ltr'] .tracked { letter-spacing: .05em; }
 
 /* ── الهيكل ── */
 .shell { display: grid; grid-template-columns: 210px minmax(0, 1fr); min-height: 100vh; }
@@ -143,7 +195,7 @@ code, .mono, .num {
   font-weight: 600; border-inline-end-color: var(--accent);
 }
 .navi .bdg {
-  margin-inline-start: auto; background: var(--crit); color: #fff;
+  margin-inline-start: auto; background: var(--crit); color: var(--status-on);
   font-size: 10px; padding: 0 6px; border-radius: 9px; line-height: 17px;
 }
 .side-foot { margin-top: auto; padding: 12px 16px 0; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--muted); }
@@ -161,7 +213,7 @@ code, .mono, .num {
   white-space: nowrap; transition: background .12s, border-color .12s;
 }
 .btn:hover:not(:disabled) { background: var(--surface-2); }
-.btn.pri { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.pri { background: var(--brand); border-color: var(--brand); color: var(--signal-on); }
 .btn.pri:hover:not(:disabled) { filter: brightness(1.08); }
 .btn.dgr { color: var(--crit); border-color: var(--crit); }
 .btn.sm { padding: 3px 9px; font-size: 11.5px; }
@@ -170,8 +222,7 @@ code, .mono, .num {
 .pill {
   display: inline-flex; align-items: center; gap: 4px;
   font-size: 10.5px; padding: 1px 8px; border-radius: 10px;
-  border: 1px solid currentColor; line-height: 1.7; white-space: nowrap;
-  font-family: 'IBM Plex Mono', monospace;
+  border: 1px solid currentColor; line-height: 1.75; white-space: nowrap;
 }
 .pill.ok { color: var(--ok); background: var(--ok-wash); }
 .pill.warn { color: var(--warn); background: var(--warn-wash); }
@@ -186,7 +237,7 @@ code, .mono, .num {
 
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1px; background: var(--rule); border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; margin-bottom: 20px; }
 .tl { background: var(--surface); padding: 13px 15px; }
-.tl .v { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 21px; font-weight: 500; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.tl .v { display: block; font-size: 21px; font-weight: 500; line-height: 1.2; font-variant-numeric: tabular-nums; }
 .tl .v small { font-size: 11px; color: var(--muted); font-weight: 400; }
 .tl .k { display: block; font-size: 11.5px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
 .tl.hot .v { color: var(--amber); } .tl.bad .v { color: var(--crit); } .tl.good .v { color: var(--ok); }
@@ -201,7 +252,7 @@ code, .mono, .num {
 .tw { overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--radius); margin-bottom: 18px; }
 table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 12.5px; background: var(--surface); }
 th, td { text-align: right; padding: 9px 12px; border-bottom: 1px solid var(--rule-soft); vertical-align: middle; }
-thead th { font-size: 10.5px; letter-spacing: .05em; color: var(--muted); font-weight: 500; background: var(--surface-2); white-space: nowrap; border-bottom: 1px solid var(--rule); }
+thead th { font-size: 11.5px; color: var(--muted); font-weight: 500; background: var(--surface-2); white-space: nowrap; border-bottom: 1px solid var(--rule); }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr.clk { cursor: pointer; } tbody tr.clk:hover { background: var(--surface-2); }
 
@@ -247,7 +298,7 @@ tbody tr.clk { cursor: pointer; } tbody tr.clk:hover { background: var(--surface
 .conv[aria-current='true'] { background: var(--accent-wash); box-shadow: inset 2.5px 0 0 var(--accent); }
 .conv .r1 { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
 .conv .nm { font-weight: 600; font-size: 12.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.conv .tm { margin-inline-start: auto; font-size: 9.5px; color: var(--muted); flex: none; }
+.conv .tm { margin-inline-start: auto; font-size: 12px; color: var(--muted); flex: none; }
 .conv .pv { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .conv .r3 { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
 
@@ -257,9 +308,10 @@ tbody tr.clk { cursor: pointer; } tbody tr.clk:hover { background: var(--surface
 .bub.bot { align-self: flex-end; background: var(--accent-wash); border: 1px solid var(--accent); border-start-end-radius: 2px; }
 .bub.agent { align-self: flex-end; background: var(--amber-wash); border: 1px solid var(--amber); border-start-end-radius: 2px; }
 .bub.sys { align-self: center; background: transparent; border: 1px dashed var(--rule); color: var(--muted); font-size: 11px; max-width: 88%; text-align: center; border-radius: 5px; }
-.bub .src { display: block; font-size: 9px; letter-spacing: .04em; margin-bottom: 3px; opacity: .85; font-family: 'IBM Plex Mono', monospace; }
+/* 12px أرضيّةٌ صلبة: الفرق بين ح وخ وج نقطةٌ بعرض بكسل، ودونها تندمج */
+.bub .src { display: block; font-size: 12px; margin-bottom: 3px; opacity: .9; font-weight: 500; }
 .bub.bot .src { color: var(--accent-ink); } .bub.agent .src { color: var(--amber-ink); }
-.bub .mt { display: block; font-size: 9px; color: var(--muted); margin-top: 4px; font-family: 'IBM Plex Mono', monospace; }
+.bub .mt { display: block; font-size: 12px; color: var(--muted); margin-top: 4px; }
 .chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
 .chips .c { border: 1px solid var(--accent); color: var(--accent-ink); background: var(--surface); border-radius: 5px; padding: 3px 10px; font-size: 11px; }
 
@@ -268,7 +320,7 @@ tbody tr.clk { cursor: pointer; } tbody tr.clk:hover { background: var(--surface
 .composer input { flex: 1; border: 1px solid var(--rule); border-radius: 18px; padding: 8px 15px; background: var(--surface); font-size: 12.5px; min-width: 0; }
 .locked { padding: 11px 13px; border-top: 1px solid var(--crit); background: var(--crit-wash); font-size: 11.5px; color: var(--crit); flex: none; line-height: 1.6; }
 .pane { overflow-y: auto; flex: 1; padding: 14px 13px; font-size: 12px; }
-.pane .ph { font-size: 9.5px; letter-spacing: .07em; color: var(--muted); margin: 15px 0 7px; padding-bottom: 4px; border-bottom: 1px solid var(--rule-soft); font-family: 'IBM Plex Mono', monospace; }
+.pane .ph { font-size: 12px; font-weight: 600; color: var(--muted); margin: 15px 0 7px; padding-bottom: 4px; border-bottom: 1px solid var(--rule-soft); }
 .pane .ph:first-child { margin-top: 0; }
 
 /* ── تسجيل الدخول ── */
