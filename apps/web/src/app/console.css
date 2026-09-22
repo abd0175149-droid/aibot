@@ -1,0 +1,196 @@
+/*
+ * لوحة المالك — العملاء والحوادث والهامش
+ *
+ * ورقةٌ لكلّ مجموعة شاشات: الأنماط المشتركة في `components.css`، وهنا ما
+ * يخصّ هذه الشاشات وحدها. والفصل ليس ترتيباً بل يمنع تصادم من يعمل عليها.
+ *
+ * والقواعد سارية: حشوٌ وحدودٌ **منطقيّة** لا فيزيائيّة · `min-height: 0` على
+ * كلّ حاوٍ مُمرِّرٍ في شبكةٍ أو عمودٍ مرن · ولا كلمةَ عربيّةٍ داخل عازل
+ * `.num`/`.mono`.
+ */
+
+
+/* ══════════════════ الرقم البطوليّ وسياقُه الملاصق ══════════════════ */
+/* ★ **لا رقمَ بلا سياقٍ ملاصق.** «2 عملاء بحوادث حرجة» رقمٌ لا يُقرَّر عليه:
+   من كم؟ ومنذ متى؟ وهل يسوء أم يهدأ؟ فالبطوليُّ صار صفَّين لا سطراً —
+   الرقمُ ووسمُه، وتحتهما خطُّ الأساس الذي يعطيه معناه. والخطُّ الفاصلُ انتقل
+   إلى الحاوي كي يسكن السياقُ **فوقه**: لو بقي على `.stat.hero` لقُرئ السياقُ
+   أوّلَ سطرٍ في القسم التالي لا آخرَ سطرٍ في البطوليّ. */
+.cn-hero {
+  display: flex; flex-direction: column; gap: 7px; min-width: 0;
+  padding-block-end: 14px; border-block-end: 1px solid var(--rule);
+}
+.cn-hero .stat.hero { border-block-end: 0; padding-block-end: 0; }
+.cn-ctx {
+  margin: 0; font-size: var(--t-label); color: var(--muted);
+  line-height: 1.7; max-width: 78ch;
+}
+
+/* علامةُ الهدف على مقياس البطوليّ. موضعُها 50٪ لأنّ هدفَ الهامش في الشاشتين
+   ثابتٌ عند نصف الإيراد (`TARGET = 0.5`) — وهي لا تحمل المعنى وحدها: سطرُ
+   السياق يقول «والهدف 50٪» بالنصّ، فمن لا يرى العلامةَ يقرأ الحدّ. */
+.cn-goal .meter { overflow: visible; }
+.cn-goal .meter::after {
+  content: ''; position: absolute; inset-block: -3px; inset-inline-start: 50%;
+  width: 2px; background: var(--ink);
+}
+
+
+/* ══════════════════ الرصيفُ لاصقاً في مُمرِّر الشاشة ══════════════════ */
+/* `.main` هو المُمرِّر الوحيد في الإطار، والرصيفُ صفٌّ في محتواه — فلو تُرك في
+   مجراه الطبيعيّ هبط تحت الطيّة ولم يبقَ «تحت الإبهام». والالتزاقُ يحلّها بلا
+   `position: fixed`: لا حشوٌ وهميٌّ في المُمرِّر يُنسى فيغطّي آخرَ صفّ، ولا
+   قفزةٌ مع لوحة مفاتيح الهاتف، ولا تغطيةٌ لما تحته عند التكبير. */
+.cn-dock {
+  position: sticky; inset-block-end: 0; z-index: 2; min-width: 0;
+}
+/* ★ واللاصقُ محصورٌ في **صندوق محتوى** المُمرِّر لا في صندوق حشوه: يقف
+   الرصيفُ أربعين بكسلاً فوق حافّة الشاشة (حشوُ `.main` السفليّ) فيمرّ
+   المحتوى في الشريط المكشوف تحته — رأيتُه في لقطة الحوادث على الهاتف:
+   كتلةُ الشيفرة وزرُّ «انسخ» يزحفان تحت الرصيف، وهو ما يُقرأ عطلاً في
+   الرسم لا تمريراً. وذيلٌ بلون **الصفحة** يغطّي أيَّ حشوٍ كان (فالرصيفُ
+   هنا لوحٌ بحدٍّ وزوايا، وذيلٌ بسطحه يرسم لوحاً ثانياً تحته)، ويُقصّ
+   بفيضان المُمرِّر فيختفي حين يستقرّ الرصيفُ في آخر الصفحة. */
+.cn-dock::after {
+  content: ""; position: absolute;
+  inset-inline: 0; inset-block-start: 100%; height: 64px;
+  background: var(--bg);
+}
+/* الرصيفُ هنا ليس بعرض الشاشة (المُمرِّرُ محشوٌّ)، فيُقرأ لوحاً لا شريطاً
+   مقطوعاً من طرفَيه. */
+.cn-dock .dock { border: 1px solid var(--rule); border-radius: var(--radius); }
+/* وفوق 1100 يدور `.dock` شريطاً أفقيّاً، ومجموعتا مرشّحاتٍ وسطرُ أثرٍ لا تدخل
+   في عرض عمودٍ واحدٍ بلا التفاف — فالالتفافُ مأذونٌ قبل أن يفيض. */
+@media (min-width: 1100px) {
+  .cn-dock .dock { flex-wrap: wrap; }
+  .cn-dock .row { flex: 1 1 auto; min-width: 0; }
+}
+
+/* حقلُ البحث في رأس القسم: يتمدّد ولا يطغى، ولا يدفع العدّادَ خارج السطر. */
+.cn-find { flex: 1 1 210px; max-width: 320px; min-width: 0; }
+
+/* نصٌّ خافتٌ مُلاصقٌ لعنصرٍ — لا فقرة `.muted-p` المستقلّة */
+.cn-dim {
+  display: block; margin: 0; font-size: var(--t-label);
+  color: var(--muted); line-height: 1.6; max-width: 72ch;
+}
+
+
+/* ══════════════════ الحوادث: البطاقةُ تُطوى، والتفصيلُ هو ما يُكشف ══════════════════ */
+/* ★ كان التسلسلُ مقلوباً: خطواتُ المعالجة — وهي أكثرُ المحتوى تكرّراً بين
+   حادثتَين من نوعٍ واحد — مفتوحةً دائماً، والتفصيلُ التقنيُّ الذي **وحده**
+   يفرّق حادثةً عن أختها مطويّاً. فمئةُ بطاقةٍ كانت مئةَ نسخةٍ من نفس الخطوات.
+   والترتيبُ الآن: السطرُ يحمل ما يُقرَّر عليه (شدّةٌ · عميلٌ · تكرارٌ · هل
+   تُغلق نفسها)، وأوّلُ ما يُكشف هو التفصيل، والخطواتُ طيَّةٌ ثانية.
+   ★ ولا `display: flex` على `<details>`: متصفّحاتٌ تكسر الطيَّ معه، فالطيُّ
+   أهمُّ من صفٍّ مرن — والتخطيطُ في أبناءٍ لا في العنصر نفسه. */
+.cn-ic { display: block; padding-block: 10px; }
+.cn-ic > summary {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 10px; align-items: center;
+  padding-block: 3px; min-height: 40px; cursor: pointer; list-style: none;
+}
+.cn-ic > summary::-webkit-details-marker { display: none; }
+.cn-ic > summary:hover .cn-ic-t { text-decoration: underline; }
+.cn-ic-t {
+  font-size: var(--t-h2); font-weight: 600; line-height: 1.5;
+  min-width: 0; text-wrap: pretty;
+}
+/* سطرُ الحكم: كلُّ ما يُقرَّر عليه قبل الفتح. ويلتفّ ولا يُقصّ — اسمُ العميل
+   ووقتُ الظهور خبرٌ لا زينة. */
+.cn-ic-m {
+  grid-column: 1 / -1;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  font-size: var(--t-label); color: var(--muted); line-height: 1.7;
+}
+/* مؤشّرُ الطيّ شكلٌ لا لون، ومعناه في عنوانٍ يُقرأ بجانبه */
+.cn-ic-x { flex: none; color: var(--muted); font-size: var(--t-label); }
+.cn-ic-x::after { content: '▾'; }
+.cn-ic[open] .cn-ic-x::after { content: '▴'; }
+.cn-ic-b {
+  display: flex; flex-direction: column; gap: 10px;
+  min-width: 0; margin-block-start: 11px;
+}
+/* التفصيلُ التقنيُّ أوّلُ ما يُكشف — وعنوانُه يقول لماذا هو أوّلاً */
+.cn-det { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.cn-det-h { font-size: var(--t-sm); font-weight: 700; color: var(--ink-2); }
+@media (pointer: coarse) {
+  .cn-ic > summary { min-height: var(--tap); }
+}
+
+
+/* ══════════════════ بوّابةُ الكتابة — الفعلُ الذي يُسكت بوتاً ══════════════════ */
+/* ★ إيقافُ بوتِ عميلٍ يُصمته عند **كلّ** زبائنه في الحال، ولا يرجع إلّا
+   بتشغيلٍ يدويّ. ففعلٌ بهذا الأثر لا يكون أضعفَ زرٍّ في الشاشة ولا نقرةً
+   واحدة: يسكن طيَّةً تُفتح، ثمّ بوّابةَ كتابةٍ تُطابق اسمَ العميل حرفاً حرفاً. */
+.cn-gate {
+  border: 1px solid var(--crit); border-radius: var(--radius-sm);
+  padding: 10px 12px; background: var(--crit-wash);
+}
+.cn-gate > summary {
+  display: flex; align-items: center; min-height: 34px; cursor: pointer;
+  font-size: var(--t-sm); font-weight: 700; color: var(--crit);
+}
+.cn-gate[open] > summary { margin-block-end: 8px; }
+.cn-gate .field { margin-block: 9px; }
+@media (pointer: coarse) { .cn-gate > summary { min-height: var(--tap); } }
+
+
+/* ══════════════════ الهامش: المقياسُ الواحدُ وعلامةُ هدفه ══════════════════ */
+/* علامةُ الهدف على شريط الكلفة: الموضعُ الذي تصير عنده كلفةُ العميل نصفَ
+   إيراده — أي هامشُه هدفَه بالضبط. فما تجاوزها فهامشُه دون الهدف، ويُقرأ
+   ذلك من الشريط بلا حسابٍ في الرأس. وحِبرٌ صلبٌ لا لونُ حالة: هي خطُّ قياسٍ
+   لا إنذار، وألوانُ الحالة محجوزةٌ للمعنى. */
+.mg-bar .mg-goal { fill: var(--ink); }
+
+/* مفتاحُ الرسم: عيّنةُ لونٍ **مع** نصِّها — فلا سلسلةَ يحملها اللونُ وحده */
+.cn-legend {
+  display: flex; flex-wrap: wrap; gap: 4px 15px; margin: 0;
+  font-size: var(--t-label); color: var(--muted); line-height: 1.7;
+}
+.cn-legend > span { display: inline-flex; align-items: center; gap: 6px; }
+.cn-sw { flex: none; width: 15px; height: 9px; border-radius: 2px; background: var(--muted); }
+.cn-sw.rev { background: var(--brand); }
+.cn-sw.cst { background: var(--violet); }
+.cn-sw-goal { flex: none; width: 2px; height: 13px; background: var(--ink); }
+
+/* خليّةُ الأشرطة داخل الجدول: أرضيّةُ عرضٍ لها، وإلّا صار الشريطُ خطّاً لا
+   مقياساً حين يزدحم الجدولُ بأعمدته فوق 1100. */
+.cn-bars-cell { display: block; min-width: 168px; }
+.cn-bars-cell .mg-bars { margin-block-start: 0; }
+
+/* وِجهةُ الفرز في الصفحة: الرأسُ اللاصقُ يغطّي أوّلَ صفٍّ لو قفزت إليه بلا
+   هامشٍ للتمرير — فالهامشُ معلَنٌ لا مُكتشَف. */
+.cn-anchor { scroll-margin-block-start: 60px; }
+
+
+/* ══════════════════ صفوفُ المعايير — والمقياسُ داخل صفٍّ منها ══════════════════ */
+/* `.rows` يعطي العمود، وهذا الصنفُ يخصّ ما يسكن عمودَه الثالث في هذه الشاشات:
+   مقياسٌ لا عرضَ له بطبعه. فلو تُرك عنصراً مرناً بلا أرضيّةٍ انضغط إلى خطٍّ
+   لا يُقرأ، ولو تُرك بلا سقفٍ أكل الصفَّ كلَّه. والحدّان معلَنان هنا لا مخمَّنان. */
+.cn-rows { min-width: 0; }
+.cn-rows .meter { flex: 1 1 120px; min-width: 92px; max-width: 240px; margin-top: 0; }
+
+/* جسمُ مجموعة الإلحاح: عمودُ بطاقاتٍ بفواصل. و`min-height: 0` صريحةً فلا يمنع
+   الافتراضُ `auto` أيَّ مُمرِّرٍ يسكنها لاحقاً من الصغر عن محتواه. */
+.cn-list {
+  display: flex; flex-direction: column; gap: 8px;
+  min-width: 0; min-height: 0; padding-block: 9px;
+}
+
+/* زرٌّ بسببٍ مرسومٍ داخل رصيف: `.btn-wrap` عمودٌ ضامرٌ يحمل `align-self:
+   flex-start`، فيبقى فعلُ الرصيف الأوّل بعرض كلمته ولا يصحّ `.btn.wide` داخله.
+   ★ والامتدادُ بـ`stretch` لا بـ`width: 100%`: الأوّل يعمل في المحور المتقاطع
+     وحده، فيملأ العرضَ حين يكون الرصيفُ عموداً (الهاتف) ولا يفعل شيئاً حين
+     يدور شريطاً أفقيّاً فوق 1100 — وهناك يقرّر `.dock .btn.wide` عرضَه.
+     و`width: 100%` كان يكسر الشريط: الزرُّ يأخذ السطرَ كلَّه فيُدفع سطرُ
+     الأثر تحته، فيصير الرصيفُ عمودين على الحاسوب. */
+.cn-dock .btn-wrap { display: flex; align-self: stretch; }
+
+
+/* ══════════════════ الوِجهةُ زرّاً — رابطٌ حقيقيٌّ بهيئة زرّ ══════════════════ */
+/* فعلُ «اذهب إلى» رابطٌ لا زرّ: يُفتح في تبويبٍ جديد، ويُنسخ عنوانه، ويُقرأ
+   رابطاً للقارئ الصوتيّ. و`a` في هذا المشروع بلا `text-decoration: none`
+   افتراضاً (وهو الصحيح للروابط النصّيّة)، فالخطُّ يظهر تحت نصّ الزرّ ما لم
+   يُنفَ هنا — كما نفاه `a.stat` و`.row-m` لنفس السبب. */
+a.btn { text-decoration: none; }

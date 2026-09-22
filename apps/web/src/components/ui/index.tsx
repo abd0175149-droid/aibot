@@ -709,3 +709,74 @@ export function Dock({ children, hint }: {
     </div>
   );
 }
+
+/* ══════════════ نموذجٌ يراه مديرُ كلمات السرّ ══════════════ */
+
+/**
+ * حقلُ نموذجٍ يحمل السِّمات التي **لا يعوّضها صنفٌ ولا CSS**.
+ *
+ * ★ لماذا مكوّنٌ ثانٍ ولا تُوسَّع `Input`: `Input` مُستدعاةٌ في كلّ شاشةٍ في
+ *   المنتج، والتعديلُ فيها فعلٌ في ملفٍّ مشترك. وقانونُ المرحلة إضافةٌ بلا
+ *   حذفٍ ولا تعديلٍ لما لا يخصّ صاحبَ الشاشة — فيُضاف اسمٌ ثانٍ ويبقى
+ *   الأوّلُ كما هو. ولا صنفَ جديداً معه: هو `.input` بعينه.
+ *
+ * ★ ولماذا هي بنيةٌ لا رفاهية: `name` و`autoComplete` هما ما يجعل مديرَ
+ *   كلمات السرّ **يرى الحقل أصلاً**. فبلاهما لا يُعرض حسابٌ محفوظ ولا تُقترح
+ *   كلمةٌ جديدةٌ عند التغيير، فتُكتب باليد — وذاك بابُ الكلمة القصيرة
+ *   وإعادةِ استعمالها في كلّ مكان. وشاشةُ دخولٍ بلا `autoComplete` هي أضعفُ
+ *   نموذجٍ ممكن، لا نموذجٌ «بسيط».
+ *
+ * و`autoFocus` مقصورٌ على شاشةٍ لا غرضَ لها إلّا هذا النموذج (الدخول ·
+ * البوّابة): نقلُ التركيز في شاشةٍ فيها محتوًى آخر يسرق موضعَ القارئ.
+ */
+export function FormInput({
+  id, name, value, onChange, type = 'text', autoComplete, autoFocus,
+  dir, placeholder, disabled, required, invalid, inputMode, enterKeyHint, describedBy,
+}: {
+  id: string;
+  /** اسمُ الحقل في النموذج — بلاه لا يربط مديرُ كلمات السرّ الحقلَ بحساب */
+  name: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: 'text' | 'email' | 'password' | 'tel' | 'url';
+  /** `username` · `current-password` · `new-password` — وهي عقدُ المتصفّح لا تلميحٌ له */
+  autoComplete?: string;
+  autoFocus?: boolean;
+  dir?: 'ltr' | 'rtl';
+  placeholder?: string;
+  disabled?: boolean;
+  required?: boolean;
+  /** يُنطَق «غير صالح» للقارئ الصوتيّ — واللونُ وحده لا يقول ذلك */
+  invalid?: boolean;
+  inputMode?: 'text' | 'email' | 'numeric' | 'tel' | 'url';
+  /** مفتاحُ الإدخال على لوحة الهاتف: «التالي» في وسط النموذج و«اذهب» في آخره */
+  enterKeyHint?: 'enter' | 'done' | 'go' | 'next' | 'send';
+  /** معرّفُ نصٍّ يشرح الحقل — يُنطَق بعد وسمه */
+  describedBy?: string;
+}) {
+  return (
+    <input
+      id={id} name={name} className="input" type={type} value={value} dir={dir}
+      autoComplete={autoComplete} autoFocus={autoFocus} inputMode={inputMode}
+      enterKeyHint={enterKeyHint} placeholder={placeholder}
+      disabled={disabled} required={required}
+      aria-invalid={invalid || undefined}
+      aria-describedby={describedBy}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
+/**
+ * ملاحظةٌ **تُنطَق**: هي `Note` بعينها مظهراً، ودورُها الحيُّ هو المعنى.
+ *
+ * ★ كان فشلُ الدخول يُرسَم في `Note` بلا `role`، فمن يستعمل قارئَ شاشةٍ يضغط
+ *   «دخول» ولا يسمع شيئاً — الصفحةُ لم تتغيّر عنده، والزرُّ لا يُخبر. و
+ *   `ErrorBox` تحمل الدورَ لكنّها تحمل معه عنواناً ثابتاً («تعذّر تحميل هذا
+ *   الجزء») لا يصلح لفشل **فعلٍ طلبه المستخدم**. فهذه ثالثةٌ بلا صنفٍ جديد.
+ */
+export function Alert({ tone = 'crit', children }: {
+  tone?: 'brand' | 'warn' | 'crit'; children: ReactNode;
+}) {
+  return <div className={`note ${tone}`} role="alert">{children}</div>;
+}

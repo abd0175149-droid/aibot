@@ -1,0 +1,265 @@
+/*
+ * الرئيسيّة · القنوات · الاستهلاك
+ *
+ * ورقةٌ لكلّ مجموعة شاشات: الأنماط المشتركة في `components.css`، وهنا ما
+ * يخصّ هذه الشاشات وحدها. والفصل ليس ترتيباً بل يمنع تصادم من يعمل عليها.
+ *
+ * والقواعد سارية: حشوٌ وحدودٌ **منطقيّة** لا فيزيائيّة · `min-height: 0` على
+ * كلّ حاوٍ مُمرِّرٍ في شبكةٍ أو عمودٍ مرن · ولا كلمةَ عربيّةٍ داخل عازل
+ * `.num`/`.mono`.
+ *
+ * ── لماذا كلّ صنفٍ هنا يبدأ بـ`sc-` ────────────────────────────────────────
+ *   حارسُ الصنف الميّت يسأل «هل هذا الصنف معرَّفٌ في **أيّ** ورقةٍ يحمّلها
+ *   التخطيط؟» — فلا يمسك التصادمَ المعاكس: اسمٌ عامٌّ (`.band` · `.hero` ·
+ *   `.vital`) يُكتب هنا وفي ورقةٍ أخرى بقيمٍ مختلفة، فيصير رسمُ الشاشة رهينةَ
+ *   ترتيبِ الاستيراد في `layout.tsx`. والبادئةُ تُنهي هذا الاحتمال بنيويّاً،
+ *   ولا تكلّف حرفاً في القراءة.
+ *
+ * ── وما يُستعمل هنا ولا يُعرَّف هنا ────────────────────────────────────────
+ *   `.sect` · `.rows` · `.row-m` وأبناؤه · `.delta` · `.dock` · `.tag` ·
+ *   `.opts`/`.opt` — كلُّها في `components.css` من المرحلة السابقة، وهذه
+ *   الشاشاتُ أوّلُ من يستدعيها. فلا تُعاد كتابتُها، ويُكتب هنا ما ينقصها فقط.
+ */
+
+/* ══════════════════ الشريط الحاكم — واحدٌ لكلّ شاشة ══════════════════ */
+/* ★ سؤالٌ واحدٌ يُجاب قبل كلّ شيء: «في شيء يحتاجني؟». وهو **ليس** ملاحظةً
+   (`.note`) ولا خطأً: الملاحظةُ تشرح، وهذا **يحكم** — فله علامةٌ ونصٌّ عريضٌ
+   وسطرُ عاقبةٍ تحته، ويتلوّن باللون حين تكون الحالة حالةً فعلاً.
+   واللونُ لا يقف وحده هنا كما في كلّ مكان: العلامةُ شكلٌ، والنصُّ يقول الحكم. */
+.sc-band {
+  display: flex; align-items: flex-start; gap: 10px; min-width: 0;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--rule); border-radius: var(--radius);
+}
+/* العلامةُ شكلٌ هندسيٌّ لا حرفٌ عربيّ، فأرضيّةُ نقطةِ الحاء لا تسري عليها */
+.sc-band-m { flex: none; font-size: 11px; line-height: 1.9; color: var(--muted); }
+.sc-band-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 64ch; }
+.sc-band-h { font-size: var(--t-sm); font-weight: 700; line-height: 1.6; text-wrap: pretty; }
+.sc-band-s { font-size: var(--t-label); color: var(--muted); line-height: 1.7; }
+.sc-band.sc-good .sc-band-m { color: var(--ok); }
+.sc-band.sc-warn { background: var(--warn-wash); border-color: var(--warn); }
+.sc-band.sc-warn .sc-band-m,
+.sc-band.sc-warn .sc-band-h,
+.sc-band.sc-warn .sc-band-s { color: var(--warn); }
+.sc-band.sc-bad { background: var(--crit-wash); border-color: var(--crit); }
+.sc-band.sc-bad .sc-band-m,
+.sc-band.sc-bad .sc-band-h,
+.sc-band.sc-bad .sc-band-s { color: var(--crit); }
+
+/* ══════════════════ الرقم البطوليّ — وسياقُه ملاصقٌ لا مفقود ══════════════════ */
+/* ★ `.stat.hero` موجودةٌ في طبقة المكوّنات وتُؤدّي الرقمَ ووسمَه — ولا ثالثَ
+   لها: **سطرُ السياق**. ورقمٌ بلا سياقٍ لا يُقرأ حكماً بل يُقرأ خبراً: «12»
+   لا تقول شيئاً، و«12 من 1,500 · وبهذه الوتيرة تُنهي الشهر عند 640» تقول
+   كلَّ شيء. ولذلك بنيةٌ ثالثةٌ هنا لا صيغةٌ رابعةٌ هناك: السياقُ جزءٌ من
+   العقد، فلا يجوز أن يكون خيارياً في مكوّنٍ يستعمله من لا يعرف القاعدة. */
+.sc-hero {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px 20px;
+  min-width: 0; padding: 2px 0 16px;
+  border-block-end: 1px solid var(--rule);
+}
+.sc-hero-v {
+  font-size: var(--t-hero); font-weight: 600; line-height: .96;
+  font-variant-numeric: tabular-nums;
+}
+/* تتبّعٌ سالبٌ على العازل وحده: `.num` مضمونُ اللاتينيّة بنيويّاً، والرقمُ
+   الكبير يحتاج شدّاً وإلّا تفكّك. ولا يمسّ وحدةً عربيّةً لأنّها خارج العازل. */
+.sc-hero-v .num { letter-spacing: -.025em; }
+.sc-hero-v small {
+  font-size: .36em; font-weight: 500; color: var(--muted);
+  margin-inline-start: 7px; letter-spacing: normal;
+}
+.sc-hero-s { display: flex; flex-direction: column; gap: 3px; min-width: 0; padding-block-start: 6px; }
+.sc-hero-k { font-size: var(--t-h2); font-weight: 600; color: var(--ink-2); max-width: 62ch; text-wrap: pretty; }
+.sc-hero-c { font-size: var(--t-sm); color: var(--muted); max-width: 66ch; line-height: 1.7; text-wrap: pretty; }
+.sc-hero.sc-bad .sc-hero-v { color: var(--crit); }
+.sc-hero.sc-warn .sc-hero-v { color: var(--serious); }
+.sc-hero.sc-good .sc-hero-v { color: var(--ok); }
+/* بطاقةٌ تُوصِل لا تُشخّص فقط — والرابطُ يبقى رابطاً حقيقيّاً في الشجرة */
+a.sc-hero { text-decoration: none; color: inherit; }
+a.sc-hero:hover .sc-hero-k { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+/* الرقمُ ووسمُه جنباً إلى جنبٍ حيث يتّسع: وسمٌ معلَّقٌ تحت رقمٍ بارتفاع 58px
+   يفصل الرقمَ عن معناه بواديٍ فارغ. وهي نفسُ النقطة التي تتبنّاها `.stat.hero`. */
+@media (min-width: 700px) {
+  .sc-hero { grid-template-columns: auto minmax(0, 1fr); align-items: center; }
+}
+
+/* ══════════════════ ما ينقص صفَّ المعيار ══════════════════ */
+/* الوحدةُ تلاصق رقمها بلا فراغٍ في `.rm-v small` — و«12/ 1,500» تُقرأ خطأً.
+   والفراغُ من النمط لا من محرفٍ مخفيٍّ في السلسلة: مسافةٌ في أوّل نصٍّ تنطوي
+   بقواعد HTML متى تغيّر ما قبلها. */
+.rm-v small { margin-inline-start: 4px; }
+/* سطرُ سياقٍ خافتٌ داخل عمود الصفّ الثالث — لا حالةٌ فلا لونَ له */
+.sc-ctx { font-size: var(--t-label); color: var(--muted); line-height: 1.6; min-width: 0; }
+/* المقياسُ داخل صفٍّ: `.meter` كتلةٌ بلا عرضٍ ذاتيّ، فتنكمش إلى صفرٍ عنصراً
+   مرناً. والغلافُ يعطيها مدىً مقروءاً ويُلغي هامشَها العلويّ (الفراغ من
+   التخطيط هنا لا من الهوامش). */
+.sc-mw { display: flex; align-items: center; flex: 1 1 96px; min-width: 88px; max-width: 220px; }
+.sc-mw .meter { width: 100%; margin-top: 0; }
+
+/* ══════════════════ الطيُّ التدريجيّ — لما لا يُتّخذ عليه قرار ══════════════════ */
+/* ★ الصفُّ الذي لا يُتّخذ عليه قرارٌ ليس عدوّاً يُحذف: هو مرجعٌ يُطلب مرّةً في
+   الشهر. فيُطوى ويبقى — والمطويُّ يُفتح، والمحذوفُ يُسأل عنه في مكالمة. */
+.sc-fold { border-block-start: 1px solid var(--rule-soft); min-width: 0; }
+.sc-fold > summary {
+  display: flex; align-items: center; gap: 8px;
+  min-height: var(--tap); list-style: none; cursor: pointer;
+  font-size: var(--t-sm); font-weight: 500; color: var(--muted);
+}
+.sc-fold > summary::-webkit-details-marker { display: none; }
+.sc-fold > summary:hover { color: var(--ink); }
+.sc-fold[open] > summary { color: var(--ink); font-weight: 600; }
+.sc-fold-m { flex: none; display: inline-block; font-size: 10px; line-height: 1; }
+.sc-fold[open] .sc-fold-m { transform: rotate(180deg); }
+.sc-fold-b { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding-block-end: 14px; }
+
+/* ══════════════════ الصفُّ الحيويّ — القنوات ══════════════════ */
+/* ★ صفّان في شاشة القنوات ينكسر المنتجُ بسببهما: **سمعةُ الرقم** عند ميتا
+   و**وصولُ الرسائل** إلى البوت. وكانا سطرَين في جدول «مفتاح · قيمة» بين
+   ثمانية مثلهما — أي بوزنٍ يساوي «مستوى الإرسال». فيُرفعان إلى بنيةٍ تحمل
+   ثلاثةَ أشياء لا شيئَين: علامةَ شدّةٍ، وحكماً عريضاً، و**نصَّ عاقبةٍ** يقول
+   ماذا يحدث لو انكسر — لا نصَّ حالةٍ يقول إنّه سليم. */
+.sc-vital {
+  display: grid; grid-template-columns: 17px minmax(0, 1fr);
+  gap: 3px 9px; min-width: 0; padding: 11px 0;
+  border-block-end: 1px solid var(--rule-soft);
+}
+.sc-vital:last-child { border-block-end: 0; padding-block-end: 4px; }
+.sc-vital-m { grid-row: 1; font-size: 11px; line-height: 1.9; color: var(--muted); }
+.sc-vital-k { font-size: var(--t-sm); font-weight: 700; line-height: 1.6; text-wrap: pretty; }
+.sc-vital-s {
+  grid-column: 2; font-size: var(--t-label); color: var(--muted);
+  line-height: 1.75; max-width: 58ch; text-wrap: pretty;
+}
+.sc-vital.sc-good .sc-vital-m { color: var(--ok); }
+.sc-vital.sc-warn .sc-vital-m,
+.sc-vital.sc-warn .sc-vital-k { color: var(--warn); }
+.sc-vital.sc-bad .sc-vital-m,
+.sc-vital.sc-bad .sc-vital-k { color: var(--crit); }
+
+/* ══════════════════ تقرير الفحص — نتيجةٌ تُقرأ سطراً سطراً ══════════════════ */
+/* غائرٌ لا مرتفع: أرضيّةُ الصفحة داخله وسطحُ اللوح حوله، فيُقرأ «نتيجةٌ
+   حدثت الآن» لا «لوحاً ثانياً». */
+.sc-rep {
+  border: 1px solid var(--rule-strong); border-radius: var(--radius);
+  background: var(--bg); overflow: hidden; min-width: 0;
+}
+.sc-rep-h {
+  display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+  padding: 10px 12px; border-block-end: 1px solid var(--rule-soft);
+}
+.sc-rep-h b { font-size: var(--t-sm); font-weight: 700; }
+/* الحاويةُ تحمل الهامشَ التلقائيّ، والعازلُ يسكن مدًى داخلها: `direction: ltr`
+   مع `margin-inline-start: auto` على عنصرٍ واحدٍ يدفعه إلى الطرف الخطأ في RTL. */
+.sc-rep-t { margin-inline-start: auto; font-size: var(--t-label); color: var(--muted); }
+.sc-chk {
+  display: grid; grid-template-columns: 15px minmax(0, 1fr);
+  gap: 3px 9px; padding: 9px 12px; min-width: 0;
+}
+.sc-chk + .sc-chk { border-block-start: 1px solid var(--rule-soft); }
+.sc-chk-m { grid-row: 1; font-size: 10px; line-height: 2; color: var(--muted); }
+.sc-chk-k { font-size: var(--t-sm); font-weight: 600; line-height: 1.6; }
+.sc-chk-s {
+  grid-column: 2; font-size: var(--t-label); color: var(--muted);
+  line-height: 1.75; max-width: 58ch; text-wrap: pretty;
+}
+.sc-chk.sc-good .sc-chk-m { color: var(--ok); }
+.sc-chk.sc-warn .sc-chk-m, .sc-chk.sc-warn .sc-chk-k { color: var(--warn); }
+.sc-chk.sc-bad .sc-chk-m, .sc-chk.sc-bad .sc-chk-k { color: var(--crit); }
+
+/* ══════════════════ خطواتٌ مرقَّمة — ما يجري عند ميتا لا عندنا ══════════════════ */
+.sc-steps {
+  counter-reset: s; display: flex; flex-direction: column; gap: 10px;
+  margin: 0; padding: 0; list-style: none;
+}
+.sc-steps li {
+  counter-increment: s; display: grid; grid-template-columns: 19px minmax(0, 1fr);
+  gap: 10px; font-size: var(--t-sm); line-height: 1.75; color: var(--ink-2);
+}
+/* `--t-badge` تحت أرضيّة الاثني عشر بشرطٍ **بنيويّ**: رقمُ خطوةٍ يولّده
+   العدّادُ داخل عازلٍ اتّجاهيّ — فلا حرفَ عربيّاً يسكن هنا أبداً. */
+.sc-steps li::before {
+  content: counter(s);
+  width: 19px; height: 19px; border-radius: var(--radius-pill);
+  background: var(--surface-2); color: var(--ink-2);
+  font-size: var(--t-badge); font-weight: 700;
+  display: grid; place-items: center; margin-block-start: 3px;
+  direction: ltr; unicode-bidi: isolate;
+}
+
+/* ══════════════════ الرصيف — لاصقٌ لا مثبَّت ══════════════════ */
+/* ★ `.dock` صفٌّ في تخطيط أبيه بقرارٍ مكتوبٍ في طبقة المكوّنات، و`.main` هو
+   المُمرِّرُ الوحيد في الإطار. فاللصقُ (`sticky`) يعطي أثرَ التثبيت بلا ثمنه:
+   لا حشوٌ سفليٌّ وهميّ يُنسى فيغطّي آخرَ صفّ، ولا قفزٌ مع لوحة المفاتيح، ولا
+   تغطيةٌ عند التكبير — والعنصرُ يشغل مكانه في نهاية الصفحة كما هو.
+   وهو يعمل لأنّ الرصيفَ آخرُ ابنٍ في عمودٍ يمتدّ بطول المحتوى كلِّه. */
+.sc-dock { position: sticky; inset-block-end: 0; z-index: 4; min-width: 0; }
+/* ★ مقاسٌ رأيتُه ولم أقرأه: المتصفّح يحصر اللاصقَ في **صندوق محتوى** المُمرِّر
+   لا في صندوق حشوه — فالرصيف يقف أربعين بكسلاً فوق حافّة الشاشة (وهي حشوُ
+   `.main` السفليّ)، ويمرّ المحتوى في الشريط المكشوف تحته فيُقرأ عطلاً في الرسم.
+   والعلاجُ لا يخمّن رقم الحشو (وهو يتغيّر عند 768 و1100 في ورقةٍ لا أملكها):
+   ذيلٌ مرسومٌ بنفس سطح الرصيف يمتدّ تحته ويُقصّ بفيضان المُمرِّر — فيغطّي أيّ
+   حشوٍ كان، ويختفي من تلقائه حين يستقرّ الرصيفُ في آخر الصفحة. */
+.sc-dock::after {
+  content: ""; position: absolute;
+  inset-inline: 0; inset-block-start: 100%; height: 64px;
+  background: var(--surface);
+}
+
+/* مرشّحاتٌ في الرصيف: صفٌّ واحدٌ يُمرَّر أفقيّاً — والالتفافُ يغيّر ارتفاع
+   الرصيف فيقفز ما فوقه عند كلّ ضغطة. */
+.sc-chips {
+  display: flex; gap: 6px; flex: 1 1 auto; min-width: 0;
+  overflow-x: auto; scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+.sc-chips::-webkit-scrollbar { display: none; }
+.sc-chips > * { flex: none; scroll-snap-align: start; }
+
+/* ══════════════════ مجموعُ الجدول — الرقمُ الذي يُطابَق بالفاتورة ══════════════════ */
+/* ★ جدولٌ يُفتح ليُطابَق ولا يحمل مجموعه يُجبر العميل على الجمع بيده — وهو
+   بالضبط ما يُنتج نزاعَ فاتورةٍ لا حسمَه. والخطُّ الحِبريُّ فوقه يقول «هذا
+   ليس صفَّ بيانات»: نفسُ سُمكِ خطِّ رأس العمود ونفسُ حبره. */
+.sc-sum {
+  display: flex; flex-wrap: wrap; gap: 4px 20px; min-width: 0;
+  padding: 11px 2px 2px; border-block-start: 1.5px solid var(--ink);
+  font-size: var(--t-sm); line-height: 1.7;
+}
+.sc-sum-i { color: var(--muted); }
+.sc-sum-i b { color: var(--ink); font-weight: 700; }
+
+/* ══════════════════ رأسُ العمود الرقميّ ══════════════════ */
+/* ★ قِيس بالعين على 1560: خاناتُ «رسائل» و«كلفة الذكاء» تُحاذى إلى النهاية
+   (`.tbl td.n`) ورؤوسُها تبقى عند البداية — فالعنوانُ في طرفٍ وأرقامُه في
+   الطرف الآخر، وهو أوّلُ ما يُربك في جدولٍ يُطابَق بالفاتورة.
+   والتقييدُ بحاوي هذه الشاشة مقصود: `Table` مشتركٌ وثلاثُ شاشاتٍ أخرى تستعمله،
+   ولا أُغيّر رسمَها من ورقتي. */
+.sc-tbl .tbl th.n { text-align: end; }
+
+/* ══════════════════ هويّةُ الصفّ زرٌّ لا نصّ ══════════════════ */
+/* ★ «اضغط الصفَّ ليُفتح تفصيلُه» على `<tr>` وحده فعلٌ **للفأرة فقط**: لا
+   تركيزَ بالمفتاح ولا نطقٌ للقارئ الصوتيّ. فاسمُ الزبون — وهو هويّةُ الصفّ
+   وعنوانُ بطاقته دون 1100 — يصير زرّاً حقيقيّاً، ويبقى نقرُ الصفّ كلِّه
+   راحةً للفأرة فوقه. */
+.sc-rowbtn {
+  padding: 0; border: 0; background: none; color: inherit; font: inherit;
+  text-align: start; min-width: 0; overflow-wrap: anywhere;
+}
+.sc-rowbtn:hover { text-decoration: underline; text-underline-offset: 3px; }
+/* ★ والزرُّ كان **بلا أثرٍ يُرى على الإصبع**: أثرُه الوحيد `:hover`، ولا
+   تحويمَ على اللمس — فاسمُ الزبون في بطاقة الصفّ (وهو مفتاحُ تفصيلها دون
+   1100) يُرسم نصّاً عادياً لا يُعرف أنّه يُضغط. فحيث لا تحويمَ يُرسم الخطُّ
+   دائماً: وهي قاعدةُ هذا النظام نفسها — الرابطُ يُميَّز بخطٍّ تحته لا بلون.
+   ★ وأرضيّةُ اللمس كانت 32 والنظامُ يعلن 44 (`--tap`): هدفٌ دون الأرضيّة
+   في الشاشة التي تُفتح من الهاتف لتُطابَق بالفاتورة. */
+@media (hover: none) {
+  .sc-rowbtn { text-decoration: underline; text-underline-offset: 3px; }
+}
+@media (pointer: coarse) {
+  .sc-rowbtn { min-height: var(--tap); }
+}
+
+/* ══════════════════ روابطُ بهيئة زرّ ══════════════════ */
+/* وِجهةٌ تُفتح في تبويبٍ جديدٍ ويُنسخ عنوانُها = `<a>` لا `<button>`.
+   و`.btn` لا تُلغي خطَّ الرابط لأنّها كُتبت للأزرار، فيُلغى هنا. */
+.sc-link { text-decoration: none; }

@@ -3,6 +3,10 @@ import './components.css';
 /* الترتيب مقصود: الإطار عامٌّ، والإنبوكس تخصيصٌ عليه فيأتي بعده. */
 import './shell.css';
 import './inbox.css';
+import './screens.css';
+import './bot.css';
+import './console.css';
+import './auth.css';
 import type { ReactNode } from 'react';
 import type { Metadata, Viewport } from 'next';
 import { SessionProvider } from '@/lib/session';

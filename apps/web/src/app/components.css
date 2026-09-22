@@ -342,6 +342,12 @@ td.n, th.n { white-space: nowrap; }
 .note.warn { border-inline-start-color: var(--warn); background: var(--warn-wash); }
 .note.crit { border-inline-start-color: var(--crit); background: var(--crit-wash); }
 
+/* ★ زرٌّ داخل ملاحظة ينزل سطراً — لا يقع وسط الجملة.
+   العطل كان في لافتة الانتحال: `.note` عنصرٌ كتليٌّ ونصُّه جارٍ، فالزرّ يُرسم
+   **بين** «ويراه العميل في سجلّه» وما بعده كأنّه كلمةٌ في الجملة. ويظهر فوق
+   1100 وحدها لأنّ السطر لا يلتفّ قبلها، فيسهل أن يفوت. */
+.note > .btn, .note > .btn-wrap { display: flex; margin-block-start: 9px; }
+
 /* ══════════════ الحوار ══════════════ */
 .scrim {
   position: fixed; inset: 0; z-index: 80;
