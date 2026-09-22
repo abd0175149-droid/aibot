@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, type ReactNode } from 'react';
 import { useSession } from '@/lib/session';
-import { post, setToken } from '@/lib/api';
+import { bootstrap, post, setToken } from '@/lib/api';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Skeleton, Note, Button } from '@/components/ui';
 
@@ -22,7 +22,7 @@ export function Shell({
 }: { nav: NavItem[]; children: ReactNode; footer?: ReactNode }) {
   const path = usePathname();
   const router = useRouter();
-  const { me, loading } = useSession();
+  const { me, loading, reload } = useSession();
 
   useEffect(() => {
     if (loading) return;
@@ -72,6 +72,26 @@ export function Shell({
     router.replace('/login');
   }
 
+  /**
+   * إنهاء الانتحال.
+   *
+   * لا نقطةَ نهايةٍ جديدة ولا حاجة: توكن الانتحال يحمل مطالبة `imp`، و
+   * `/auth/refresh` يوقّع توكناً جديداً من **جلستك أنت** بـ`sub` و`tid`
+   * و`role` وحدها — بلا `imp`. فاستئناف الجلسة هو الخروج بعينه.
+   *
+   * وإن فشل التجديد فالجلسة نفسها انتهت، والمخرج الصادق هو صفحة الدخول
+   * لا شاشةٌ عالقةٌ بزرٍّ لا يفعل شيئاً.
+   */
+  async function leaveImpersonation() {
+    if (await bootstrap()) {
+      await reload();
+      router.replace('/console/tenants');
+    } else {
+      setToken(null);
+      router.replace('/login');
+    }
+  }
+
   return (
     <div className={`shell${pinned ? ' pinned' : ''}`}>
       <nav className="side" aria-label="القائمة">
@@ -107,6 +127,15 @@ export function Shell({
           <Note tone="warn">
             <b>انتحال نشط — قراءةٌ فقط.</b> كلّ فعلٍ كاتبٍ مرفوض، والجلسة 30 دقيقة،
             والأمر مسجَّلٌ <b>ويراه العميل في سجلّه</b>.
+            {/* ★ كانت اللافتة تُخبر بالحبس ولا تدلّ على بابٍ للخروج: لا زرّ
+                ولا رابط، فالمخرج الوحيد تسجيل خروجٍ كامل أو انتظار ثلاثين
+                دقيقة. ومن لا يعرف أنّه منتحِل يقرأ «حسابك للقراءة فقط» على
+                كلّ زرٍّ ويظنّ حسابه معطوباً — وهذا ما حدث بالضبط.
+                و`/auth/refresh` يوقّع توكناً جديداً بلا `imp` أصلاً
+                (auth.ts)، فالخروج استئنافُ جلستك أنت لا نقطةَ نهايةٍ جديدة. */}
+            <Button size="sm" onClick={() => void leaveImpersonation()}>
+              إنهاء الانتحال والعودة لحسابي
+            </Button>
           </Note>
         )}
         {children}
