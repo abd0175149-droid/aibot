@@ -1,0 +1,215 @@
+/*
+ * البوت — الشخصيّة والمعرفة والأدوات والسلوك
+ *
+ * ورقةٌ لكلّ مجموعة شاشات: الأنماط المشتركة في `components.css`، وهنا ما
+ * يخصّ هذه الشاشات وحدها. والفصل ليس ترتيباً بل يمنع تصادم من يعمل عليها.
+ *
+ * والقواعد سارية: حشوٌ وحدودٌ **منطقيّة** لا فيزيائيّة · `min-height: 0` على
+ * كلّ حاوٍ مُمرِّرٍ في شبكةٍ أو عمودٍ مرن · ولا كلمةَ عربيّةٍ داخل عازل
+ * `.num`/`.mono`.
+ *
+ * ★ وما بُني هنا في هذه المرحلة، ولماذا كلٌّ منه:
+ *   ① **الرصيف لاصقٌ لا مثبَّت** — المُمرِّر في هذا التطبيق هو `.main` (شرحُه
+ *      في `shell.css`)، فالرصيفُ صفٌّ أخيرٌ في عمود الصفحة يلتصق بأسفل
+ *      المُمرِّر. ولا `position: fixed`: المثبَّت يحتاج حشواً وهميّاً يُنسى،
+ *      ويقفز مع لوحة مفاتيح الهاتف، ويغطّي ما تحته عند التكبير.
+ *   ② **سلّمُ المعرفة بعتبتَين ظاهرتَين** — `Meter` يرسم نسبةً من سقفٍ واحد،
+ *      ومعرفةُ البوت لها عتبتان (8,000 و40,000) وتجاوزُهما **ليس خطأً** بل
+ *      تحوُّلُ وضعٍ. فالعتبتان مرسومتان على المحور بأرقامهما، ولا لونَ حالةٍ
+ *      على الشريط: حبرٌ صلبٌ لأنّ الارتفاع ليس إنذاراً.
+ *   ③ **لافتةُ الحالة** — جملةٌ واحدةٌ تقول ماذا يجري ببوتك الآن، بعلامةٍ
+ *      ونصٍّ معاً (لا معنى باللون وحده)، وسطحٌ ملوّنٌ للحرج والتحذير وحدهما.
+ */
+
+
+/* ══════════════ تخطيط الصفحة: عمودٌ واحدٌ ورصيفٌ في ذيله ══════════════ */
+/* ★ `min-height: 100%` لا `height`: يملأ منطقةَ المُمرِّر حين يقصر المحتوى
+   فيهبط الرصيفُ إلى أسفل الشاشة، ويطول بطول المحتوى حين يفيض. */
+.bot-page {
+  display: flex; flex-direction: column; gap: 16px;
+  min-width: 0; min-height: 100%;
+}
+/* ★ `min-height: 0` صريحةً على الجسم المرن: الافتراض `auto` يمنعه من الصغر
+   عن محتواه، فيُدفع الرصيفُ خارج الصندوق — وهو العطل المكتوب بالدم هنا. */
+.bot-main {
+  display: flex; flex-direction: column; gap: 16px;
+  flex: 1 1 auto; min-width: 0; min-height: 0;
+}
+
+/* الرصيف: ملتصقٌ بأسفل المُمرِّر، فيبقى في مدى الإبهام على كلّ ارتفاع. */
+.bot-dock { position: sticky; inset-block-end: 0; z-index: 4; min-width: 0; }
+/* ★ عطلٌ رأيتُه في لقطةٍ ولم أقرأه في الكود: المتصفّح يحصر اللاصقَ في **صندوق
+   محتوى** المُمرِّر لا في صندوق حشوه، فيقف الرصيفُ أربعين بكسلاً فوق حافّة
+   الشاشة (وهي حشوُ `.main` السفليّ) ويمرّ المحتوى في الشريط المكشوف تحته —
+   جدولٌ يزحف تحت الرصيف يُقرأ عطلاً في الرسم لا تمريراً. و`screens.css`
+   عالجها لرصيفها (`.sc-dock::after`) ولم تعالَج هنا.
+   والذيلُ بلون **الصفحة** لا بلون الرصيف: هذا الرصيفُ لوحٌ بحدٍّ وزوايا
+   داخل حشو المُمرِّر، فذيلٌ بسطحه يرسم لوحاً ثانياً تحته. ولا يُخمَّن رقمُ
+   الحشو (وهو يتغيّر عند 768 و1100 في ورقةٍ لا أملكها): ذيلٌ أطولُ منه
+   يُقصّ بفيضان المُمرِّر، ويختفي من تلقائه حين يستقرّ الرصيفُ في آخر الصفحة. */
+.bot-dock::after {
+  content: ""; position: absolute;
+  inset-inline: 0; inset-block-start: 100%; height: 64px;
+  background: var(--bg);
+}
+/* `.dock` يحمل حدَّه العلويّ وظلَّه الصاعد من `components.css`؛ وهنا يصير
+   لوحاً مستقلّاً لأنّ `.main` يحمل حشواً جانبيّاً فلا يمسّ الرصيفُ الحافّة. */
+.bot-dock .dock { border: 1px solid var(--rule); border-radius: var(--radius); }
+
+
+/* ══════════════ لافتةُ الحالة — جملةٌ واحدةٌ تقول ما يجري ══════════════ */
+.bot-band {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 11px;
+  align-items: start; min-width: 0;
+  padding: 13px 15px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-inline-start: 3px solid var(--rule-strong);
+  border-radius: var(--radius);
+}
+/* العلامةُ ترميزٌ ثانٍ مع اللون — فلا لونٌ يحمل معنًى وحده */
+.bot-band-m { grid-row: 1 / span 2; font-size: 13px; line-height: 1.6; color: var(--muted); }
+.bot-band-t { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.bot-band-t b { font-size: var(--t-h2); font-weight: 700; color: var(--ink); text-wrap: pretty; }
+.bot-band-t span { font-size: var(--t-sm); color: var(--muted); line-height: 1.75; max-width: 74ch; }
+.bot-band-a { grid-column: 2; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.bot-band.crit { border-inline-start-color: var(--crit); background: var(--crit-wash); }
+.bot-band.crit .bot-band-m { color: var(--crit); }
+.bot-band.warn { border-inline-start-color: var(--warn); background: var(--warn-wash); }
+.bot-band.warn .bot-band-m { color: var(--warn); }
+.bot-band.ok { border-inline-start-color: var(--ok); }
+.bot-band.ok .bot-band-m { color: var(--ok); }
+.bot-band.info { border-inline-start-color: var(--rule-strong); }
+
+
+/* ══════════════ الرقمُ البطوليُّ وسلّمُ عتبتَيه ══════════════ */
+/* الرقمُ ثمّ تركيبُه ثمّ سلّمُه: لا رقمَ بلا سياقٍ ملاصق. والخطُّ السفليّ
+   يفصله عمّا بعده فيُقرأ خلاصةً لا بطاقةً في صفّ. */
+.bot-hero {
+  display: flex; flex-direction: column; gap: 6px; min-width: 0;
+  padding-block-end: 14px; border-block-end: 1px solid var(--rule);
+}
+/* `.stat.hero` تحمل خطّاً سفليّاً خاصّاً بها — والحاوي هو من يفصل هنا */
+.bot-hero .stat.hero { border-block-end: 0; padding-block-end: 0; }
+
+.bot-scale { position: relative; min-width: 0; padding-block-end: 40px; }
+.bot-scale-b {
+  display: block; block-size: 9px; border-radius: var(--radius-pill);
+  background: var(--surface-3); overflow: hidden;
+}
+/* ★ حبرٌ صلبٌ لا لونُ حالة: تجاوزُ العتبة تحوُّلُ وضعٍ لا إنذار. */
+.bot-scale-f {
+  display: block; block-size: 100%;
+  background: var(--ink-2); border-radius: var(--radius-pill);
+}
+/* أرضيّةٌ مرئيّة: معرفةٌ ضئيلةٌ تُرسم شريطاً فارغاً يُقرأ معطوباً لا منخفضاً */
+.bot-scale-f.floor { min-inline-size: 3px; }
+.bot-tick { position: absolute; inset-block-start: 0; inline-size: 0; }
+.bot-tick::before {
+  content: ""; position: absolute; inset-block-start: 0;
+  block-size: 20px; inline-size: 2px; background: var(--ink);
+}
+.bot-tick-l {
+  position: absolute; inset-block-start: 23px;
+  font-size: var(--t-label); color: var(--muted); white-space: nowrap;
+}
+/* موضعُ العتبتَين حسابٌ ثابتٌ من المحور (8,000 و40,000 من 40,000) — فصنفٌ
+   لا نمطٌ مضمَّن. والقياسُ من **بداية** السطر كما يقيس الشريطُ نفسه.
+   والعلامتان تُوضعان على `.bot-tick` — وهو في اتّجاه الصفحة — فتُحلّ
+   `inset-inline-start` فيه يميناً كما يُحلّ الشريطُ نفسه. */
+.bot-tick.t1 { inset-inline-start: 20%; }
+.bot-tick.t2 { inset-inline-start: calc(100% - 2px); }
+/* ★ **الوسمُ لا يقيس باتّجاه المحور بل باتّجاه نفسه.** `.bot-tick-l` يحمل
+   `.num`، و`.num` يفرض `direction: ltr` — والخصائصُ المنطقيّة تُحلّ باتّجاه
+   **العنصر** لا أبيه. فكانت `inset-inline-end` على وسم العتبة الثانية تصير
+   `right` لا `left`: يُمسَك الوسمُ من طرفه الأيمن عند نهاية المحور فينمو
+   **خارجه** — «40,000» مقصوصةٌ على حافّة الشاشة، وتمريرٌ أفقيٌّ في الصفحة
+   كلِّها على تبويبات البوت الأربعة وفي المقاسات الثلاثة. رأيتُه في اللقطة:
+   «000,» معلّقةٌ في الحافّة وشريطُ تمريرٍ أفقيٌّ أسفل الشاشة.
+   والعلاجُ أن يُمسَك الوسمان من نفس الحافّة الفيزيائيّة فينمُوَا إلى داخل
+   المحور معاً: `inset-inline-start` على عنصرٍ LTR هي `left`. ولا تُخلَط
+   بعد اليوم حسبةُ المحور (RTL) بحسبة وسمه (LTR) في محدِّدٍ واحد. */
+.bot-tick .bot-tick-l { inset-inline-start: 0; }
+
+
+/* ══════════════ الطيُّ التدريجيّ — ما لا يُتّخذ عليه قرار ══════════════ */
+.bot-more {
+  border: 1px solid var(--rule); border-radius: var(--radius);
+  background: var(--surface); min-width: 0;
+}
+.bot-more > summary {
+  display: flex; align-items: center; gap: 9px; cursor: pointer;
+  min-height: var(--tap); padding: 10px 14px;
+  font-size: var(--t-sm); font-weight: 600; color: var(--ink-2);
+  list-style: none;
+}
+.bot-more > summary::-webkit-details-marker { display: none; }
+/* ★ علامةٌ رأسيّةٌ (▾/▴) لا سهمٌ أفقيّ: الأفقيُّ ينقلب معناه في RTL */
+.bot-more > summary::before { content: "▾"; font-size: 11px; line-height: 1; color: var(--muted); }
+.bot-more[open] > summary::before { content: "▴"; }
+.bot-more[open] > summary { border-block-end: 1px solid var(--rule-soft); }
+.bot-more-b {
+  display: flex; flex-direction: column; gap: 11px;
+  padding: 12px 14px; min-width: 0;
+}
+
+
+/* ══════════════ نصٌّ يقرؤه زبونك بحرفه ══════════════ */
+/* اقتباسٌ لا قيمةٌ في جدول: ما يظهر هنا يخرج من بوتك إلى زبونٍ حقيقيّ،
+   فيُرى بهيئة رسالةٍ لا بهيئة حقلٍ للقراءة. */
+.bot-quote {
+  margin: 0; padding: 11px 14px; max-width: 66ch;
+  background: var(--surface-2); color: var(--ink);
+  border-inline-start: 3px solid var(--rule-strong);
+  border-start-end-radius: var(--radius-sm);
+  border-end-end-radius: var(--radius-sm);
+  font-size: var(--t-body); line-height: 1.8;
+}
+
+
+/* ══════════════ صفوفُ المعيار في هذه الشاشة ══════════════ */
+/* آخرُ صفٍّ بلا خطٍّ سفليّ: الخطُّ فاصلٌ بين صفَّين لا إطارٌ للقائمة. */
+.bot-rows > .row-m:last-child { border-block-end: 0; }
+
+
+/* ══════════════ صفُّ أفعال: الخطرُ بعيدٌ عن الشائع ══════════════ */
+/* ★ كان «احذف» يبعد خمسة بكسلاتٍ عن «عايِن» — وهو حذفٌ نهائيٌّ بجوار فعلٍ
+   يُضغط عشرات المرّات. فالفجوةُ ثلاثةُ أضعافها، والخطرُ يُنفى إلى نهاية
+   الصفّ بهامشٍ تلقائيّ، ولا يقع إلّا بعد ورقةِ تأكيدٍ تقول ما يحدث. */
+/* ★ `width: 100%` شرطُ عمل الهامش التلقائيّ: في وضع البطاقات تُوضع خليّةُ
+   الأفعال في عمودٍ `justify-items: start`، فتضيق على محتواها ولا يبقى فراغٌ
+   يبتلعه الهامش — فيلتصق الحذفُ بجاره من جديد. */
+.bot-acts { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; width: 100%; min-width: 0; }
+.bot-acts > .btn.danger { margin-inline-start: auto; }
+
+
+/* ══════════════ الرفع: تقدّمٌ لكلّ ملفٍّ لا علمٌ للدفعة ══════════════ */
+/* ★ كان علمٌ واحدٌ (`busy`) لخمسة ملفّات: لا يُعرف أيُّها يُرفع الآن ولا
+   أيُّها سقط. فالحالةُ صارت لكلّ ملفٍّ على حِدة، والعدّادُ يقول أين نحن. */
+.kb-up {
+  display: flex; flex-direction: column; gap: 9px; min-width: 0;
+  padding: 12px 14px; background: var(--surface);
+  border: 1px solid var(--rule); border-radius: var(--radius);
+}
+.kb-up-h {
+  display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap;
+  font-size: var(--t-sm); font-weight: 600; color: var(--ink);
+}
+.kb-up-c { margin-inline-start: auto; font-size: var(--t-label); color: var(--muted); }
+.kb-up-l {
+  display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0;
+  list-style: none; font-size: var(--t-label); color: var(--muted); min-width: 0;
+}
+.kb-up-l li { display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.kb-up-l li.fail { color: var(--crit); }
+
+/* اسمُ الملفّ في الجدول: يلتفّ ولا يدفع العمود — أسماءُ الملفّات طويلة */
+.kb-name { overflow-wrap: anywhere; min-width: 0; }
+
+
+/* ══════════════ الرقمُ البطوليُّ جنبَ وسمه حيث يتّسع ══════════════ */
+/* نفسُ نقطة `components.css` لـ`.stat.hero`: المسافةُ تتّسع مع الرقم فلا
+   يلتصق السلّمُ بحرفٍ بارتفاع 58 بكسلاً. */
+@media (min-width: 700px) {
+  .bot-hero { gap: 10px; }
+}

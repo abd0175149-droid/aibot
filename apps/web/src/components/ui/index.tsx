@@ -54,11 +54,44 @@ export function Stack({ children, gap = 'md' }: { children: ReactNode; gap?: 'xs
 
 /* ══════════════ الحالة ══════════════ */
 
-export type Tone = 'ok' | 'warn' | 'serious' | 'crit' | 'brand' | 'violet' | 'neutral';
+export type Tone = 'ok' | 'warn' | 'serious' | 'crit' | 'cool' | 'brand' | 'violet' | 'neutral';
 
 const ICON: Record<Tone, string> = {
-  ok: '●', warn: '▲', serious: '▲', crit: '■', brand: '●', violet: '●', neutral: '○',
+  ok: '●', warn: '▲', serious: '▲', crit: '■', cool: '◆',
+  brand: '●', violet: '●', neutral: '○',
 };
+
+/* ══════════════ العازل الاتّجاهيّ — قرارٌ محسوبٌ لا صنفٌ يُكتب باليد ══════════════ */
+
+/**
+ * ★ **لا كلمةَ عربيّةٍ داخل عازلٍ اتّجاهيّ أبداً** — وهذا ما يجعل القرار
+ * حساباً لا اختياراً. فالمشكلتان متقابلتان وكلتاهما تقع فعلاً:
+ *
+ *  ① **بلا عزلٍ ينقلب الرقم.** «12 / 1,500» في فقرةٍ أساسُها RTL: الشرطة
+ *    محيّدةٌ بين رقمَين، والرقم يعمل عملَ R في UAX#9، فترتفع الشرطةُ
+ *    إلى R ويُقلب الرقمان إلى «1,500 / 12». وهذا رقمُ الفاتورة.
+ *  ② **ومع عزلٍ خاطئٍ تختفي العربيّة.** وضعُ `.num` على مدىً فيه «د.أ»
+ *    يرمي محايداتِ الطرف إلى الطرف الآخر، ويفكّك ترتيبَ الوحدة مع رقمها.
+ *
+ * فالمكوّن يقرّر: ما لا حرفَ عربيٍّ فيه **وفيه رقمٌ أو لاتينيّ** يُعزَل؛
+ * وما سواه يُترك لاتّجاه الصفحة. ولأنّ `.num` يحمل `direction: ltr`
+ * صراحةً، فالمحايد في أوّله («/» في «/ 1,500») يأخذ اتّجاهَ العازل ويبقى
+ * في موضعه — ولا يُرمى كما يُرمى داخل عازلٍ بلا اتّجاهٍ مفروض.
+ *
+ * والمدَيانِ العربيُّ واللاتينيُّ المتجاوران يبقيان منفصلَين في الشجرة،
+ * فلا يلزم أن يختار أحدُهما اتّجاهَ الآخر.
+ */
+const ARABIC_RE = /[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\ufb50-\ufdff\ufe70-\ufeff]/;
+const LATIN_CORE_RE = /[0-9A-Za-z]/;
+
+export function isMachineString(s: string): boolean {
+  return !ARABIC_RE.test(s) && LATIN_CORE_RE.test(s);
+}
+
+/** يعزل ما يستحقّ العزل وحده — ويترك العربيّة حيث هي. */
+function Iso({ text }: { text: string }) {
+  return isMachineString(text) ? <span className="num">{text}</span> : <>{text}</>;
+}
 
 /**
  * ★ **لا معنى باللون وحده أبداً.** كلّ شارةٍ تحمل علامةً ونصّاً معها، لأنّ نحو
@@ -71,7 +104,12 @@ export function Pill({ tone = 'neutral', label, mark = true }: {
   return (
     <span className={`pill ${tone}`}>
       {mark && <span aria-hidden="true" className="pill-m">{ICON[tone]}</span>}
-      {label}
+      {/* ★ «2025-09» كان يُقرأ «09-2025»: شرطةٌ محيّدةٌ بين رقمَين ترتفع
+          إلى RTL فيُقلب الطرفان. وقد أُنشئ لهذا صنفان خاصّان في
+          شاشتَين (`.mg-period` و`.tn-period`) لأنّ `Pill` لا يوفّر العزل.
+          وهو يوفّره الآن محسوباً: الوسمُ العربيّ يُترك، وسلسلةُ
+          الآلة تُعزَل — والعلامةُ تبقى خارج العازل فلا تُرمى. */}
+      <Iso text={label} />
     </span>
   );
 }
@@ -99,10 +137,19 @@ export function Stat({ value, label, unit, tone, hero, meter, href }: {
   href?: string;
 }) {
   const cls = `stat${hero ? ' hero' : ''}${tone ? ` t-${tone}` : ''}${href ? ' link' : ''}`;
+  const v = String(value);
+  /* ★ القيمةُ ووحدتُها **عازلٌ واحد** حين تكون الوحدةُ سلسلةَ آلةٍ
+     أيضاً («/ 1,500» · «M»): فهما طرفا تعبيرٍ رقميٍّ واحد، وفصلُ العازلين
+     يعيد القلبَ الذي أُريد منعُه (12 واحد، و«/ 1,500» آخر، فيتبادلان).
+     أمّا الوحدةُ العربيّة («ث» · «د.أ») فتبقى **خارج** العازل ولا تدخله
+     أبداً — فهي تُقرأ باتّجاه الصفحة: رقمٌ ثمّ وحدتُه عن يساره. */
+  const joined = unit !== undefined && isMachineString(v) && isMachineString(unit);
   const body = (
     <>
       <span className="stat-v">
-        {value}{unit && <small>{unit}</small>}
+        {joined
+          ? <span className="num">{v}<small>{unit}</small></span>
+          : <><Iso text={v} />{unit && <small>{unit}</small>}</>}
       </span>
       <span className="stat-k">{label}</span>
       {meter && <Meter pct={meter.pct} tone={meter.tone} />}
@@ -114,20 +161,37 @@ export function Stat({ value, label, unit, tone, hero, meter, href }: {
 
 /** عتباتٌ ظاهرة: ٨٠٪ تحذير و٩٥٪ خطير و١٠٠٪ حرج — فلا يُفاجأ أحدٌ بسقف. */
 export function Meter({ pct, tone }: { pct: number; tone?: Tone }) {
-  const p = Math.max(0, Math.min(1, pct));
+  /* ★ لا حصرَ للمدخل عند 1 قبل قراءته: كان `Math.min(1, pct)` يمحو
+     التجاوز من الحساب نفسه، فيستوي من بلغ السقفَ بمن تجاوزه ثمانين
+     ضعفاً — والفرق بينهما فاتورة. */
+  const p = Number.isFinite(pct) ? Math.max(0, pct) : 0;
   const auto: Tone = p >= 1 ? 'crit' : p >= 0.95 ? 'serious' : p >= 0.8 ? 'warn' : 'brand';
-  const t = tone ?? auto;
+  /* ★ `tone` يصبغ السلّم ولا **يُطفئ إنذاراً**. وكان يُلغي العتباتِ
+     المدمجة بلا شرط: شاشةُ البوت تمرّر `tone: 'brand'` على نسبةٍ قد
+     تتجاوز المائة، فكان التجاوز يُرسم حِبراً هادئاً.
+     والحدُّ موضوعٌ عند **تجاوز السقف وحده** لا عند كلّ عتبة، لأنّ
+     للمقياس دلالتَين في المنتج: استهلاكٌ يُخشى ارتفاعُه، ومنسوبٌ
+     يُراد ارتفاعُه (قوّةُ كلمة السرّ عند 100٪ «قويّة» لا «حرجة»).
+     فما دون السقف يبقى للمستدعي، وفوقه لا يبقى لأحد. */
+  const over = p > 1;
+  const t = over ? 'crit' : (tone ?? auto);
   /* ★ أرضيّةٌ مرئيّة: استهلاكٌ ضئيل (2 من 1500 = 0.13%) يُرسم شريطاً فارغاً
      يُقرأ **معطوباً** لا منخفضاً. فأيّ استهلاكٍ > 0 يُظهر أثراً، والصفر وحده
      يبقى فارغاً — فالفرق بين «لم تبدأ» و«بدأت بالكاد» معلومةٌ لا زينة. */
-  const width = p === 0 ? 0 : Math.max(p * 100, 2.5);
+  const drawn = Math.min(p, 1);
+  const width = drawn === 0 ? 0 : Math.max(drawn * 100, 2.5);
+  const real = Math.round(p * 100);
   return (
     <span
-      className={`meter ${t}`}
+      className={`meter ${t}${over ? ' over' : ''}`}
       role="meter"
-      aria-valuenow={Math.round(p * 100)}
+      aria-valuenow={Math.min(real, 100)}
       aria-valuemin={0}
       aria-valuemax={100}
+      /* ★ النّسبةُ الحقيقيّة تُنطَق ولو جاوزت المائة: `aria-valuenow`
+         محصورٌ بالمدى المعلَن، فلو وقف الأمرُ عليه سمع قارئُ
+         الشّاشة «100» عند 8000 وعند 80000 سواءً. */
+      aria-valuetext={`${real}%`}
     >
       {/* style-ok: العرض نسبةٌ محسوبة — لا يُمثَّل بصنفٍ ثابت */}
       <i style={{ width: `${width}%` } as CSSProperties} />
@@ -205,16 +269,23 @@ export function DataView<T>({ state, empty, children, skeletonRows }: {
  */
 let reasonSeq = 0;
 
-export function Button({ children, onClick, variant = 'quiet', size = 'md', disabled, reason, type = 'button', busy }: {
+export function Button({ children, onClick, variant = 'quiet', size = 'md', disabled, reason, type = 'button', busy, wide }: {
   children: ReactNode;
   onClick?: () => void;
   variant?: 'primary' | 'quiet' | 'danger';
-  size?: 'sm' | 'md';
+  /** `lg` للفعل الواحد في رصيفٍ — إضافةٌ لا تمسّ موضعَ استدعاءٍ قائماً. */
+  size?: 'sm' | 'md' | 'lg';
   disabled?: boolean;
   /** سببُ التعطيل — يُرسَم على الشاشة، لا في `title`. */
   reason?: string;
   type?: 'button' | 'submit';
   busy?: boolean;
+  /**
+   * يمتدّ على عرض حاويه — للفعل الأساس في رصيفٍ سفليّ، فلا يبحث
+   * الإبهامُ عن هدفٍ في وسط الشاشة. ويرتدّ إلى عرضِ محتواه على
+   * الحاسوب حيث يدور الرّصيفُ شريطاً أفقيّاً.
+   */
+  wide?: boolean;
 }) {
   const showReason = Boolean(disabled && reason && !busy);
   /* معرّفٌ مستقرّ عبر إعادة الرسم — التسلسل يزيد مرّةً لكلّ نسخةٍ لا لكلّ رسم */
@@ -223,7 +294,7 @@ export function Button({ children, onClick, variant = 'quiet', size = 'md', disa
   const btn = (
     <button
       type={type}
-      className={`btn ${variant} ${size}`}
+      className={`btn ${variant} ${size}${wide ? ' wide' : ''}`}
       onClick={onClick}
       disabled={disabled || busy}
       aria-describedby={showReason ? rid : undefined}
@@ -335,7 +406,18 @@ export function TextArea({ id, value, onChange, rows, placeholder, count, dir }:
       />
       {count && (
         <div className={`cnt${pct >= 1 ? ' crit' : pct >= 0.8 ? ' warn' : ''}`}>
-          <span className="num">{count.used.toLocaleString('en-US')} / {count.limit.toLocaleString('en-US')} {count.unit}</span>
+          {/* ★ الوحدةُ **خارج العازل** — وهي عربيّةٌ في كلّ موضع استدعاءٍ في
+              المنتج («توكن» · «محرف»). وكانت داخله، فيسري عليها `direction: ltr`
+              ويُقلب ترتيبُها مع رقمها: «1,240 / 2,000 توكن» تُرسم والوحدةُ
+              **قبل** عددها في القراءة. وهذه هي القاعدة المكتوبة في هذا الملفّ
+              نفسه: لا كلمةَ عربيّةٍ داخل عازلٍ اتّجاهيّ أبداً.
+              والمَدَيان في مدًى واحدٍ فلا يفترقان عنصرَين في شبكةٍ مرنة. */}
+          <span>
+            <span className="num">
+              {count.used.toLocaleString('en-US')} / {count.limit.toLocaleString('en-US')}
+            </span>
+            {' '}{count.unit}
+          </span>
           {pct >= 0.8 && <span>{pct >= 1 ? 'تجاوزتَ الحدّ' : 'قاربتَ الحدّ'}</span>}
         </div>
       )}
@@ -416,13 +498,29 @@ export interface Column<T> {
   cell: (row: T) => ReactNode;
 }
 
+/**
+ * ★ **الجدول ينقلب بطاقاتٍ حيث يضيق — نفسُ المكوّن بأعمدةٍ أكثر لا علامةٌ ثانية.**
+ *
+ *   كان يُرسَم `.tw > table` بـ`min-width: 560px` وتمريرٍ أفقيّ، فستّةُ أعمدةٍ
+ *   على هاتفٍ بعرض 390 تعني **عمودَين مخفيَّين خلف تمريرٍ لا يقول إنّه موجود**:
+ *   «رسائل» و«كلفة الذكاء» — أي الرقمان اللذان تُفتح الشاشةُ من أجلهما.
+ *
+ *   و`components.css` يحمل الانقلاب جاهزاً منذ المرحلة ③ (`.tblw` · `.tbl`
+ *   واستعلامُ حاوٍ عند 1100)، ولم يكن له موضعُ استدعاء. وشرطاه يقعان هنا:
+ *   `data-k` على كلّ خليّة — وهو اسمُ العمود يصير مفتاحاً في البطاقة —
+ *   و`.tblw` حاويةً مسمّاةً يُقاس عليها. والقياسُ على **الحاوي** لا النافذة:
+ *   جدولٌ في عمودٍ ضيّقٍ من شاشةٍ عريضةٍ يبقى بطاقاتٍ، وهو الصحيح.
+ *
+ *   والعمودُ الأوّل هو هويّةُ الصفّ في كلّ استعمالٍ في المنتج (الزبون · العميل)،
+ *   فيُوسَم `hd` ليُقرأ عنواناً للبطاقة لا سطراً فيها.
+ */
 export function Table<T>({ columns, rows, keyOf, onRowClick }: {
   columns: Array<Column<T>>; rows: T[]; keyOf: (row: T) => string;
   onRowClick?: (row: T) => void;
 }) {
   return (
-    <div className="tw">
-      <table>
+    <div className="tblw">
+      <table className="tbl">
         <thead>
           <tr>{columns.map((c) => <th key={c.key} className={c.num ? 'n' : undefined}>{c.head}</th>)}</tr>
         </thead>
@@ -433,7 +531,16 @@ export function Table<T>({ columns, rows, keyOf, onRowClick }: {
               className={onRowClick ? 'clk' : undefined}
               onClick={onRowClick ? () => onRowClick(r) : undefined}
             >
-              {columns.map((c) => <td key={c.key} className={c.num ? 'n' : undefined}>{c.cell(r)}</td>)}
+              {columns.map((c, i) => (
+                <td
+                  key={c.key}
+                  /* المفتاحُ يُطبع من `content: attr(data-k)` في وضع البطاقات */
+                  data-k={c.head}
+                  className={[i === 0 ? 'hd' : '', c.num ? 'n' : ''].filter(Boolean).join(' ') || undefined}
+                >
+                  {c.cell(r)}
+                </td>
+              ))}
             </tr>
           ))}
         </tbody>
@@ -506,4 +613,170 @@ export function DiffView({ before, after }: { before: string; after: string }) {
       ))}
     </div>
   );
+}
+
+/* ══════════════ بنى d4 الجديدة — مكوّناتٌ تنتظر تبنّيها ══════════════ */
+/*
+ * لا موضعَ استدعاءٍ لها بعد، وهذا مقصود: قانونُ المرحلة **إضافةٌ بلا حذف**،
+ * فتُبنى الأداةُ أوّلاً ثمّ تُهاجَر الشاشاتُ إليها واحدةً واحدة. وكلُّ صنفٍ
+ * تكتبه هذه المكوّناتُ معرَّفٌ في `components.css` — وإلّا أمسكها حارسُ
+ * الصنف الميّت في نفس اللحظة.
+ */
+
+/**
+ * وسمٌ عامّ. يفترق عن `Pill` بالمعنى لا بالمظهر: `Pill` شارةُ **حالةٍ** مفرداتُها
+ * مغلقة (سليم · تحذير · خطير · حرج)، و`Tag` وسمٌ لِما ليس حالةً — سلسلةُ رسمٍ،
+ * أو تصنيفٌ لا شدّةَ له — ومعه صيغةُ الخطّ التي لا تحمل سطحاً فلا تُقرأ حالة.
+ *
+ * و`label` إلزاميّةٌ كما في `Pill`: لا معنى باللون ولا بالشكل وحدهما.
+ */
+export function Tag({ tone = 'neutral', label, mark = true, line }: {
+  tone?: Tone; label: string; mark?: boolean;
+  /** بلا سطح — لِما ليس حالةً */
+  line?: boolean;
+}) {
+  return (
+    <span className={`tag ${tone}${line ? ' line' : ''}`}>
+      {mark && <span aria-hidden="true" className="tag-m">{ICON[tone]}</span>}
+      <Iso text={label} />
+    </span>
+  );
+}
+
+/**
+ * الورقةُ الصاعدة — سطحُ الكشف الوحيد.
+ *
+ * ★ **عقدةٌ واحدةٌ لا عقدتان.** لا منسدلةٌ للحاسوب وورقةٌ للهاتف يُخفى إحداهما:
+ *   نفسُ الشجرة، وCSS يقرّر هيئتها. وقرارُ الهيئة معلَّقٌ على **الفأرة** لا على
+ *   العرض (`pointer: fine` مع 1100) — فلوحٌ لمسيٌّ عريضٌ يستحقّ ورقةً تصعد
+ *   لا قائمةً تحتاج تصويباً بالإصبع على 340 بكسلاً.
+ *
+ * ويبقى المكوّنُ مرسوماً وهو مغلق: الإخفاءُ بـ`visibility` في CSS كي يعمل
+ * الانزلاق — ولو أُزيل من الشجرة لظهر وانزلق في نفس الإطار فلم يُرَ انزلاقُه.
+ */
+export function Sheet({ open, title, onClose, children, footer, hint, kind = 'sheet' }: {
+  open: boolean;
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  /** الفعلُ الأساس — يسكن ذيلاً ثابتاً لا يمرّ مع المحتوى */
+  footer?: ReactNode;
+  /** سطرٌ يقول أثرَ الفعل قبل الضغط — لا بعده */
+  hint?: string;
+  /** `menu` تُثبَّت تحت الترويسة على الفأرة فتُقرأ منسدلة */
+  kind?: 'sheet' | 'menu';
+}) {
+  return (
+    <div className={`sheetwrap${open ? ' on' : ''}`} data-kind={kind}>
+      {/* ★ زرٌّ حقيقيٌّ لا `div` بمعالج: «أغلِق بالنقر خارجها» فعلٌ يجب أن
+          يُنطَق ويُبلَغ بالمفتاح، وإلّا صارت الورقةُ مصيدةً لمن لا فأرةَ له. */}
+      <button type="button" className="sheet-scrim" aria-label="إغلاق بالنقر خارج الورقة" onClick={onClose} />
+      <div className="sheet" role="dialog" aria-modal="true" aria-label={title}>
+        <span className="grab" aria-hidden="true" />
+        <header>
+          <h2>{title}</h2>
+          <button type="button" className="x" onClick={onClose} aria-label="إغلاق">✕</button>
+        </header>
+        <div className="sheet-b">{children}</div>
+        {(footer || hint) && (
+          <div className="sheet-f">
+            {footer}
+            {hint && <p className="sheet-hint">{hint}</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * الرصيف — ما تحت الإبهام.
+ *
+ * ★ **صفٌّ في تخطيط أبيه لا `position: fixed`.** والفرقُ ليس ذوقاً: المثبَّتُ
+ *   يحتاج حشواً سفليّاً وهميّاً في المُمرِّر (يُنسى فيغطّي آخرَ صفٍّ في القائمة)،
+ *   ويقفز مع لوحة مفاتيح الهاتف، ويغطّي ما تحته عند التكبير. فمن يستعمله يضعه
+ *   آخرَ صفٍّ في عمودٍ مرنٍ أو شبكةٍ، والجسمُ فوقه يحمل `min-height: 0`.
+ */
+export function Dock({ children, hint }: {
+  children: ReactNode;
+  /** يشرح أثرَ الفعل قبل الضغط — ويدور إلى نهاية الشريط على الحاسوب */
+  hint?: string;
+}) {
+  return (
+    <div className="dock">
+      {children}
+      {hint && <p className="dock-h">{hint}</p>}
+    </div>
+  );
+}
+
+/* ══════════════ نموذجٌ يراه مديرُ كلمات السرّ ══════════════ */
+
+/**
+ * حقلُ نموذجٍ يحمل السِّمات التي **لا يعوّضها صنفٌ ولا CSS**.
+ *
+ * ★ لماذا مكوّنٌ ثانٍ ولا تُوسَّع `Input`: `Input` مُستدعاةٌ في كلّ شاشةٍ في
+ *   المنتج، والتعديلُ فيها فعلٌ في ملفٍّ مشترك. وقانونُ المرحلة إضافةٌ بلا
+ *   حذفٍ ولا تعديلٍ لما لا يخصّ صاحبَ الشاشة — فيُضاف اسمٌ ثانٍ ويبقى
+ *   الأوّلُ كما هو. ولا صنفَ جديداً معه: هو `.input` بعينه.
+ *
+ * ★ ولماذا هي بنيةٌ لا رفاهية: `name` و`autoComplete` هما ما يجعل مديرَ
+ *   كلمات السرّ **يرى الحقل أصلاً**. فبلاهما لا يُعرض حسابٌ محفوظ ولا تُقترح
+ *   كلمةٌ جديدةٌ عند التغيير، فتُكتب باليد — وذاك بابُ الكلمة القصيرة
+ *   وإعادةِ استعمالها في كلّ مكان. وشاشةُ دخولٍ بلا `autoComplete` هي أضعفُ
+ *   نموذجٍ ممكن، لا نموذجٌ «بسيط».
+ *
+ * و`autoFocus` مقصورٌ على شاشةٍ لا غرضَ لها إلّا هذا النموذج (الدخول ·
+ * البوّابة): نقلُ التركيز في شاشةٍ فيها محتوًى آخر يسرق موضعَ القارئ.
+ */
+export function FormInput({
+  id, name, value, onChange, type = 'text', autoComplete, autoFocus,
+  dir, placeholder, disabled, required, invalid, inputMode, enterKeyHint, describedBy,
+}: {
+  id: string;
+  /** اسمُ الحقل في النموذج — بلاه لا يربط مديرُ كلمات السرّ الحقلَ بحساب */
+  name: string;
+  value: string;
+  onChange: (v: string) => void;
+  type?: 'text' | 'email' | 'password' | 'tel' | 'url';
+  /** `username` · `current-password` · `new-password` — وهي عقدُ المتصفّح لا تلميحٌ له */
+  autoComplete?: string;
+  autoFocus?: boolean;
+  dir?: 'ltr' | 'rtl';
+  placeholder?: string;
+  disabled?: boolean;
+  required?: boolean;
+  /** يُنطَق «غير صالح» للقارئ الصوتيّ — واللونُ وحده لا يقول ذلك */
+  invalid?: boolean;
+  inputMode?: 'text' | 'email' | 'numeric' | 'tel' | 'url';
+  /** مفتاحُ الإدخال على لوحة الهاتف: «التالي» في وسط النموذج و«اذهب» في آخره */
+  enterKeyHint?: 'enter' | 'done' | 'go' | 'next' | 'send';
+  /** معرّفُ نصٍّ يشرح الحقل — يُنطَق بعد وسمه */
+  describedBy?: string;
+}) {
+  return (
+    <input
+      id={id} name={name} className="input" type={type} value={value} dir={dir}
+      autoComplete={autoComplete} autoFocus={autoFocus} inputMode={inputMode}
+      enterKeyHint={enterKeyHint} placeholder={placeholder}
+      disabled={disabled} required={required}
+      aria-invalid={invalid || undefined}
+      aria-describedby={describedBy}
+      onChange={(e) => onChange(e.target.value)}
+    />
+  );
+}
+
+/**
+ * ملاحظةٌ **تُنطَق**: هي `Note` بعينها مظهراً، ودورُها الحيُّ هو المعنى.
+ *
+ * ★ كان فشلُ الدخول يُرسَم في `Note` بلا `role`، فمن يستعمل قارئَ شاشةٍ يضغط
+ *   «دخول» ولا يسمع شيئاً — الصفحةُ لم تتغيّر عنده، والزرُّ لا يُخبر. و
+ *   `ErrorBox` تحمل الدورَ لكنّها تحمل معه عنواناً ثابتاً («تعذّر تحميل هذا
+ *   الجزء») لا يصلح لفشل **فعلٍ طلبه المستخدم**. فهذه ثالثةٌ بلا صنفٍ جديد.
+ */
+export function Alert({ tone = 'crit', children }: {
+  tone?: 'brand' | 'warn' | 'crit'; children: ReactNode;
+}) {
+  return <div className={`note ${tone}`} role="alert">{children}</div>;
 }

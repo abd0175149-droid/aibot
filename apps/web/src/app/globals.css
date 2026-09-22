@@ -1,140 +1,216 @@
 /*
- * نظام التصميم.
+ * نظام التصميم — لوحة «الإشارة بالإبهام» وسلّمها الطباعيّ.
  *
  * مستخدمك ليس مبرمجاً — صاحب مطعمٍ أو عيادة. ومقياس نجاح الواجهة:
  * هل يضبط بوته بنفسه بلا أن يتّصل بك؟
  *
- * ثلاث قواعد تحكم كلّ ما هنا:
+ * أربع قواعد تحكم كلّ ما هنا:
  *  • عربيّ أوّلاً و RTL أصليّ — لا انعكاسٌ لتصميمٍ إنجليزيّ.
- *  • أرقام غربيّة (0-9) في الجداول: الأرقام الهنديّة تكسر المحاذاة الرقميّة.
+ *  • أرقام غربيّة (0-9) معزولةٌ اتّجاهيّاً: الهنديّة تكسر المحاذاة الرقميّة.
  *  • لا مصطلح تقنيّ ظاهر — كلّ «webhook» و«token» في الشاشة مكالمةُ دعمٍ قادمة.
+ *  • ★ **اللونُ مِلكُ الحالة وحدها.** لا لونَ علامةٍ ولا لونَ زينة. والفعلُ
+ *    الأساس حِبرٌ صلبٌ — أسودُ على فاتح، أبيضُ على داكن — فيبقى الأحمرُ
+ *    والكهرمانيُّ والأخضرُ **مسموعَين لأنّهما لا يُنفَقان**. وكلُّ حالةٍ
+ *    مُرمَّزةٌ مرّتين: شكلٌ ونصّ، واللونُ ثالثٌ زائد.
  */
 
 :root {
-  /* ═══ الأسطح — رماديّاتٌ مُنحازةٌ بردٍّ خفيف نحو هوى الأساس.
-         رماديٌّ خالصٌ يقرأ «غير مقصود»؛ الميل يجعل الشاشة مجموعةً واحدة. ═══ */
+  /* ═══ الأسطح — رماديّاتٌ مُنحازةٌ بردٍّ خفيف نحو الأخضر المحيَّد.
+         رماديٌّ خالصٌ يقرأ «غير مقصود»؛ والميلُ يجعل الشاشة مجموعةً واحدة. ═══ */
   /* ★ الارتفاع خطوةُ لمعانٍ مقيسة لا ظلٌّ مستعار: الأرضيّة **أغمق** من
      السطح، فاللوح يرتفع بذاته. وهذا يُلغي بنيويّاً «البطاقة البيضاء على
      أبيض» التي هي بصمة كلّ قالب SaaS. */
-  --bg: #e9edef;
-  --surface: #ffffff;
-  --surface-2: #dfe6e8;
-  --surface-3: #ccd6da;
-  --ink: #0c1719;
-  --ink-2: #35484d;
-  --muted: #56686d;
-  /* ثلاث درجاتٍ للخطّ، لكلٍّ وظيفةٌ لا تُبدَّل — والأرقام نِسَبُ تباينٍ مقصودة:
+  --bg: #e7ebe8;
+  --surface: #fcfdfc;
+  --surface-2: #dee3df;
+  --surface-3: #ccd3ce;
+
+  /* أربع درجاتٍ للحبر، لكلٍّ وظيفةٌ لا تُبدَّل: النصّ · النصّ الثانويّ ·
+     الوسمُ حاملُ المعنى · ثمّ الأخفت (وقتٌ وفاصلُ يومٍ — ما لا يُقرأ للفهم). */
+  --ink: #121818;
+  --ink-2: #3a4745;
+  --muted: #4d5b58;
+  --faint: #5a6763;
+
+  /* ثلاث درجاتٍ للخطّ ورابعةٌ جديدة، والأرقام نِسَبُ تباينٍ مقصودة:
      `--rule-strong` لكلّ عنصرٍ تفاعليّ (مطلب 1.4.11 لا ذوق)،
+     `--line-2` لحدّ الحبّة — بين القويّ والعاديّ: يُرى ولا يصرخ،
      `--rule` لإطار اللوح، `--rule-soft` لفاصل الصفّ. */
-  --rule-strong: #5d7076;
-  --rule: #b9c6ca;
-  --rule-soft: #d6dee1;
+  --rule-strong: #6a7874;
+  --line-2: #7f8c88;
+  --rule: #c3ccc7;
+  --rule-soft: #dae0dc;
 
-  /* ═══ الأساس: بحريٌّ عميق، لا أزرق شركاتيّ.
-         «ثقة» = لونٌ واحدٌ هادئ في أقلّ من ٥٪ من البكسلات — الفعل الأساس
-         والعنصر النشط وحدهما. اللون الكثير يقرأ دِعايةً لا أداة. ═══ */
-  --brand: #0f6d86;
-  --brand-ink: #0a5468;
-  --brand-wash: #e2eff3;
-  /** «تقدّم»: للنموّ وحده — فرقٌ موجب، سقفٌ يرتفع. لا يُستعمل زينةً. */
-  --progress: #157f56;
+  /* ═══ ★ الفعل الأساس — حِبرٌ صلبٌ لا لونُ علامة.
+         `--brand` بقي اسماً وتغيّر معناه: لم يعد بحريّاً، بل هو **الحِبر
+         الممتلئ** الذي يُطلى به الزرُّ الأساس والعنصرُ النشط وحلقةُ التركيز.
+         وسببُ بقاء الاسم أنّه في نحو خمسةٍ وثلاثين موضعاً في ثلاث أوراق،
+         وحذفُه يُغرِق حارسَ الصنف الميّت في مئة نقصٍ بدل أن يمسك انكساراً
+         واحداً. والقيمةُ سادسَ‑عشريّةٌ صريحةٌ لأنّ حارس التباين يقرأها
+         من الملفّ ولا يحسب `var()`. ═══ */
+  --brand: #141b1a;
+  /* حبرُ التوكيد = نفسُ حبر النصّ عمداً: لا حبرَ علامةٍ ثانياً في الملفّ.
+     والرابطُ يُميَّز بخطٍّ تحته لا بلون — 1.4.1 مُرضًى بلا صرف اللون. */
+  --brand-ink: #121818;
+  /* «المسحة» صارت سطحاً لا صِباغاً: نفسُ `--surface-2`. فالمنتقى يُعرَف
+     بثلاثيٍّ بلا لون — سطحٌ وحدٌّ ووسمٌ نصّيّ — لا بمسحةٍ ملوّنة. */
+  --brand-wash: #dee3df;
 
-  /* ★ حبرٌ منقلب: لون النصّ فوق تعبئةٍ ملوّنة **توكِنٌ يُقلَب مع الثيم**
+  /* ★ حبرٌ منقلب: لون النصّ فوق تعبئةٍ ممتلئة **توكِنٌ يُقلَب مع الثيم**
      لا `#fff` مثبَّت. كان `.btn.primary` يثبّت الأبيض، فصار «انشر»
-     و«شغّل البوت» — أهمّ زرٍّ في المنصّة — عند **2.94:1** في الداكن،
-     أي تحت حدّ النصّ الكبير. وبالتوكِن يصير 6.48:1. */
-  --signal-on: #ffffff;
+     و«شغّل البوت» — أهمّ زرٍّ في المنصّة — عند **2.94:1** في الداكن.
+     وبالتوكِن يصير 16.49:1 في الفاتح و16.23:1 في الداكن. */
+  --signal-on: #f6f9f7;
+  /* حبرُ الشارة فوق `--crit` وحده — وفي الداكن ينقلب إلى حبرٍ داكنٍ لأنّ
+     الأحمرَ الداكنَ فاتحُ اللمعان (أبيضُ عليه = 3.90:1، وهذا = 5.24:1). */
   --status-on: #ffffff;
 
-  /* أسماءٌ قديمة تبقى عاملةً أثناء الترحيل التدريجيّ. الجديد يستعمل --brand. */
+  /* أسماء اللوحة الجديدة تُشتقّ ولا تُكرَّر: قيمةٌ واحدةٌ لكلّ دور، فلا
+     تتباعد نسختان من نفس الحِبر. والجديد يكتب `--fill` و`--on-fill`. */
+  --fill: var(--brand);
+  --on-fill: var(--signal-on);
+
+  /* أسماءٌ قديمة تبقى عاملةً أثناء الترحيل التدريجيّ — وكلُّها الآن حِبر. */
   --accent: var(--brand);
   --accent-ink: var(--brand-ink);
   --accent-wash: var(--brand-wash);
 
-  --amber: #8f6304;
-  --amber-ink: #6f4d03;
-  --amber-wash: #f7efda;
-  --violet: #7b52b5;
-  --violet-ink: #603f90;
-  --violet-wash: #eee7f7;
-
   /* ═══ ألوان الحالة **محجوزة**: لا تصير سلسلةً في رسمٍ ولا لون علامة.
          ولا معنى باللون وحده — كلّ حالةٍ أيقونةٌ ونصٌّ معها. ═══ */
-  --ok: #16653e;
-  --warn: #8f6304;
-  --serious: #a8500b;
-  --crit: #9c2018;
-  --ok-wash: #e2efe8;
-  --warn-wash: #f7efda;
-  --serious-wash: #f9ebdf;
-  --crit-wash: #f8e5e3;
+  --ok: #136b41;
+  --warn: #8a5d00;
+  --serious: #a1500a;
+  --crit: #9e2016;
+  --ok-wash: #dfefe6;
+  --warn-wash: #f5eedb;
+  --serious-wash: #f8eade;
+  --crit-wash: #f7e2de;
+  /* حالةٌ خامسة من اللوحة الجديدة: معلوماتيّةٌ باردة — «مجدول» و«قيد
+     الانتظار». تُحجَز مثل غيرها: شكلٌ ونصٌّ معها لا لونٌ عارٍ. */
+  --cool: #2a5e74;
+  --cool-wash: #e2eef2;
+  /* البنفسجيّ يبقى للكلفة وحدها في رسم الاستهلاك — لا زينةً ولا حالة. */
+  --violet: #6d4b9e;
+  --violet-wash: #ece6f5;
+  --violet-ink: var(--violet);
 
-  /* ═══ سلَّم الطباعة — ملتزَم. المقاسات المتفرّقة في JSX هي ما يُفقد التدرّج. ═══ */
-  --t-display: 26px; --t-h1: 20px; --t-h2: 16px;
-  --t-body: 14px; --t-sm: 12.5px;
+  /** «تقدّم»: للنموّ وحده — فرقٌ موجب، سقفٌ يرتفع. وهو **نفسُ أخضر «سليم»**:
+      نموٌّ ونجاحٌ معنًى واحدٌ عند القارئ، فأخضران يُلزمانه بتعلّم فرقٍ لا
+      وجود له. */
+  --progress: var(--ok);
+  /* والكهرمانيّ اسمٌ آخر للتحذير — أُلحق به فلا يبقى صفراوان في الشاشة. */
+  --amber: var(--warn);
+  --amber-ink: var(--warn);
+  --amber-wash: var(--warn-wash);
+
+  /* ═══ سلَّم الطباعة — ملتزَم. المقاسات المتفرّقة في JSX هي ما يُفقد التدرّج.
+         والسلّم كلُّه **صعد أو ثبت**، ولا رُتبةَ نزلت: 26←30 · 20←21 ·
+         14←14.5 · 12.5←13 · و12 أرضيّةٌ لا تُلمَس. ═══ */
+  /* الرقمُ البطوليّ: يتمدّد بالعرض ولا ينزل عن 40 — خلاصةُ الشاشة لا زينتها. */
+  --t-hero: clamp(40px, 8vw, 58px);
+  --t-big: 30px;
+  --t-h1: 21px;
+  /* رُتبةٌ جديدة بين العنوان وعنوانه الفرعيّ: قيمةُ صفّ المعيار. كانت
+     مقاساتٍ متفرّقةً في JSX (19 و21 و24)، فصارت رُتبةً واحدةً تُفرَض. */
+  --t-val: 19px;
+  /* اللوحة تقول 15.5، والقاعدةُ تقول لا تصغر رُتبة — ففاز الأكبر،
+     والفرقُ نصفُ بكسلٍ لا يُرى في عنوانٍ وزنُه 700. */
+  --t-h2: 16px;
+  --t-body: 14.5px;
+  --t-sm: 13px;
   /* ★ 12px أرضيّةٌ صلبة للعربيّة — لا شيء تحتها. الفرق بين ح وخ وج نقطةٌ
-     بعرض بكسلٍ واحد، والتباين لا يحلّ ذلك أبداً. وكان 11px بـ٢٧ استعمالاً،
-     فرفعُ التوكِن يُصلح السبعةً والعشرين دفعةً — وهذا ما يعنيه «ما لا توكِن
-     له لا يمكن فرضه». */
+     بعرض بكسلٍ واحد، والتباين لا يحلّ ذلك أبداً. */
   --t-label: 12px;
+  /* الاستثناء الوحيد تحت الأرضيّة، وشرطُه بنيويّ: **أرقامٌ لاتينيّةٌ خالصةٌ
+     داخل عازل `.num`** — شارةُ عدّادٍ أو رقمُ خطوة. لا عربيّةَ فيه أبداً،
+     فالأرضيّة أرضيّةُ نقطةِ الحاء لا أرضيّةُ الرقم. */
+  --t-badge: 10.5px;
+  /* اسمٌ قديم يبقى عاملاً — وهو نفسُ `--t-big`. */
+  --t-display: var(--t-big);
 
-  --radius: 8px;
-  --shadow: 0 1px 2px rgba(12, 23, 25, .05), 0 6px 18px rgba(12, 23, 25, .045);
+  /* عمودُ القراءة: النثرُ وحده محدودُ العرض، والجداولُ تأخذ ما تحتاج. */
+  --measure: 960px;
+  /* ★ أرضيّةُ اللمس — رقمٌ واحدٌ لا ذوقٌ متفرّق: تحت 44 يفقد الإبهامُ هدفه. */
+  --tap: 44px;
+
+  --radius: 12px;
+  --radius-sm: 8px;
+  --radius-sheet: 26px;
+  --radius-pill: 999px;
+
+  /* الظلُّ لا يصنع الارتفاع (السطحُ يصنعه) — بل يفصل ما يطفو عمّا لا يطفو. */
+  --sh-2: 0 1px 2px rgba(18, 24, 24, .06), 0 10px 26px rgba(18, 24, 24, .07);
+  /* ظلُّ الرصيف يصعد لا ينزل: ما تحت الإبهام يعلو ما فوقه. */
+  --sh-dock: 0 -8px 22px rgba(18, 24, 24, .07);
+  --shadow: var(--sh-2);
+
+  /* احتياطيٌّ حقيقيٌّ لكلّ وجه: `Segoe UI` عربيّةٌ مضمونة على ويندوز،
+     و`system-ui` تحلّ إلى SF على آبل، و`Tahoma` آخرُ حصنٍ عربيّ. */
+  --font-sans: 'IBM Plex Sans Arabic', 'Segoe UI', system-ui, -apple-system,
+    'Noto Sans Arabic', Tahoma, sans-serif;
+  /* ★ `IBM Plex Mono` **بلا تغطيةٍ عربيّةٍ إطلاقاً**. فإن تسرّبت عربيّةٌ إلى
+     مدًى مونو سقطت لخطٍّ احتياطيٍّ صامتٍ يختلف على كلّ منصّة. ولذلك يأتي
+     `IBM Plex Sans Arabic` **قبل** العائلة العامّة: السقوطُ يصير مقصوداً
+     إلى نفس وجه الواجهة بدل عشوائيّة النظام. والحلُّ الصحيح أن لا تدخل. */
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    'IBM Plex Sans Arabic', monospace;
+
   color-scheme: light;
 }
 
+/* ═══ الداكن **مُصمَّمٌ لا معكوس**: اللون العميق على خلفيّةٍ داكنة يختفي،
+       فيُرفع لمعاناً ويُخفَض تشبّعاً. قيمةٌ أخرى تماماً لا نفس القيمة.
+       والكتلتان التاليتان **متطابقتان حرفيّاً** — يحرس تطابقَهما اختبار،
+       لأنّ تباعدَهما يعني أنّ «اتبع النظام» و«داكن» شاشتان لا واحدة. ═══ */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
-    --bg: #070e11; --surface: #101b1f; --surface-2: #17262c; --surface-3: #21343b;
-    --ink: #e7f0f2; --ink-2: #b4c6cb; --muted: #8aa0a7;
-    --rule-strong: #57707a; --rule: #2a4049; --rule-soft: #1c2d34;
-    /* الداكن **مُصمَّمٌ لا معكوس**: اللون العميق على خلفيّةٍ داكنة يختفي،
-       فيُرفع لمعاناً ويُخفَض تشبّعاً. قيمةٌ أخرى تماماً لا نفس القيمة. */
-    --brand: #38a3bd; --brand-ink: #6fc4d8; --brand-wash: #0f2b33;
-    --progress: #3aa87a;
-    /* الحبر ينقلب: أبيضُ على أساسٍ داكنٍ فاتح = 2.94:1؛ والحبر الداكن = 6.48:1 */
-    --signal-on: #071319; --status-on: #0a0f12;
-    --amber: #c79a2a; --amber-ink: #dfb659; --amber-wash: #241d0d;
-    --violet: #9670cb; --violet-ink: #b795de; --violet-wash: #1d1526;
-    --ok: #3fae79; --warn: #c79a2a; --serious: #d1763a; --crit: #d9564c;
-    --ok-wash: #102420; --warn-wash: #241d0d; --serious-wash: #26170f; --crit-wash: #271311;
-    --shadow: 0 1px 2px rgba(0,0,0,.45), 0 6px 20px rgba(0,0,0,.3);
+    --bg: #0a100f; --surface: #151c1b; --surface-2: #1e2726; --surface-3: #2a3533;
+    --ink: #e9efec; --ink-2: #b3c0bc; --muted: #9eaca8; --faint: #8b9995;
+    --rule-strong: #64736f; --line-2: #5f6e6a; --rule: #2b3634; --rule-soft: #1f2827;
+    --brand: #e9efec; --brand-ink: #e9efec; --brand-wash: #1e2726;
+    --signal-on: #0c1211; --status-on: #2c1512;
+    --ok: #46b481; --warn: #d0a23a; --serious: #d8813f; --crit: #e2695c;
+    --ok-wash: #0f2419; --warn-wash: #251d0b; --serious-wash: #281709; --crit-wash: #2c1512;
+    --cool: #63a7c0; --cool-wash: #10262e;
+    --violet: #a084d2; --violet-wash: #1c1628;
+    --sh-2: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px rgba(0, 0, 0, .36);
+    --sh-dock: 0 -8px 22px rgba(0, 0, 0, .42);
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
-  --bg: #070e11; --surface: #101b1f; --surface-2: #17262c; --surface-3: #21343b;
-  --ink: #e7f0f2; --ink-2: #b4c6cb; --muted: #8aa0a7;
-  --rule-strong: #57707a; --rule: #2a4049; --rule-soft: #1c2d34;
-  /* الداكن **مُصمَّمٌ لا معكوس**: اللون العميق على خلفيّةٍ داكنة يختفي،
-     فيُرفع لمعاناً ويُخفَض تشبّعاً. قيمةٌ أخرى تماماً لا نفس القيمة. */
-  --brand: #38a3bd; --brand-ink: #6fc4d8; --brand-wash: #0f2b33;
-  --progress: #3aa87a;
-  /* الحبر ينقلب: أبيضُ على أساسٍ داكنٍ فاتح = 2.94:1؛ والحبر الداكن = 6.48:1 */
-  --signal-on: #071319; --status-on: #0a0f12;
-  --amber: #c79a2a; --amber-ink: #dfb659; --amber-wash: #241d0d;
-  --violet: #9670cb; --violet-ink: #b795de; --violet-wash: #1d1526;
-  --ok: #3fae79; --warn: #c79a2a; --serious: #d1763a; --crit: #d9564c;
-  --ok-wash: #102420; --warn-wash: #241d0d; --serious-wash: #26170f; --crit-wash: #271311;
-  --shadow: 0 1px 2px rgba(0,0,0,.45), 0 6px 20px rgba(0,0,0,.3);
+  --bg: #0a100f; --surface: #151c1b; --surface-2: #1e2726; --surface-3: #2a3533;
+  --ink: #e9efec; --ink-2: #b3c0bc; --muted: #9eaca8; --faint: #8b9995;
+  --rule-strong: #64736f; --line-2: #5f6e6a; --rule: #2b3634; --rule-soft: #1f2827;
+  --brand: #e9efec; --brand-ink: #e9efec; --brand-wash: #1e2726;
+  --signal-on: #0c1211; --status-on: #2c1512;
+  --ok: #46b481; --warn: #d0a23a; --serious: #d8813f; --crit: #e2695c;
+  --ok-wash: #0f2419; --warn-wash: #251d0b; --serious-wash: #281709; --crit-wash: #2c1512;
+  --cool: #63a7c0; --cool-wash: #10262e;
+  --violet: #a084d2; --violet-wash: #1c1628;
+  --sh-2: 0 1px 2px rgba(0, 0, 0, .5), 0 10px 28px rgba(0, 0, 0, .36);
+  --sh-dock: 0 -8px 22px rgba(0, 0, 0, .42);
   color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
-html, body { height: 100%; }
+html, body { height: 100%; margin: 0; padding: 0; }
+html { -webkit-text-size-adjust: 100%; }
 body {
-  margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: 'IBM Plex Sans Arabic', system-ui, -apple-system, 'Segoe UI', sans-serif;
-  font-size: 14px;
-  line-height: 1.7;
+  font-family: var(--font-sans);
+  font-size: var(--t-body);
+  /* 1.62 سطرٌ مقيسٌ للعربيّة: أوسعُ من اللاتينيّ لأنّ الهمزةَ والشدّةَ
+     تصعدان والنقطتَين تنزلان — وأضيقُ من 1.7 كي تُقرأ القائمةُ كتلةً
+     واحدةً لا أسطراً متفرّقة. */
+  line-height: 1.62;
   -webkit-font-smoothing: antialiased;
 }
 button, input, textarea, select { font: inherit; color: inherit; }
 button { cursor: pointer; border: none; background: none; }
-a { color: var(--accent-ink); }
-:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+a { color: var(--brand-ink); }
+:focus-visible { outline: 2px solid var(--fill); outline-offset: 2px; border-radius: 3px; }
 /* ═══════════════════════════════════════════════════════════════
    عقد الطباعة العربيّة — ثلاثة بنودٍ يفرضها الاختبار لا المراجعة.
    ═══════════════════════════════════════════════════════════════
@@ -153,13 +229,15 @@ a { color: var(--accent-ink); }
      محيّدةً بين رقمَين فترتفع إلى R، ويُقلب الرقمان بصريّاً إلى
      `1,500 / 1,240`. **رقمٌ مقلوبٌ لا قبيح.** فالعزل يبقى، والعائلة تصير
      عائلة النصّ مع `tabular-nums` — فنكسب المحاذاة بلا كسر العربيّة.
+     وشرطُه المقابل مكتوبٌ بالدم: **لا كلمةَ عربيّةٍ داخل العازل**، ولا
+     محايدَ في أوّله (مسافة · «·» · «—») فيُرمى إلى طرفه الآخر ويختفي.
 
    ★ ③ **لا تتبّع (letter-spacing) على العربيّة أبداً.**
      التتبّع يفكّ وصلات الحرف المتّصل فيُقرأ الاسم مقطّعاً. مسموحٌ داخل
      `[dir="ltr"]` وحده، حيث النصّ لاتينيّ فعلاً. */
 
 code, pre, .mono {
-  font-family: 'IBM Plex Mono', ui-monospace, monospace;
+  font-family: var(--font-mono);
   direction: ltr;
   unicode-bidi: isolate;
 }
@@ -176,35 +254,22 @@ code, pre, .mono {
 :root, [lang='ar'] { letter-spacing: normal; }
 [dir='ltr'] .tracked { letter-spacing: .05em; }
 
-/* ── الهيكل ── */
-.shell { display: grid; grid-template-columns: 210px minmax(0, 1fr); min-height: 100vh; }
-.side {
-  background: var(--surface-2);
-  border-inline-end: 1px solid var(--rule);
-  padding: 14px 0;
-  display: flex; flex-direction: column; gap: 2px;
-  position: sticky; top: 0; height: 100vh; overflow-y: auto;
-}
-.brand { padding: 2px 16px 13px; margin-bottom: 7px; border-bottom: 1px solid var(--rule); }
-.brand b { display: block; font-size: 16px; font-weight: 700; }
-.brand span { font-size: 11.5px; color: var(--muted); }
-.navi {
-  display: flex; align-items: center; gap: 10px; width: 100%;
-  padding: 8px 16px; text-align: right; font-size: 13.5px;
-  color: var(--ink-2); border-inline-end: 2.5px solid transparent;
-  text-decoration: none;
-}
-.navi:hover { background: var(--surface-3); color: var(--ink); }
-.navi[aria-current='page'] {
-  background: var(--surface); color: var(--accent-ink);
-  font-weight: 600; border-inline-end-color: var(--accent);
-}
-.navi .bdg {
-  margin-inline-start: auto; background: var(--crit); color: var(--status-on);
-  font-size: 10px; padding: 0 6px; border-radius: 9px; line-height: 17px;
-}
-.side-foot { margin-top: auto; padding: 12px 16px 0; border-top: 1px solid var(--rule); font-size: 11.5px; color: var(--muted); }
-.main { padding: 22px 24px 56px; min-width: 0; }
+/* ══════════════════════════════════════════════════════════════════════════
+   ── الهيكل ──
+
+   ★ **انتقل كاملاً إلى `shell.css`** في المرحلة ③، ولم يُحذف منه صنف: كلّ
+   اسمٍ كان هنا (`.shell` · `.side` · `.brand` · `.navi` · `.bdg` · `.main`)
+   بقي عاملاً وتغيّرت قيمُه ليصير الإطارَ الجديد — شبكةَ ثلاثِ مناطق يدور
+   فيها التنقّل من شريطٍ سفليٍّ إلى رصيفٍ جانبيّ.
+
+   وسببُ النقل لا الإضافة: التعريفان القديم والجديد لنفس الأصناف يتقاتلان
+   بترتيب الاستيراد لا بالوزن (`.navi` هنا و`.side .navi` هناك)، فيصير رسمُ
+   القشرة رهينةَ سطرٍ في `layout.tsx`. وشرطٌ خفيٌّ كهذا يُكسر بأوّل ترتيبٍ
+   حسن النيّة.
+
+   وهنا كان أيضاً `@media (max-width: 700px)` يقلب الشريط الجانبيّ صفّاً
+   أفقيّاً. و700 لم تكن نقطةً في النظام أصلاً: النقاط ثلاثٌ — 768 و1100.
+   ══════════════════════════════════════════════════════════════════════════ */
 
 .vh { display: flex; gap: 14px; align-items: flex-start; flex-wrap: wrap; padding-bottom: 14px; margin-bottom: 18px; border-bottom: 1px solid var(--rule); }
 .vh h1 { font-size: 21px; font-weight: 600; margin: 0 0 3px; }
@@ -222,7 +287,11 @@ code, pre, .mono {
 .btn.pri:hover:not(:disabled) { filter: brightness(1.08); }
 .btn.dgr { color: var(--crit); border-color: var(--crit); }
 .btn.sm { padding: 3px 9px; font-size: 11.5px; }
-.btn:disabled { opacity: .45; cursor: not-allowed; }
+/* ★ 0.45 كانت تُذيب وسمَ الزرّ: الأساسُ حِبرٌ ممتلئٌ ونصُّه منقلب، فعند
+   هذه الشفافيّة يصير «احفظ كلمة السرّ» أبيضَ على رماديٍّ عند 2.7:1 —
+   وشدّةُ «السرّ» تختفي. والمعطَّلُ يُقرأ ثمّ يُفهَم أنّه معطَّل، لا العكس.
+   0.6 تُبقيه خافتاً بوضوحٍ وترفع وسمَه فوق 4:1. */
+.btn:disabled { opacity: .6; cursor: not-allowed; }
 
 .pill {
   display: inline-flex; align-items: center; gap: 4px;
@@ -256,7 +325,7 @@ code, pre, .mono {
 
 .tw { overflow-x: auto; border: 1px solid var(--rule); border-radius: var(--radius); margin-bottom: 18px; }
 table { border-collapse: collapse; width: 100%; min-width: 560px; font-size: 12.5px; background: var(--surface); }
-th, td { text-align: right; padding: 9px 12px; border-bottom: 1px solid var(--rule-soft); vertical-align: middle; }
+th, td { text-align: start; padding: 9px 12px; border-bottom: 1px solid var(--rule-soft); vertical-align: middle; }
 thead th { font-size: 11.5px; color: var(--muted); font-weight: 500; background: var(--surface-2); white-space: nowrap; border-bottom: 1px solid var(--rule); }
 tbody tr:last-child td { border-bottom: none; }
 tbody tr.clk { cursor: pointer; } tbody tr.clk:hover { background: var(--surface-2); }
@@ -273,7 +342,7 @@ tbody tr.clk { cursor: pointer; } tbody tr.clk:hover { background: var(--surface
 .empty b { display: block; color: var(--ink); font-size: 14.5px; margin-bottom: 6px; }
 .empty .act { margin-top: 12px; }
 
-.note { border-inline-start: 3px solid var(--accent); background: var(--accent-wash); border-radius: 0 5px 5px 0; padding: 11px 14px; margin: 14px 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.65; }
+.note { border-inline-start: 3px solid var(--accent); background: var(--accent-wash); border-start-start-radius: 0; border-end-start-radius: 0; border-start-end-radius: 5px; border-end-end-radius: 5px; padding: 11px 14px; margin: 14px 0; font-size: 12.5px; color: var(--ink-2); line-height: 1.65; }
 .note.w { border-color: var(--amber); background: var(--amber-wash); }
 .note.c { border-color: var(--crit); background: var(--crit-wash); }
 .note b { color: var(--ink); }
@@ -300,12 +369,3 @@ tbody tr.clk { cursor: pointer; } tbody tr.clk:hover { background: var(--surface
 
 .toast { position: fixed; inset-block-end: 20px; inset-inline-start: 50%; transform: translateX(50%); background: var(--ink); color: var(--bg); padding: 10px 20px; border-radius: 20px; font-size: 12.5px; box-shadow: var(--shadow); z-index: 60; max-width: 88vw; text-align: center; }
 .err { color: var(--crit); font-size: 12.5px; margin-bottom: 12px; }
-
-@media (max-width: 700px) {
-  .shell { grid-template-columns: 1fr; }
-  .side { position: static; height: auto; flex-direction: row; overflow-x: auto; border-inline-end: none; border-bottom: 1px solid var(--rule); padding: 9px 8px; gap: 5px; align-items: center; }
-  .brand, .side-foot { display: none; }
-  .navi { width: auto; padding: 6px 12px; border-inline-end: none; border-bottom: 2.5px solid transparent; border-radius: 5px; white-space: nowrap; }
-  .navi[aria-current='page'] { border-bottom-color: var(--accent); }
-  .main { padding: 16px 14px 48px; }
-}

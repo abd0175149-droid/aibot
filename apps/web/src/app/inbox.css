@@ -11,22 +11,43 @@
  *   ردٍّ بلا حقل كتابة.
  *
  *   ولذلك قاعدةٌ صريحة في كلّ ملفّ هذا: **كلّ حاوٍ مُمرِّرٍ في شبكةٍ أو عمودٍ
- *   مرن يحمل `min-height: 0`.** ولا يُترك للافتراض.
+ *   مرن يحمل `min-height: 0`.** ولا يُترك للافتراض. وهي تسري على ما أُضيف في
+ *   المرحلة الرابعة أيضاً: الجسمُ صار عموداً مرناً (ليسكن الحوارُ القصيرُ قاعَ
+ *   اللوح)، والرصيفُ تحته `flex: none` — فلا يزحف أحدهما على الآخر.
  *
  * ★ والارتفاع لم يعد مخمَّناً. كان `calc(100vh - 150px)` — رقمٌ يخمّن ارتفاع
  *   الترويسة والحشو ويكذب مع أوّل تغيير. الآن `Shell` يضع `.pinned` على هذه
  *   الشاشة وحدها: الصفحة لا تمرّ، والشبكة تملأ ما بقي بـ`minmax(0, 1fr)`.
+ *
+ * ══════ المرحلة الرابعة: ما تبنّاه هذا الملفّ من d4 ══════
+ *
+ *  · **مجموعاتُ الإلحاح برؤوسٍ لاصقة** (`.ugrp` · `.grp` من `components.css`):
+ *    القائمةُ لم تعد صفّاً زمنيّاً واحداً، والرأسُ يحمل عدّادَه فيقول إن كان
+ *    النزولُ يستحقّ.
+ *  · **مقياسُ انتظارٍ في الصفّ** (`.ibx-wait`): الرقمُ وحده لا يقول «كم بقي من
+ *    صبر الزبون»، والمقياسُ يقيسه على سقفٍ معلَن.
+ *  · **رصيفٌ مشترك** (`.dock`) في كلّ لوح: مرشّحاتُ القائمة ورقمُها البطوليّ،
+ *    وأفعالُ الحوار مع مُنشئه — كلُّها في مدى الإبهام.
+ *  · **ورقةٌ صاعدة** (`.sheet`) لمدّة التولّي بدل منسدلةٍ بأهدافٍ صغيرة.
+ *  · **ثلاثيّ الصوت بلا لونِ علامة**: جهةٌ + سطحٌ + وسمٌ نصّيّ تحت الفقاعة.
  */
 
 /* ══════════════ الشاشة المثبَّتة ══════════════ */
-/* ★ `min-height: 0` هنا ليس زينة: `.shell` تحمل `min-height: 100vh`، و`100vh`
-   على الهاتف **يشمل شريط العنوان** الذي ينزلق. فلو بقي، لصار أدنى ارتفاعٍ
-   للهيكل أطولَ من الشاشة الفعليّة، فتمرّ الصفحةُ نفسها ويهرب الرصيف (وفيه حقل
-   الكتابة) تحت الحافّة. و`100dvh` هو الارتفاع الحقيقيّ الآن. */
-.shell.pinned {
-  min-height: 0; height: 100dvh; overflow: hidden;
-  grid-template-rows: minmax(0, 1fr);
-}
+/* ★★ المرحلة ③ عمّمت هذا العلاج على الإطار كلّه، فتقلّص عملُ `.pinned`.
+   `.shell` في `shell.css` صارت **مثبَّتةً على كلّ شاشة**: `height: 100dvh`
+   و`overflow: hidden` وشبكةٌ بثلاثة صفوفٍ (ترويسة · جسمٌ يمرّ · رصيف).
+   فلا `min-height` يُطرح ولا `100vh` يكذب على الهاتف.
+
+   ⚠️ وقاعدةٌ صريحة هنا: **`.shell.pinned` لا تلمس `grid-template-rows` أبداً.**
+   وزنُها (0,2,0) يغلب `.shell` (0,1,0) في كلّ استعلام، فأيُّ صفوفٍ تُكتب هنا
+   تُلغي صفوفَ الإطار — وتُلغي معها دورانَ الرصيف عند 1100 (حيث تصير الصفوف
+   اثنتَين والمناطق `"rail top" "rail main"`). وهذا بالضبط ما كان يقع لو بقي
+   `grid-template-rows: minmax(0, 1fr)` هنا: ترويسةٌ بارتفاع 1fr وإنبوكسٌ
+   بارتفاع محتواه — نفسُ عطل «لا تمرير» من بابٍ ثالث.
+
+   فما بقي لـ`.pinned` عملٌ واحدٌ ويقع كلُّه على `.main` أدناه: إلغاءُ تمريره
+   وحشوِه فيملأ الإنبوكس المنطقة بلوحَيه. */
+.shell.pinned { min-height: 0; }
 
 /* ★ عمودٌ مرن لا شبكةُ صفوفٍ مُعدّة. السبب: `main` يحمل ابناً **شرطيّاً**
    (لافتةُ الانتحال). فلو كتبنا `grid-template-rows: auto minmax(0, 1fr)`
@@ -40,14 +61,9 @@
 .main.pinned > * { max-width: none; flex: none; }
 .main.pinned > .note { margin: 10px 12px 0; }
 .main.pinned > .ibx { flex: 1 1 auto; min-height: 0; }
-/* `100vh` في `.side` يتجاوز ارتفاع الهيكل الحقيقيّ فيُخرج ذيلها */
-.shell.pinned .side { height: 100%; }
-
-@media (max-width: 700px) {
-  /* شريط التنقّل صفٌّ بارتفاع محتواه، والإنبوكس يأخذ ما بقي — لا أكثر */
-  .shell.pinned { grid-template-rows: auto minmax(0, 1fr); }
-  .shell.pinned .side { padding-block: 4px; }
-}
+/* الرصيف صفٌّ (أو عمودٌ) في الشبكة فيأخذ ارتفاع منطقته بنفسه — و`height: 100%`
+   على عنصرِ شبكةٍ إمّا لا معنى له أو يكذب. والصفوف يملكها الإطار وحده. */
+.shell.pinned .side { height: auto; }
 
 /* ══════════════ الشبكة ══════════════ */
 .ibx {
@@ -70,135 +86,285 @@
 .ibx-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .ibx-pad { padding: 14px; }
 .ibx-thread .ibx-body > .ibx-pad { padding: 0 0 12px; }
-.ibx-grow { margin-inline-start: auto; }
+
+/* ══════════════ الرصيف — مكوّنٌ مشترك، وموضعُه هنا يفرض ثلاث تسويات ══════════════ */
+/* ① **عمودٌ دائماً.** الرصيفُ المشترك يدور شريطاً أفقيّاً فوق 1100 لأنّ الفأرة
+      لا تحتاج هدفاً بعرض الشاشة. وهنا يسكن **المُنشئ** في الرصيف، والمُنشئ
+      يأخذ العرض كلَّه في كلّ مقاس — فلا دوران.
+   ② **الحشو السفليّ.** منطقةُ النظام السفليّة يملكها **آخرُ ما يلامس الحافّة**
+      لا كلُّ صفٍّ في العمود. ودون 1100 آخرُ ما يلامسها هو التنقّل السفليّ
+      (`shell.css` يحمل `env(safe-area-inset-bottom)`)، فحشوٌ هنا يُجمَع إليه
+      ويُنتج **شريطاً ميّتاً تحت حقل الكتابة** — وهو عطلٌ أُمسك في النموذج
+      بعينه. وفوق 1100 يدور التنقّل عموداً جانبيّاً فيعود الرصيفُ آخرَ ما
+      يلامس الحافّة، فيستعيد حشوَه من تعريفه المشترك.
+   ③ **سطرُ العاقبة يبقى في مكانه**: فوق 1100 يُرسل الرصيفُ المشترك تلميحَه
+      إلى نهاية الشريط (`margin-inline-start: auto`)، ولا معنى لذلك في عمود. */
+.ibx .dock {
+  flex: none;
+  flex-direction: column; align-items: stretch;
+  padding-inline: 12px;
+}
+.ibx .dock-h { order: 0; margin-inline: 0; text-align: start; }
+@media (max-width: 1099.98px) {
+  .ibx .dock { padding-block-end: 10px; }
+}
 
 /* ══════════════ رأس القائمة ══════════════ */
+/* المرشّحاتُ نزلت إلى الرصيف: هي أكثرُ ما تُلمَس، وكانت أبعدَ ما عن الإبهام. */
 .ibx-lhead {
   flex: none; padding: 10px 12px; border-bottom: 1px solid var(--rule);
   background: var(--surface-2); display: flex; flex-direction: column; gap: 8px;
 }
 .ibx-search {
-  width: 100%; min-height: 44px; border-radius: 8px;
+  width: 100%; min-height: 44px; border-radius: var(--radius-sm);
   border: 1px solid var(--rule-strong); background: var(--surface);
   padding: 0 12px; font-size: var(--t-body); color: var(--ink);
 }
 .ibx-search::placeholder { color: var(--muted); }
-/* المرشّحات صفٌّ واحدٌ يُمرَّر — والالتفاف يغيّر ارتفاع الرأس فتقفز القائمة */
+
+/* ══════════════ مجموعاتُ الإلحاح ══════════════ */
+/* الرأسُ اللاصقُ وعدّادُه من `components.css`. وهنا تسويةٌ واحدة: سطحُ الرأس
+   هو سطحُ الصفوف نفسه (`--surface`) فيبهت عند التمرير فوقها — فيرتفع درجةً.
+   و«يحتاجك الآن» تحمل سطحَ حالتها من الأصل فلا تُلمس. */
+.ibx-list .grp:not(.attn) { background: var(--surface-2); }
+.ibx-gm { font-size: var(--t-label); line-height: 1; }
+
+/* ══════════════ صفّ المحادثة ══════════════ */
+/* أعمدةٌ ثابتة الإحداثيّات: العين تنزل رأسيّاً ولا تبحث أفقيّاً.
+   ★ والشِّعارُ الحرفيّ رُفع: حلقتُه كانت تحمل **القناة باللون وحده** — معنىً
+   لا يقرأه من لا يفرّق الأحمر من الأخضر. صار مكانَه **علامةُ حالةٍ شكليّة**
+   (■ ◇ ○) هي نفسُ علامة رأس المجموعة، والقناةُ نصٌّ إلى جانب الاسم. */
+.ibx-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: 15px minmax(0, 1fr) auto;
+  grid-template-areas: 'mk nm tm' 'mk pv pv' 'mk sb sb';
+  gap: 3px 9px; align-items: center;
+  width: 100%; min-height: 72px; padding-block: 10px; padding-inline: 13px;
+  text-align: start; border-bottom: 1px solid var(--rule-soft);
+  background: var(--surface); color: inherit;
+}
+.ibx-row:hover { background: var(--surface-2); }
+/* المنتقى: سطحٌ **وشريطُ بدايةٍ** — والشريطُ عنصرٌ زائفٌ لا حدٌّ حقيقيّ، فلا
+   يزيح المحتوى 3px عند الانتقاء ولا تقفز القائمة صفّاً صفّاً. */
+.ibx-row::before {
+  content: ''; position: absolute; inset-block: 0; inset-inline-start: 0;
+  width: 3px; background: transparent;
+}
+.ibx-row[aria-current='true'] { background: var(--surface-2); }
+.ibx-row[aria-current='true']::before { background: var(--fill); }
+
+.ibx-mark {
+  grid-area: mk; align-self: start; margin-block-start: 3px;
+  font-size: var(--t-label); line-height: 1; color: var(--muted);
+}
+.ibx-row[data-state='attn'] .ibx-mark { color: var(--crit); }
+.ibx-row[data-state='wait'] .ibx-mark { color: var(--ink-2); }
+
+.ibx-nm { grid-area: nm; display: flex; align-items: baseline; gap: 7px; min-width: 0; }
+.ibx-name {
+  min-width: 0; font-size: var(--t-body); font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ibx-row[data-state='attn'] .ibx-name { font-weight: 700; }
+.ibx-row[data-state='calm'] .ibx-name { font-weight: 500; color: var(--ink-2); }
+/* القناةُ نصٌّ لا لون — ولا تتقلّص فتصير حرفاً */
+.ibx-ch { flex: none; font-size: var(--t-label); color: var(--muted); }
+
+.ibx-meta { grid-area: tm; display: flex; align-items: center; gap: 7px; flex: none; }
+.ibx-time { font-size: var(--t-label); color: var(--muted); white-space: nowrap; }
+/* ★ الشارةُ تحت أرضيّة الـ12: **أرقامٌ لاتينيّةٌ خالصةٌ داخل عازل `.num`** —
+   وهو الاستثناء الوحيد المسموح في عقد الطباعة. وكانت 11px عارية. */
+.ibx-badge {
+  display: grid; place-items: center; flex: none;
+  min-width: 19px; height: 19px; padding: 0 5px; border-radius: var(--radius-pill);
+  background: var(--fill); color: var(--on-fill);
+  font-size: var(--t-badge); font-style: normal; font-weight: 700; line-height: 1;
+}
+
+.ibx-prev {
+  grid-area: pv; font-size: var(--t-sm); color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+
+.ibx-sub {
+  grid-area: sb; display: flex; align-items: center; gap: 4px 9px;
+  flex-wrap: wrap; min-width: 0;
+}
+
+/* ══════════════ مقياس الانتظار ══════════════ */
+/* رقمٌ بلا سياقٍ لا يقرّر: «42 د» لا تقول أهي كثيرةٌ أم قليلة. والمقياسُ
+   يقيسها على سقفٍ معلَنٍ (ثلاث ساعات)، وما جاوزه يرسمه المكوّنُ المشترك
+   مشطوباً حرجاً — فيفترق من بلغ السقف عمّن جاوزه. */
+.ibx-wait { display: inline-flex; align-items: center; gap: 7px; font-size: var(--t-label); }
+.ibx-wbar { flex: none; width: 92px; }
+.ibx-wbar .meter { margin-top: 0; height: 5px; }
+.ibx-wtxt { color: var(--ink-2); font-weight: 600; white-space: nowrap; }
+/* وسمٌ نصّيٌّ في الصفّ: تولٍّ · إطفاءٌ · وسمُ تحويل. سطحٌ هادئٌ ونصٌّ — بلا لون */
+.ibx-tg {
+  font-size: var(--t-label); color: var(--ink-2); background: var(--surface-2);
+  border-radius: var(--radius-sm); padding: 1px 7px; white-space: nowrap;
+}
+
+/* ══════════════ الرقم البطوليّ — في رصيف القائمة ══════════════ */
+/* رقمٌ واحدٌ لكلّ شاشة، ويُختار بالحالة: **ما ينتظر ردَّك** هو ما يقرّر عملَ
+   الدقيقة القادمة. ولا رقمَ بلا سياقٍ ملاصق — نسبتُه من القائمة وأطولُ
+   انتظارٍ فيه على سطرٍ واحدٍ تحته. */
+.ibx-hero {
+  display: grid;
+  grid-template-columns: 14px auto minmax(0, 1fr);
+  gap: 0 10px; align-items: center;
+}
+.ibx-hm { font-size: var(--t-label); line-height: 1; color: var(--muted); }
+.ibx-hero[data-state='attn'] .ibx-hm { color: var(--crit); }
+.ibx-hv { font-size: var(--t-big); font-weight: 700; line-height: 1.05; }
+.ibx-hero[data-state='attn'] .ibx-hv { color: var(--crit); }
+.ibx-hk {
+  display: flex; flex-direction: column; gap: 2px; min-width: 0;
+  font-size: var(--t-sm); font-weight: 600;
+}
+.ibx-hn { font-size: var(--t-label); font-weight: 400; color: var(--muted); line-height: 1.55; }
+
+/* المرشّحات صفٌّ واحدٌ يُمرَّر — والالتفاف يغيّر ارتفاع الرصيف فتقفز القائمة */
 .ibx-chips {
   display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none;
   padding-bottom: 2px;
 }
 .ibx-chips::-webkit-scrollbar { display: none; }
 
-/* ══════════════ صفّ المحادثة ══════════════ */
-/* أعمدةٌ ثابتة الإحداثيّات: العين تنزل رأسيّاً ولا تبحث أفقيّاً. */
-.ibx-row {
-  display: grid;
-  grid-template-columns: 4px 40px minmax(0, 1fr) auto;
-  gap: 10px; align-items: center;
-  width: 100%; min-height: 68px; padding-block: 8px; padding-inline: 0;
-  text-align: start; border-bottom: 1px solid var(--rule-soft);
-  background: var(--surface); color: inherit;
-}
-.ibx-row:hover { background: var(--surface-2); }
-.ibx-row[aria-current='true'] { background: var(--brand-wash); }
-
-/* شريط الحافّة: يُقرأ بالطرف البصريّ قبل قراءة حرف */
-.ibx-edge { align-self: stretch; border-radius: 0 3px 3px 0; background: transparent; }
-.ibx-row[data-state='attn'] .ibx-edge { background: var(--crit); }
-.ibx-row[data-state='unread'] .ibx-edge { background: var(--brand); }
-
-/* الشِّعار الحرفيّ: مرساةٌ بصريّة، وحلقته تقول القناة بلا شارةٍ تأكل عرضاً */
-.ibx-av {
-  position: relative; width: 40px; height: 40px; border-radius: 50%;
-  display: grid; place-items: center; flex: none;
-  font-size: 15px; font-weight: 600;
-  background: var(--surface-2); color: var(--ink-2);
-  border: 2px solid var(--rule);
-}
-.ibx-av.brand { border-color: var(--brand); color: var(--brand-ink); background: var(--brand-wash); }
-.ibx-av.violet { border-color: var(--violet); color: var(--violet-ink); background: var(--violet-wash); }
-.ibx-badge {
-  position: absolute; inset-block-start: -4px; inset-inline-start: -4px;
-  min-width: 18px; height: 18px; padding: 0 4px; border-radius: 9px;
-  background: var(--brand); color: var(--signal-on);
-  font-size: 11px; font-style: normal; line-height: 18px; text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.ibx-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.ibx-name {
-  font-size: var(--t-body); font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.ibx-prev {
-  font-size: var(--t-sm); color: var(--muted);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}
-.ibx-meta {
-  display: flex; flex-direction: column; align-items: flex-end; gap: 3px;
-  flex: none; padding-inline-end: 12px;
-}
-.ibx-time { font-size: var(--t-label); color: var(--muted); white-space: nowrap; }
-.ibx-attn {
-  font-size: var(--t-label); font-weight: 600; color: var(--crit);
-  background: var(--crit-wash); border-radius: 999px; padding: 1px 8px; white-space: nowrap;
-}
-
-/* ══════════════ رأس الحوار ══════════════ */
+/* ══════════════ رأس الحوار — يقول ولا يفعل ══════════════ */
+/* سطرانِ: هويّةٌ ثمّ حالة. والأفعالُ كلُّها نزلت إلى الرصيف، فلا يبقى في أعلى
+   الشاشة هدفٌ يحتاج إبهاماً أن يصعد إليه. */
 .ibx-thead {
-  flex: none; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  flex: none; display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-areas: 'bk r1' 'bk r2';
+  gap: 4px 8px; align-items: center;
   padding: 8px 12px; border-bottom: 1px solid var(--rule); background: var(--surface-2);
 }
-.ibx-tname { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ibx-thandle { font-size: var(--t-label); color: var(--muted); }
 .ibx-back {
-  min-width: 44px; min-height: 44px; border-radius: 8px; flex: none;
+  grid-area: bk;
+  min-width: 44px; min-height: 44px; border-radius: var(--radius-sm); flex: none;
   color: var(--ink-2); font-size: 18px; line-height: 1;
 }
 .ibx-back:hover { background: var(--surface-3); }
+.ibx-tr1 { grid-area: r1; display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.ibx-tname {
+  font-size: var(--t-h2); font-weight: 700; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ibx-thandle { font-size: var(--t-label); color: var(--muted); }
+.ibx-tr2 { grid-area: r2; display: flex; align-items: center; gap: 5px 8px; flex-wrap: wrap; }
+/* الوسمُ المشترك `nowrap` لأنّ مفرداته قصيرة، ووسومُ هذا الرأس جملُ عاقبةٍ
+   («يعود البوت بعد ٢٥ د») — فتلتفّ هنا ولا تفيض من اللوح. */
+.ibx-tr2 .tag { white-space: normal; }
+.ibx-win {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: var(--t-label); color: var(--muted);
+}
+.ibx-win .ibx-wbar { width: 54px; }
 
 /* ══════════════ الحوار ══════════════ */
-.ibx-thread .ibx-body { background: var(--bg); padding: 14px; }
-.ibx-msg { display: flex; flex-direction: column; align-items: stretch; }
+/* ★ عمودٌ مرن لا كتلةٌ ساكنة، وسببُه معلومةٌ لا ذوق: `margin-block-start: auto`
+   على أوّل ابنٍ يُنزل الحوارَ **القصيرَ** إلى قاع اللوح ملاصقاً للمُنشئ، بدل
+   أن يتعلّق رسالتَين في أعلى فراغٍ طويل. و`min-height: 0` باقيةٌ أعلاه. */
+.ibx-thread .ibx-body {
+  background: var(--bg); padding: 14px;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.ibx-thread .ibx-body > *:first-child { margin-block-start: auto; }
+
 .ibx-day {
   display: flex; align-items: center; gap: 10px;
-  margin: 14px 0 8px; color: var(--muted); font-size: var(--t-label);
+  color: var(--muted); font-size: var(--t-label);
 }
 .ibx-day::before, .ibx-day::after {
   content: ''; flex: 1; height: 1px; background: var(--rule);
 }
 .ibx-media { display: inline-block; font-style: italic; color: var(--ink-2); }
-.ibx-err {
-  display: block; margin-top: 5px; font-size: var(--t-label);
-  color: var(--crit); line-height: 1.5;
+
+/* ══════════════ الفقاعات — ثلاثةُ أصواتٍ بثلاث إشارات ══════════════ */
+/* ★ **اللونُ مِلكُ الحالة، فالصوتُ لا يُنفق لوناً.** كان البوتُ فيروزيّاً
+   والموظّفُ بنفسجيّاً — أي أنّ لونَين من لوحة الحالة يُصرفان على «من يتكلّم»،
+   فلا يبقى للتحذير معنىً متميّز. والصوتُ الآن **ثلاثُ إشاراتٍ متراكبة**:
+    · **الجهة**: الزبون على بداية السطر، وأنت والبوت على نهايته.
+    · **السطح**: لوحٌ بحدٍّ للزبون · خطٌّ **منقّطٌ** بلا سطحٍ للبوت (فيُقرأ
+      «آليّاً» بشكله) · **حبرٌ صلبٌ** لك (أثقلُ سطحٍ في الشاشة لأثقل فعلٍ فيها).
+    · **وسمٌ نصّيّ** تحت الفقاعة يقول القائل صراحةً.
+   ولا تُقرأ الجهةُ وحدها: صورةٌ واحدةٌ بالأبيض والأسود تكفي لتمييز الثلاثة. */
+.bub {
+  position: relative; max-width: min(78%, 560px);
+  padding: 9px 13px; border-radius: 13px;
+  font-size: var(--t-sm); line-height: 1.7;
+  word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap;
+}
+.bub.in    { background: var(--surface); border: 1px solid var(--rule-strong); border-start-start-radius: 3px; }
+.bub.bot   { background: transparent; border: 1px dashed var(--rule-strong); color: var(--ink); border-start-end-radius: 3px; }
+.bub.agent { background: var(--fill); border: 1px solid var(--fill); color: var(--on-fill); border-start-end-radius: 3px; }
+.bub.sys {
+  max-width: 88%; text-align: center;
+  background: transparent; border: 1px dashed var(--rule-strong);
+  color: var(--muted); font-size: var(--t-label); border-radius: 7px; padding: 6px 12px;
 }
 
-/* ══════════════ الرصيف — كلّ فعلٍ متكرّر هنا ══════════════ */
-.ibx-dock {
-  flex: none; border-top: 1px solid var(--rule); background: var(--surface);
-  /* على الهاتف: يبقى فوق شريط النظام */
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+/* المحاذاةُ على **الرسالة** لا على الفقاعة: الرسالةُ صارت عمودَين (فقاعةٌ
+   ووسمٌ تحتها)، فمحاذاةُ الفقاعة وحدها تترك وسمَها على الطرف المقابل. */
+.ibx-msg { display: flex; flex-direction: column; gap: 4px; min-width: 0; max-width: 100%; }
+.ibx-msg.in { align-items: flex-start; }
+.ibx-msg.bot, .ibx-msg.agent { align-items: flex-end; }
+.ibx-msg.sys { align-items: center; }
+
+/* ★ الوسمُ **خارج** الفقاعة، ولهذا سببٌ وظيفيّ لا جماليّ: حبرُ الموظّف صلبٌ،
+   وسببُ فشلٍ أحمرَ داخله لا يُقرأ (‎--crit‎ على ‎--fill‎ يسقط تحت كلّ عتبة).
+   فالتوقيتُ والحالةُ وسببُ الفشل كلُّها على أرضيّة الصفحة حيث تُقرأ. */
+/* ومداه مدى الفقاعة: سببُ فشلٍ من سطرَين (وهو نصُّ ميتا الحقيقيّ) كان يمدّ
+   صفَّ الميتا إلى عرض اللوح كلِّه، فينفصل «لم تصل» عن فقاعته ويطفو على
+   الطرف المقابل. فالسببُ يلتفّ الآن **تحت الفقاعة** لا عبر الشاشة. */
+.mt {
+  display: flex; align-items: center; gap: 4px 8px; flex-wrap: wrap;
+  max-width: min(78%, 560px);
+  font-size: var(--t-label); color: var(--muted); padding-inline: 4px;
 }
-.ibx-take {
+.ibx-msg.bot .mt, .ibx-msg.agent .mt { justify-content: flex-end; }
+.src { font-weight: 600; color: var(--ink-2); }
+.ibx-bad { color: var(--crit); font-weight: 600; }
+.ibx-err { flex-basis: 100%; color: var(--crit); font-weight: 600; line-height: 1.5; }
+
+/* ★ ضغطةُ زرٍّ تُعرض كضغطةٍ على إجراءٍ باسمه — لا كنصٍّ عارٍ.
+   عرضُها نصّاً هو ما أخفى يوماً كاملاً أنّ نمط التأكيد كان نصفَ نمط.
+   وسطحُها محايدٌ: فعلُ الزبون ليس حالةً ولا فعلَك أنت. */
+.bub.press {
+  white-space: normal;
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  padding: 8px 12px; border-bottom: 1px solid var(--rule-soft);
-  font-size: var(--t-sm); background: var(--surface-2);
-}
-.ibx-pause { position: relative; display: inline-flex; }
-.ibx-menu {
-  position: absolute; inset-block-end: calc(100% + 6px); inset-inline-end: 0;
-  display: flex; flex-direction: column; min-width: 150px; z-index: 20;
   background: var(--surface); border: 1px solid var(--rule-strong);
-  border-radius: 8px; box-shadow: var(--shadow); overflow: hidden;
+  border-start-start-radius: 3px;
 }
-.ibx-menu button {
-  padding: 11px 14px; text-align: start; font-size: var(--t-sm);
-  color: var(--ink-2); min-height: 44px;
-}
-.ibx-menu button:hover { background: var(--brand-wash); color: var(--brand-ink); }
+.press-v { font-weight: 600; color: var(--ink); background: var(--surface-2); border-radius: 5px; padding: 1px 8px; }
+.press-a { font-size: var(--t-label); color: var(--muted); }
 
-.ibx-comp { display: flex; align-items: flex-end; gap: 8px; padding: 10px 12px; }
+/* الأزرار المُرسلة: تُعرض كأزرارٍ لأنّها وصلت الزبون أزراراً */
+.chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+.chips .c {
+  border: 1px solid var(--rule-strong); color: var(--ink-2); background: var(--surface);
+  border-radius: 6px; padding: 3px 10px; font-size: var(--t-label); white-space: nowrap;
+}
+.chips-n { display: block; width: 100%; font-size: var(--t-label); color: var(--muted); margin-top: 4px; line-height: 1.5; }
+/* داخل حبرٍ صلبٍ ينقلب الحبرُ كلُّه — وإلّا صار الزرُّ نصّاً على لونه */
+.bub.agent .chips .c { background: transparent; border-color: var(--on-fill); color: var(--on-fill); }
+.bub.agent .chips-n { color: var(--on-fill); }
+
+@media (max-width: 560px) { .bub { max-width: 86%; } }
+
+/* ══════════════ رصيف الحوار ══════════════ */
+/* أفعالُ الحوار الثلاثة (تولٍّ · التالي المنتظر · تحويل) صفٌّ واحدٌ يلتفّ،
+   ثمّ المُنشئ. وكلُّها فوق التنقّل السفليّ مباشرةً — في مدى الإبهام. */
+.ibx-acts { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+/* ★ شريطُ المنع صار ساكنَ الرصيف: كان يمتدّ حافّةً إلى حافّة فيكفيه خطٌّ
+   علويّ، وهو اليوم داخل حشو الرصيف — فخطٌّ وحده يُقرأ حدّاً منسيّاً معلّقاً
+   في الهواء. حدٌّ كاملٌ وزوايا: كتلةٌ واحدةٌ تقول «هنا لا تُكتب رسالة». */
+.ibx .dock .locked { border: 1px solid var(--crit); border-radius: var(--radius); }
+
+.ibx-comp { display: flex; align-items: flex-end; gap: 8px; }
 .ibx-ta {
   flex: 1; min-width: 0; resize: none;
   min-height: 46px; max-height: 160px;
@@ -212,74 +378,27 @@
 .ibx-count { font-size: var(--t-label); color: var(--muted); }
 .ibx-count.over { color: var(--crit); font-weight: 600; }
 
-/* انتقالٌ للتالي بلا عودةٍ إلى القائمة */
-.ibx-next {
-  display: block; width: 100%; min-height: 44px;
-  padding: 10px 14px; text-align: start;
-  border-top: 1px solid var(--rule-soft); background: var(--brand-wash);
-  color: var(--brand-ink); font-size: var(--t-sm); font-weight: 500;
-}
-.ibx-next:hover { filter: brightness(.97); }
-
 /* ══════════════ الحاسوب يرث الهاتف ══════════════ */
 /* لا انعكاس ولا تخطيطٌ ثانٍ: نفس العلامة ونفس الأصناف، واستعلامٌ واحد
    يُظهر اللوحين معاً. وفي RTL المسار الأوّل هو الأيمن — فالقائمة يميناً
    بترتيب الشبكة لا بحيلة. */
-@media (min-width: 860px) {
-  .ibx { grid-template-columns: 340px minmax(0, 1fr); }
+/* ★ 768 لا 860: نقاط النظام ثلاثٌ (768 · 1100)، و860 كانت رقماً يخصّ هذا
+   الملفّ وحده — فلوحٌ بعرض 834 يحصل على عمودَي الإطار ويبقى إنبوكسُه لوحاً
+   واحداً. والوعد المعتمَد: «اللوحُ = عمودان من مقاس الهاتف، والإنبوكس يفتح
+   لوحيه معاً». */
+@media (min-width: 768px) {
+  .ibx { grid-template-columns: 320px minmax(0, 1fr); }
   .ibx-thread .ibx-body > *,
-  .ibx-take, .ibx-comp, .ibx-next { max-width: 860px; margin-inline: auto; }
+  .ibx-thread .dock > *,
+  .ibx-thread .dock-h { max-width: 860px; margin-inline: auto; width: 100%; }
   .ibx[data-pane='thread'] .ibx-list,
   .ibx[data-pane='list'] .ibx-thread { display: flex; }
   .ibx-thread { border-inline-start: 1px solid var(--rule); }
+  /* زرُّ الرجوع نتيجةُ حالةٍ لا تبويب: اللوحان معروضان فلا رجوعَ يُطلب —
+     وتُطوى معه منطقتُه في شبكة الرأس فلا تبقى فجوةٌ بعرض الفراغ. */
   .ibx-back { display: none; }
+  .ibx-thead {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: 'r1' 'r2';
+  }
 }
-
-/* ══════════════ الفقاعات ══════════════ */
-/* ثلاثة أصواتٍ لا صوتان: الزبون (محاذاة البداية)، البوت (نهاية، فيروزيّ)،
-   والموظّف (نهاية، بنفسجيّ). والبنفسجيّ لا الكهرمانيّ عمداً: الكهرمانيّ في
-   هذه المنصّة يعني **تحذيراً**، وتدخّلُ موظّفٍ ليس تحذيراً. */
-.bub {
-  position: relative; max-width: min(78%, 560px);
-  padding: 9px 13px; border-radius: 13px;
-  font-size: var(--t-sm); line-height: 1.7;
-  word-break: break-word; overflow-wrap: anywhere; white-space: pre-wrap;
-}
-.ibx-msg + .ibx-msg { margin-top: 7px; }
-/* الحوار عمودٌ مرن فتعمل المحاذاة الذاتيّة، والفاصل اليوميّ يأخذ العرض كلّه */
-.bub.in     { align-self: flex-start; background: var(--surface); border: 1px solid var(--rule-strong); border-start-start-radius: 3px; }
-.bub.bot    { align-self: flex-end;   background: var(--brand-wash);  border: 1px solid var(--brand);  border-start-end-radius: 3px; }
-.bub.agent  { align-self: flex-end;   background: var(--violet-wash); border: 1px solid var(--violet); border-start-end-radius: 3px; }
-.bub.sys {
-  align-self: center; max-width: 88%; text-align: center;
-  background: transparent; border: 1px dashed var(--rule-strong);
-  color: var(--muted); font-size: var(--t-label); border-radius: 7px; padding: 6px 12px;
-}
-
-/* ★ ضغطةُ زرٍّ تُعرض كضغطةٍ على إجراءٍ باسمه — لا كنصٍّ عارٍ.
-   عرضُها نصّاً هو ما أخفى يوماً كاملاً أنّ نمط التأكيد كان نصفَ نمط. */
-.bub.press {
-  align-self: flex-start; white-space: normal;
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
-  background: var(--surface); border: 1px solid var(--brand);
-  border-start-start-radius: 3px;
-}
-.press-v { font-weight: 600; color: var(--brand-ink); background: var(--brand-wash); border-radius: 5px; padding: 1px 8px; }
-.press-a { font-size: var(--t-label); color: var(--muted); }
-.bub.press .mt { width: 100%; }
-
-/* 12px أرضيّةٌ صلبة: الفرق بين ح وخ وج نقطةٌ بعرض بكسل، ودونها تندمج */
-.src { display: block; font-size: var(--t-label); font-weight: 600; margin-bottom: 3px; }
-.bub.bot   .src { color: var(--brand-ink); }
-.bub.agent .src { color: var(--violet-ink); }
-.mt { display: block; font-size: var(--t-label); color: var(--muted); margin-top: 4px; }
-
-/* الأزرار المُرسلة: تُعرض كأزرارٍ لأنّها وصلت الزبون أزراراً */
-.chips { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
-.chips .c {
-  border: 1px solid var(--brand); color: var(--brand-ink); background: var(--surface);
-  border-radius: 6px; padding: 3px 10px; font-size: var(--t-label); white-space: nowrap;
-}
-.chips-n { display: block; width: 100%; font-size: var(--t-label); color: var(--muted); margin-top: 4px; line-height: 1.5; }
-
-@media (max-width: 560px) { .bub { max-width: 86%; } }
