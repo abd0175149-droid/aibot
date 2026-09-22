@@ -1,5 +1,7 @@
 import './globals.css';
 import './components.css';
+/* الترتيب مقصود: الإطار عامٌّ، والإنبوكس تخصيصٌ عليه فيأتي بعده. */
+import './shell.css';
 import './inbox.css';
 import type { ReactNode } from 'react';
 import type { Metadata, Viewport } from 'next';
@@ -18,8 +20,8 @@ export const viewport: Viewport = {
   viewportFit: 'cover',
   // يطابق --bg في كلّ ثيم — شريط المتصفّح على الهاتف يستعمله
   themeColor: [
-    { media: '(prefers-color-scheme: light)', color: '#f3f6f7' },
-    { media: '(prefers-color-scheme: dark)', color: '#091114' },
+    { media: '(prefers-color-scheme: light)', color: '#e7ebe8' },
+    { media: '(prefers-color-scheme: dark)', color: '#0a100f' },
   ],
 };
 

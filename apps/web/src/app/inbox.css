@@ -19,14 +19,21 @@
  */
 
 /* ══════════════ الشاشة المثبَّتة ══════════════ */
-/* ★ `min-height: 0` هنا ليس زينة: `.shell` تحمل `min-height: 100vh`، و`100vh`
-   على الهاتف **يشمل شريط العنوان** الذي ينزلق. فلو بقي، لصار أدنى ارتفاعٍ
-   للهيكل أطولَ من الشاشة الفعليّة، فتمرّ الصفحةُ نفسها ويهرب الرصيف (وفيه حقل
-   الكتابة) تحت الحافّة. و`100dvh` هو الارتفاع الحقيقيّ الآن. */
-.shell.pinned {
-  min-height: 0; height: 100dvh; overflow: hidden;
-  grid-template-rows: minmax(0, 1fr);
-}
+/* ★★ المرحلة ③ عمّمت هذا العلاج على الإطار كلّه، فتقلّص عملُ `.pinned`.
+   `.shell` في `shell.css` صارت **مثبَّتةً على كلّ شاشة**: `height: 100dvh`
+   و`overflow: hidden` وشبكةٌ بثلاثة صفوفٍ (ترويسة · جسمٌ يمرّ · رصيف).
+   فلا `min-height` يُطرح ولا `100vh` يكذب على الهاتف.
+
+   ⚠️ وقاعدةٌ صريحة هنا: **`.shell.pinned` لا تلمس `grid-template-rows` أبداً.**
+   وزنُها (0,2,0) يغلب `.shell` (0,1,0) في كلّ استعلام، فأيُّ صفوفٍ تُكتب هنا
+   تُلغي صفوفَ الإطار — وتُلغي معها دورانَ الرصيف عند 1100 (حيث تصير الصفوف
+   اثنتَين والمناطق `"rail top" "rail main"`). وهذا بالضبط ما كان يقع لو بقي
+   `grid-template-rows: minmax(0, 1fr)` هنا: ترويسةٌ بارتفاع 1fr وإنبوكسٌ
+   بارتفاع محتواه — نفسُ عطل «لا تمرير» من بابٍ ثالث.
+
+   فما بقي لـ`.pinned` عملٌ واحدٌ ويقع كلُّه على `.main` أدناه: إلغاءُ تمريره
+   وحشوِه فيملأ الإنبوكس المنطقة بلوحَيه. */
+.shell.pinned { min-height: 0; }
 
 /* ★ عمودٌ مرن لا شبكةُ صفوفٍ مُعدّة. السبب: `main` يحمل ابناً **شرطيّاً**
    (لافتةُ الانتحال). فلو كتبنا `grid-template-rows: auto minmax(0, 1fr)`
@@ -40,14 +47,9 @@
 .main.pinned > * { max-width: none; flex: none; }
 .main.pinned > .note { margin: 10px 12px 0; }
 .main.pinned > .ibx { flex: 1 1 auto; min-height: 0; }
-/* `100vh` في `.side` يتجاوز ارتفاع الهيكل الحقيقيّ فيُخرج ذيلها */
-.shell.pinned .side { height: 100%; }
-
-@media (max-width: 700px) {
-  /* شريط التنقّل صفٌّ بارتفاع محتواه، والإنبوكس يأخذ ما بقي — لا أكثر */
-  .shell.pinned { grid-template-rows: auto minmax(0, 1fr); }
-  .shell.pinned .side { padding-block: 4px; }
-}
+/* الرصيف صفٌّ (أو عمودٌ) في الشبكة فيأخذ ارتفاع منطقته بنفسه — و`height: 100%`
+   على عنصرِ شبكةٍ إمّا لا معنى له أو يكذب. والصفوف يملكها الإطار وحده. */
+.shell.pinned .side { height: auto; }
 
 /* ══════════════ الشبكة ══════════════ */
 .ibx {
@@ -104,7 +106,15 @@
 .ibx-row[aria-current='true'] { background: var(--brand-wash); }
 
 /* شريط الحافّة: يُقرأ بالطرف البصريّ قبل قراءة حرف */
-.ibx-edge { align-self: stretch; border-radius: 0 3px 3px 0; background: transparent; }
+/* ★ زوايا منطقيّة لا فيزيائيّة: الشريط في العمود الأوّل — أي عند البداية،
+   وهي **اليمين** في RTL. و`0 3px 3px 0` تستدير على اليمين، أي على الحافّة
+   الملاصقة للوح بدل الطرف الحرّ نحو المحتوى — عكسُ المقصود تماماً. وهو نفس
+   العطل المكتوب في `.note`، وقع مرّتين في ملفّين. */
+.ibx-edge {
+  align-self: stretch; background: transparent;
+  border-start-start-radius: 0; border-end-start-radius: 0;
+  border-start-end-radius: 3px; border-end-end-radius: 3px;
+}
 .ibx-row[data-state='attn'] .ibx-edge { background: var(--crit); }
 .ibx-row[data-state='unread'] .ibx-edge { background: var(--brand); }
 
@@ -175,10 +185,16 @@
 }
 
 /* ══════════════ الرصيف — كلّ فعلٍ متكرّر هنا ══════════════ */
+/* ★ منطقةُ النظام السفليّة يملكها **آخرُ ما يلامس الحافّة** لا كلُّ صفٍّ في
+   العمود. ودون 1100 آخرُ ما يلامسها هو التنقّل السفليّ (`shell.css` يحمل
+   `env(safe-area-inset-bottom)`)، فحشوٌ هنا يُجمَع إليه ويُنتج **شريطاً ميّتاً
+   تحت حقل الكتابة** — وهو عطلٌ أُمسك في النموذج بعينه. وفوق 1100 يدور التنقّل
+   عموداً جانبيّاً فيعود الرصيفُ آخرَ ما يلامس الحافّة، فيستعيد حشوَه. */
 .ibx-dock {
   flex: none; border-top: 1px solid var(--rule); background: var(--surface);
-  /* على الهاتف: يبقى فوق شريط النظام */
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (min-width: 1100px) {
+  .ibx-dock { padding-bottom: env(safe-area-inset-bottom, 0px); }
 }
 .ibx-take {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
@@ -225,8 +241,12 @@
 /* لا انعكاس ولا تخطيطٌ ثانٍ: نفس العلامة ونفس الأصناف، واستعلامٌ واحد
    يُظهر اللوحين معاً. وفي RTL المسار الأوّل هو الأيمن — فالقائمة يميناً
    بترتيب الشبكة لا بحيلة. */
-@media (min-width: 860px) {
-  .ibx { grid-template-columns: 340px minmax(0, 1fr); }
+/* ★ 768 لا 860: نقاط النظام ثلاثٌ (768 · 1100)، و860 كانت رقماً يخصّ هذا
+   الملفّ وحده — فلوحٌ بعرض 834 يحصل على عمودَي الإطار ويبقى إنبوكسُه لوحاً
+   واحداً. والوعد المعتمَد: «اللوحُ = عمودان من مقاس الهاتف، والإنبوكس يفتح
+   لوحيه معاً». */
+@media (min-width: 768px) {
+  .ibx { grid-template-columns: 320px minmax(0, 1fr); }
   .ibx-thread .ibx-body > *,
   .ibx-take, .ibx-comp, .ibx-next { max-width: 860px; margin-inline: auto; }
   .ibx[data-pane='thread'] .ibx-list,

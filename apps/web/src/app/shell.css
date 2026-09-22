@@ -1,0 +1,311 @@
+/*
+ * ══════════════════════════════════════════════════════════════════════════
+ * الإطار — المرحلة ③.
+ *
+ * الادّعاء الأساس الذي اعتُمد في التحكيم: **نفس العلامة تتحوّل، لا علامتان
+ * تتبادلان الظهور.** فالتنقّل عنصرٌ واحدٌ (`.side`) يدور من شريطٍ سفليٍّ على
+ * الهاتف إلى رصيفٍ جانبيٍّ فوق 1100 — نفس العقدة، نفس الأصناف، نفس الترتيب
+ * في الشجرة. ولا سطرَ JS يقرأ عرضاً.
+ *
+ * ── لماذا `@media` لا `@container` ─────────────────────────────────────────
+ *   النموذج (d4.html) كتب النقاط الثلاث `@container app` لسببٍ واحدٍ يخصّه:
+ *   مبدّلُ العرض في شريطه يغيّر **عرض الحاوي** لا عرض النافذة، فلا تعمل
+ *   `@media` هناك. وفي التطبيق الحقيقيّ الحاوي **هو** النافذة، والنموذج نفسه
+ *   نصّ على أنّها «تصير @media حرفيّاً بلا سطرٍ واحدٍ يتغيّر في الشجرة».
+ *
+ *   وهناك سببٌ تقنيٌّ يمنع `@container` هنا أصلاً: استعلامُ الحاوي **لا يستطيع
+ *   تنميط الحاوي نفسه**، و`.shell` هي التي تتغيّر مناطقُها وأعمدتُها عند 1100.
+ *   فلجعله يعمل نحتاج غلافاً خارجيّاً بـ`container-type: inline-size`، وهو
+ *   يجرّ `contain: layout` فيصير **حاوياً لكلّ `position: fixed` بداخله** —
+ *   أي أنّ الورقة الصاعدة والإعلام والحوار يتغيّر مرجعُهم بلا داعٍ. فالثمن
+ *   حقيقيٌّ والعائد صفر. (والجداولُ تبقى `@container tblw` لأنّ قياسها على
+ *   عمودها الحاوي هو الصحيح: جدولٌ في عمودٍ ضيّقٍ من شاشةٍ عريضةٍ يبقى بطاقات.)
+ *
+ * ── النقاط الثلاث ─────────────────────────────────────────────────────────
+ *   · دون 768   : لوحٌ واحد · تنقّلٌ سفليٌّ يتمدّد بنودُه · حشوٌ ضيّق.
+ *   · 768–1100  : «اللوحُ = عمودان من مقاس الهاتف». التنقّل **يبقى سفليّاً**،
+ *                 والبند يُقيَّد (132px) ويُوسَّط فلا يتمطّط عبر 834 بكسلاً.
+ *   · فوق 1100  : الرصيف يدور 90 درجة عموداً جانبيّاً — نفس العنصر، منطقةٌ
+ *                 أخرى في الشبكة.
+ *
+ * ── الرصيف صفٌّ في الشبكة لا `position: fixed` ─────────────────────────────
+ *   المثبَّتُ يحتاج حشواً سفليّاً وهميّاً في المُمرِّر (يُنسى فيغطّي آخرَ صفٍّ في
+ *   القائمة)، ويقفز مع لوحة مفاتيح الهاتف، ويغطّي ما تحته عند التكبير.
+ *   والصفُّ في الشبكة لا يفعل شيئاً من ذلك: `.main` وحده يمرّ، والرصيف تحته
+ *   لا فوقه. ولذلك `.main` يحمل `min-height: 0` صراحةً — بلاها يرفض أن يصغر
+ *   عن محتواه فلا يفيض ولا يمرّ، ويُدفع الرصيفُ خارج الصندوق. وهو العطل
+ *   الذي وُلد منه `inbox.css` كلّه.
+ * ══════════════════════════════════════════════════════════════════════════
+ */
+
+/* ══════════════ الشبكة الحاكمة — ثلاث مناطق ══════════════ */
+/* ★ ارتفاعٌ مقيسٌ لا `min-height`: التطبيق لوحُ عملٍ لا وثيقةٌ تُقرأ بالتمرير.
+   ولو بقي `min-height: 100vh` لنمت الشبكةُ بطول المحتوى **فهرب الرصيف** إلى
+   أسفل الصفحة — أي أنّ التنقّل السفليّ يحتاج تمريراً للوصول إليه، وهذا نقضُ
+   سببِ وجوده. و`100dvh` لا `100vh`: الثانية تشمل شريط عنوان الهاتف الذي
+   ينزلق، فيصير الإطار أطولَ من الشاشة الفعليّة. */
+.shell {
+  display: grid;
+  grid-template-areas: 'top' 'main' 'rail';
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+  background: var(--bg);
+}
+
+/* ══════════════ الترويسة — الهويّة والحالة ══════════════ */
+/* تُقرأ ولا تُضغط كلّ دقيقة، فمكانها أعلى الشاشة حيث لا يطالها الإبهام.
+   وهي **الموضع الوحيد** لعدّاد السقف: رقمٌ يقول «قاربتَ السقف» لا يجوز أن
+   يسكن قائمةً تُفتح، وإلّا وصل الخبرُ بعد الحدّ. */
+.shell-top {
+  grid-area: top;
+  display: flex; align-items: center; gap: 9px; flex-wrap: wrap;
+  min-height: 54px; padding: 7px 14px;
+  background: var(--surface);
+  border-block-end: 1px solid var(--rule);
+}
+/* الهويّة: الاسم ثمّ المستأجَر — والثاني يُقصّ ولا يدفع ما بعده */
+/* ★ **مقيَّدٌ بالترويسة، و`brand` اسمُ نبرةٍ قبل أن يكون اسمَ كتلة.**
+   كان المحدِّد `.brand` عارياً هنا، وهذه الورقة تُحمَّل **بعد**
+   `components.css` — فكان يغلب بنفس الوزن كلَّ ما يحمل نبرة «الأساس»:
+   `<Note>` بنبرتها الافتراضيّة تفقد حشوَها وحدَّها الجانبيّ وتصير
+   شبكةً مرنةً بمحاذاة خطّ القاعدة (فينفصل `<b>` عن نصّه عمودَين)،
+   و`<Pill tone="brand">` (وهي «واتساب» في الاستهلاك والإنبوكس والقنوات)
+   تصير كتلةً تملأ خليّتها بلا حشو، و`.meter.brand` يفقد هامشه العلويّ.
+   والقيدُ يُنهي التصادم بلا تغيير اسمٍ في الشجرة. */
+.shell-top .brand {
+  display: flex; align-items: baseline; gap: 7px;
+  min-width: 0; padding: 0; margin: 0; border: 0;
+}
+.shell-top .brand b { display: inline; font-size: 15.5px; font-weight: 700; }
+.shell-top .brand span {
+  min-width: 0; font-size: var(--t-label); color: var(--muted);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* مِصرفُ الحالة: عدّاد السقف في لوحة العميل، وعددُ الحوادث في لوحة المالك.
+   `margin-inline-start: auto` على الحاوي لا على عنصرٍ يحمل `.num` — الهامشُ
+   التلقائيُّ يُحسب ببداية العنصر نفسه، وعنصرٌ معزولٌ بـ`direction: ltr`
+   بدايتُه يساراً فيُدفع إلى الطرف الخطأ. فخٌّ وقع في هذا المشروع مرّتين. */
+.shell-st {
+  margin-inline-start: auto;
+  display: flex; align-items: center; gap: 8px;
+  min-width: 0; max-width: 100%;
+  font-size: var(--t-sm); color: var(--muted);
+}
+
+/* ══════════════ التنقّل — العنصر الذي يدور ══════════════ */
+/* المحدِّدات كلّها `.side .navi` لا `.navi` وحده: وزنٌ أعلى من تعريفات
+   القشرة القديمة في `components.css`، فلا يبقى ترتيبُ الاستيراد شرطاً
+   خفيّاً لصحّة الرسم. */
+.side {
+  grid-area: rail;
+  display: flex; gap: 4px; min-width: 0;
+  /* ★ منطقة النظام السفليّة: بلاها يسقط نصفُ البند تحت شريط الإيماءة */
+  padding: 6px 8px calc(8px + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-block-start: 1px solid var(--rule);
+  border-inline-end: 0;
+  /* ظلُّ الرصيف يصعد لا ينزل: ما تحت الإبهام يعلو ما فوقه */
+  box-shadow: var(--sh-dock);
+}
+/* الوسمُ النصّيّ للعلامة يظهر في الرصيف الجانبيّ وحده: على الهاتف تحمله
+   الترويسة، وتكرارُه يأكل خُمسَ شريطٍ كلُّ بندٍ فيه ثمين. */
+.side-mark { display: none; }
+.side-sep { display: none; }
+
+.side .navi {
+  flex: 1 1 0; min-width: 0; min-height: 56px;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 3px;
+  position: relative;
+  padding: 0 2px; border: 0; border-radius: var(--radius);
+  background: transparent; color: var(--muted);
+  font-size: 11.5px; font-weight: 600; line-height: 1.25;
+  text-align: center; text-decoration: none;
+}
+.side .navi:hover { background: var(--surface-2); color: var(--ink); }
+.side .navi[aria-current='page'] {
+  background: var(--surface-2); color: var(--ink); font-weight: 700;
+}
+/* شريطُ الحالة النشطة: علامةٌ ثانيةٌ فوق تغيُّرِ السطح والوزن — فالحالة
+   مُرمَّزةٌ مرّتين لا باللون وحده. وموضعُه منطقيٌّ فيدور مع البند:
+   `inset-inline-start: 50%` في RTL تُحلّ إلى `right: 50%` — أي أنّ حافّته
+   النهائيّة عند المنتصف — و`translateX(50%)` تدفعه يميناً نصفَ عرضه فيتوسّط. */
+.side .navi[aria-current='page']::after {
+  content: ''; position: absolute;
+  inset-block-start: 0; inset-inline-start: 50%;
+  transform: translateX(50%);
+  width: 24px; height: 2.5px;
+  border-radius: 0 0 3px 3px;
+  background: var(--fill);
+}
+.side .navi:active { transform: translateY(1px); }
+/* حاملُ الرمز — وهو مرساةُ الشارة: الشارة تُوضع بالنسبة إليه لا إلى البند
+   كلِّه، وإلّا هاجرت إلى زاويةٍ لا علاقة لها بالرمز عند دوران الرصيف. */
+.side .navi-i {
+  position: relative; display: grid; place-items: center;
+  width: auto; font-size: 19px; line-height: 1;
+}
+.side .navi-l {
+  max-width: 100%;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+/* «المزيد» زرٌّ لا رابط، ورمزُه ثلاثُ نقاطٍ لا محرفُ أيقونة: ثلاثُ نقاطٍ
+   بمقاس البقيّة تُقرأ علامةَ ترقيمٍ لا هدفاً يُضغط، فتُكبَّر وحدها. */
+.side .navi-more .navi-i { font-size: 22px; }
+/* الشارة: أرقامٌ لاتينيّةٌ خالصةٌ داخل عازلٍ اتجاهيّ — ولا كلمةَ عربيّةٍ فيه
+   أبداً. و`--t-badge` هو الاستثناء المسموح تحت أرضيّة الـ12، وشرطُه بنيويّ:
+   لا حرفَ عربيّاً يسكن هنا فلا تسري أرضيّةُ نقطةِ الحاء. */
+.side .navi .bdg {
+  position: absolute;
+  inset-block-start: -5px; inset-inline-end: -9px;
+  min-width: 19px; height: 19px; padding: 0 4px;
+  border-radius: var(--radius-pill);
+  background: var(--crit); color: var(--status-on);
+  border: 2px solid var(--surface);
+  display: grid; place-items: center;
+  margin-inline-start: 0;
+  font-size: var(--t-badge); font-weight: 700; line-height: 1;
+  direction: ltr; unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ══════════════ الشاشة — المُمرِّر الوحيد ══════════════ */
+/* ★ `min-height: 0` صراحةً: الافتراض `auto` يمنع الصندوق من الصغر عن محتواه،
+   فلا يفيض `overflow-y: auto` ولا يظهر شريطُ تمرير، ويُدفع الرصيفُ خارج
+   الشبكة. هذه هي القاعدة المكتوبة بالدم في هذا المشروع. */
+.main {
+  grid-area: main;
+  min-width: 0; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  padding: 16px 14px 40px;
+}
+
+/* ══════════════ الورقة الصاعدة — مِصرفُ «المزيد» ══════════════ */
+/* المكوّن `Sheet` جاهزٌ من المرحلة ②. ما يُضاف هنا هو ما يخصّ القشرة: */
+/* بندُ وِجهةٍ داخل الورقة رابطٌ لا زرّ — فيُفتح في تبويبٍ جديدٍ ويُنسخ عنوانه */
+.opts a.opt { text-decoration: none; }
+.opt[aria-current='page'] { background: var(--surface-2); border-color: var(--rule-strong); }
+/* طرفُ البند: علامةُ «أنتَ هنا» وعدّادُ الانتظار معاً في خليّةٍ واحدة —
+   و`.opt` شبكةٌ بعمودَين، فثالثٌ مباشرٌ يكسرها. */
+.opt-e { display: flex; align-items: center; gap: 8px; flex: none; }
+.opt-c {
+  padding: 1px 8px; border-radius: var(--radius-pill);
+  background: var(--crit-wash); color: var(--crit);
+  font-size: var(--t-label); font-weight: 700;
+}
+/* ذيلُ الحساب داخل الورقة: الاسمُ والنمطُ والخروج. وهو نفسُ `.side-foot`
+   بنفس أصنافه، سكنَ الورقةَ بدل الشريط — فيُلغى منه هامشُه التلقائيُّ وحشوُه
+   الجانبيّ (كانا يخصّان سكنَه القديم)، ويبقى حدُّه فاصلاً بين الوِجهات والحساب.
+
+   ★ والحشو السفليّ ليس زينة: الورقة `position: fixed` ملاصقةٌ لحافّة الشاشة،
+   وذيلُها الاعتياديّ (`.sheet-f`) هو حاملُ منطقة النظام — ولا ذيلَ هنا.
+   فبلاه يسقط **زرّ الخروج** تحت شريط الإيماءة. */
+.sheet-b .side-foot {
+  margin-top: 0;
+  padding: 12px 0 calc(6px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--rule-soft);
+  gap: 10px;
+}
+.sheet-b .side-user { font-size: var(--t-sm); color: var(--ink-2); font-weight: 600; }
+
+/* ★ الإعلام كان يجلس على 20 بكسلاً من حافّة النافذة، وتلك البقعة صار فيها
+   **رصيفُ التنقّل** — فيغطّي بنودَه في اللحظة التي يُرجَّح أن يُضغط فيها
+   بندٌ (بعد فعلٍ نجح). وارتفاعُه يُجمع من أرقام الرصيف نفسِها لا يُخمَّن:
+   أرضيّةُ البند + حشوُه + حدُّه + منطقةُ النظام، وفوقها فرجةٌ. */
+.toast {
+  inset-block-end: calc(56px + 6px + 8px + 1px + 12px + env(safe-area-inset-bottom));
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   768 — «اللوحُ = عمودان من مقاس الهاتف».
+   التنقّل يبقى سفليّاً لأنّ المدى مدى إبهامٍ لا مدى فأرة. والذي يتغيّر شيءٌ
+   واحد: البندُ لا يتمطّط. بندٌ بعرض 166 بكسلاً على لوحٍ هدفٌ سخيفٌ لا هدفٌ
+   أكبر — فيُقيَّد ويُوسَّط الشريط.
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (min-width: 768px) {
+  .side { justify-content: center; padding-inline: 14px; }
+  .side .navi { flex: 0 1 132px; }
+  .shell-top { padding-inline: 18px; }
+  .main { padding: 18px 18px 44px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   1100 — الحاسوب يرث الهاتف.
+   نفس العقدة، منطقةٌ أخرى في الشبكة: `"top" "main" "rail"` تصير
+   `"rail top" "rail main"`، فيدور الرصيفُ 90 درجة. ولا بندٌ يُضاف ولا
+   يُحذف — وهذا هو الفرقُ بين «تحوُّلٍ» و«علامتَين تتبادلان».
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (min-width: 1100px) {
+  .shell {
+    grid-template-areas: 'rail top' 'rail main';
+    grid-template-columns: 238px minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+  .side {
+    flex-direction: column; gap: 4px;
+    justify-content: flex-start; align-items: stretch;
+    padding: 12px 10px calc(12px + env(safe-area-inset-bottom));
+    border-block-start: 0;
+    /* حدٌّ منطقيٌّ لا فيزيائيّ: «اليمين» في RTL هو البداية، وشريطٌ جانبيٌّ
+       بحدٍّ أيمنَ في RTL يرسم خطّاً في الهواء ويترك التصاقه بالمحتوى. */
+    border-inline-end: 1px solid var(--rule);
+    box-shadow: none;
+    /* رصيفٌ طويلٌ على شاشةٍ قصيرة يمرّ بنفسه — و`min-height: 0` شرطُ ذلك */
+    min-height: 0; overflow-y: auto;
+  }
+  .side-mark {
+    display: block; padding: 4px 14px 12px;
+    font-size: var(--t-label); font-weight: 700; color: var(--ink-2);
+  }
+  /* الفاصلُ هو من يأكل الفراغَ لا البندُ بعده: لو حمل «المزيد» الهامشَ
+     التلقائيَّ لبقي الفاصلُ معلَّقاً أعلى الرصيف بعيداً عمّا يفصله. */
+  .side-sep {
+    display: block; flex: none;
+    height: 1px; margin: 8px 6px; margin-block-start: auto;
+    background: var(--rule);
+  }
+  .side .navi {
+    flex: 0 0 auto; flex-direction: row; justify-content: flex-start;
+    min-height: 46px; gap: 13px; padding-inline: 14px;
+    font-size: var(--t-body); border-radius: var(--radius);
+    text-align: start;
+  }
+  /* الشريطُ يدور معه: من ضلعٍ أفقيٍّ فوق البند إلى ضلعٍ رأسيٍّ على بدايته.
+     والاستدارةُ منطقيّةٌ (`start-end`/`end-end`) فتقع على الطرف الداخليّ
+     في الاتجاهين — والفيزيائيّة تستدير في الهواء في RTL. */
+  .side .navi[aria-current='page']::after {
+    inset-block-start: 50%; inset-inline-start: 0;
+    transform: translateY(-50%);
+    width: 3px; height: 22px;
+    border-radius: 0;
+    border-start-end-radius: 3px; border-end-end-radius: 3px;
+  }
+  /* الرمزُ يصغر في الرصيف، فلو بقيت الشارةُ بمقاسها وإزاحتِها غطّت ثلثه.
+     تصغر وترتفع إلى الزاوية: تمسّ الرمزَ ولا تحجبه. */
+  .side .navi-i { font-size: 16px; }
+  .side .navi .bdg {
+    min-width: 16px; height: 16px; border-width: 0;
+    inset-block-start: -9px; inset-inline-end: -11px;
+    font-size: 9.5px;
+  }
+  .shell-top { padding-inline: 24px; min-height: 60px; }
+  .main { padding: 22px 24px 48px; }
+  /* دار الرصيف جانباً فخلت البقعةُ السفليّة — ويعود الإعلام إليها */
+  .toast { inset-block-end: 20px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   الطبقةُ الارجونوميّة — أرضيّةُ اللمس. آخرُ ما يُقرأ فيغلب تصغيرَ الفأرة.
+   ومشروطةٌ بالعرض مع اللمس معاً: على الهاتف الأرضيّةُ 56 أصلاً، فلو
+   أُطلقت لأنزلتها إلى 52. المقصودُ رفعُ رصيفِ الحاسوب اللمسيّ وحده.
+   ══════════════════════════════════════════════════════════════════════════ */
+@media (pointer: coarse) and (min-width: 1100px) {
+  .side .navi { min-height: 52px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .side .navi:active { transform: none; }
+}
