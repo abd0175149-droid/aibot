@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
+import { execSync } from 'node:child_process';
 
 /**
  * ★ حارسٌ ساكن على سكربتات التشغيل — من عائلة `db-context.test.ts` نفسها،
@@ -160,5 +161,38 @@ describe('سكربتات التشغيل — الشكل الذي يفشل صام�
     expect(S.test('MASTER_KEY=Zm9vYmFyYmF6cXV1eDEyMzQ1Njc4OTA=')).toBe(true);
     expect(S.test('echo "MASTER_KEY=${MASTER_KEY}"')).toBe(false);
     expect(S.test('MASTER_KEY_VERSION=2')).toBe(false);
+  });
+});
+
+/**
+ * ★ بتُّ التنفيذ مسجَّلٌ في git — لا مضبوطٌ على الخادم باليد.
+ *
+ *   العطل الذي وُلد منه هذا الحارس وقع فعلاً: كُتبت السكربتات من ويندوز فسُجّلت
+ *   بوضع `100644`، ونجحت على الخادم لأنّها شُغّلت بـ`bash ops/…` أو رُفع بتُّها
+ *   يدويّاً هناك. ثمّ جاء `git pull` في النشرة التالية **فأعاد الوضع 644**.
+ *
+ *   والنتيجة صمتٌ لا خطأ: `deploy.sh` يحرس بـ`[ -x ops/backup-offsite.sh ]`،
+ *   والشرط يكذب، فتُتخطّى الكتلة كلّها ولا تُنشأ الحزمة المشفَّرة — وهي التي
+ *   تسبق تغييراً خطراً بثوانٍ. وحدةُ systemd تفشل بـ«غير قابلٍ للتنفيذ» وتبدو
+ *   عطلَ نشرٍ لا عطلَ وضع.
+ *
+ *   ولذلك يُفحص الوضع **في الفهرس** لا على القرص: قرصُ ويندوز لا يحمل بتّاً،
+ *   والحقيقة الوحيدة المنقولة إلى الخادم هي ما سجّله git.
+ */
+describe('سكربتات التشغيل قابلةٌ للتنفيذ في الفهرس', () => {
+  it('كلّ .sh يُنادى من deploy.sh أو من وحدة systemd وضعُه 100755', () => {
+    const idx = execSync('git ls-files -s -- ops/*.sh deploy.sh', {
+      cwd: join(__dirname, '..', '..', '..'), encoding: 'utf8',
+    });
+    const bad = idx.split('\n').filter(Boolean)
+      .map((l) => l.trim().split(/\s+/))
+      .filter((p) => p[0] !== '100755')
+      .map((p) => `${p[3]} → ${p[0]}`);
+
+    expect(
+      bad,
+      'سكربتٌ بلا بتّ تنفيذٍ في git. `deploy.sh` يحرس بـ[ -x ] فيتخطّاه صامتاً. '
+      + 'الإصلاح: git update-index --chmod=+x <الملفّ>',
+    ).toEqual([]);
   });
 });
