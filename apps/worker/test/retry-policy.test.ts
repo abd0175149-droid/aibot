@@ -85,10 +85,19 @@ describe('إعادة المحاولة بلا تراجعٍ ليست إعادة م
        **ألّا يتباعد الموضعان**: مسارٌ واحدٌ بسلوكَين هو العطل. فيبقى الغرض
        محروساً ويتحرّر الرقم — وحارسُ «كلّ attempts يجاوره backoff» أعلاه
        يمنع أن يعود العددُ بلا تراجع. */
-    const n = (src: string) => /attempts:\s*(\d+)/.exec(src)?.[1];
-    expect(n(worker), 'عددُ المحاولات معلَنٌ في العامل').toBeDefined();
-    expect(n(api), 'عددُ المحاولات في الموضعَين واحد').toBe(n(worker));
-    expect(Number(n(worker)), 'أكثرُ من محاولةٍ واحدة').toBeGreaterThan(1);
+    /* ★ ويُقرأ من **كتلة ردّ البوت** لا من أوّل `attempts` في الملفّ:
+       `queues.ts` فيه طابورٌ آخر قبله بسياسةٍ أخرى (`attempts: 3`)، فقراءةٌ
+       ساذجةٌ تقارن سياسةَ طابورٍ بسياسةِ طابورٍ آخر وتُعلن تباعداً لا وجود له.
+       وقد وقع ذلك فعلاً: فشل الحارسُ على إصلاحٍ سليم. */
+    const replyAttempts = (src: string, marker: RegExp) => {
+      const at = src.search(marker);
+      return at < 0 ? undefined : /attempts:\s*(\d+)/.exec(src.slice(at))?.[1];
+    };
+    const w = replyAttempts(worker, /REPLY_OPTS\s*=/);
+    const a = replyAttempts(api, /\.add\(\s*'reply'/);
+    expect(w, 'عددُ المحاولات معلَنٌ في كتلة العامل').toBeDefined();
+    expect(a, 'عددُ المحاولات في الموضعَين واحد').toBe(w);
+    expect(Number(w), 'أكثرُ من محاولةٍ واحدة').toBeGreaterThan(1);
   });
 
   it('الماسح يمسك الشكل فعلاً — وإلّا فهو اختبارٌ يمرّ دائماً', () => {
