@@ -145,6 +145,23 @@ export async function registerInbox(app: FastifyInstance) {
     },
   );
 
+  /**
+   * ★ **صفرُ صفوفٍ لا يُبلَّغ عنه نجاحاً** — والثلاثةُ التالية كانت تفعل ذلك.
+   *
+   *   قِيس على الخادم الحيّ (٢٣ أيلول ٢٠٢٦): مستأجرٌ ينادي هذه النقاط بمعرّف
+   *   محادثةِ مستأجرٍ آخر فتعود **٢٠٠ بجسمٍ فارغ**. RLS منعت التحديث (ولا صفٌّ
+   *   عند الآخر تغيّر — مُتحقَّقٌ منه)، لكنّ `returning()` عادت فارغةً و
+   *   `row` صار `undefined`، فـ:
+   *    · الردُّ ٢٠٠ على فعلٍ لم يحدث — والواجهةُ تُحدِّث حالتَها على كذب.
+   *    · و`emitToTenant(..., undefined)` يبثّ حدثاً بحمولةٍ فارغةٍ إلى غرفة
+   *      المستأجر، فكلّ مستمعٍ يقرأ `row.id` يرمي في متصفّح مستخدمٍ آخر.
+   *   والحدُّ واحدٌ في الثلاثة: لا صفَّ ⟶ ٤٠٤ قبل أيّ بثّ.
+   */
+  const orMissing = <T>(row: T | undefined): T => {
+    if (!row) throw new AppError(ErrorCode.VALIDATION, 'لا محادثةَ بهذا المعرّف', 404);
+    return row;
+  };
+
   app.post<{ Params: { id: string }; Body: { enabled?: boolean; pauseMinutes?: number } }>(
     '/conversations/:id/bot',
     { preHandler: requireAuth() },
@@ -157,8 +174,8 @@ export async function registerInbox(app: FastifyInstance) {
           set.botPausedUntil = new Date(Date.now() + req.body.pauseMinutes * 60_000);
           set.needsAttention = false;
         }
-        const [row] = await tx.update(conversations).set(set)
-          .where(eq(conversations.id, req.params.id)).returning();
+        const row = orMissing((await tx.update(conversations).set(set)
+          .where(eq(conversations.id, req.params.id)).returning())[0]);
         emitToTenant(tenantId, 'conversation:update', row);
         return row;
       });
@@ -168,8 +185,8 @@ export async function registerInbox(app: FastifyInstance) {
   app.post<{ Params: { id: string } }>('/conversations/:id/read', { preHandler: requireAuth() }, async (req) => {
     const tenantId = tenantOf(req);
     return withTenant(getDb(), tenantId, async (tx) => {
-      const [row] = await tx.update(conversations)
-        .set({ unreadCount: 0 }).where(eq(conversations.id, req.params.id)).returning();
+      const row = orMissing((await tx.update(conversations)
+        .set({ unreadCount: 0 }).where(eq(conversations.id, req.params.id)).returning())[0]);
       emitToTenant(tenantId, 'conversation:update', row);
       return row;
     });
@@ -181,13 +198,13 @@ export async function registerInbox(app: FastifyInstance) {
     async (req) => {
       const tenantId = tenantOf(req);
       return withTenant(getDb(), tenantId, async (tx) => {
-        const cur = (await tx.select({ tags: conversations.tags }).from(conversations)
-          .where(eq(conversations.id, req.params.id)).limit(1))[0];
-        const next = new Set(cur?.tags ?? []);
+        const cur = orMissing((await tx.select({ tags: conversations.tags }).from(conversations)
+          .where(eq(conversations.id, req.params.id)).limit(1))[0]);
+        const next = new Set(cur.tags ?? []);
         for (const t of req.body?.add ?? []) next.add(t);
         for (const t of req.body?.remove ?? []) next.delete(t);
-        const [row] = await tx.update(conversations).set({ tags: [...next] })
-          .where(eq(conversations.id, req.params.id)).returning();
+        const row = orMissing((await tx.update(conversations).set({ tags: [...next] })
+          .where(eq(conversations.id, req.params.id)).returning())[0]);
         emitToTenant(tenantId, 'conversation:update', row);
         return row;
       });

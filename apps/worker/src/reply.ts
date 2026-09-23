@@ -9,12 +9,12 @@ import {
   assembleContext, runAgent, buildToolDeclarations, choicesMessage, BUILTIN_TOOLS,
   FullKnowledge, buildRetrievalQuery, PLATFORM_RULES, type KnowledgeProvider,
 } from '@aibot/core';
-import { getProvider, computeCost, DEFAULT_CHAT_MODEL, type ToolCall } from '@aibot/ai';
+import { getProvider, computeCost, DEFAULT_CHAT_MODEL, AiError, type ToolCall } from '@aibot/ai';
 import type { OutboundMessage } from '@aibot/shared';
 import { sendOutbound, WindowClosedError, QuotaExceededError } from './outbound.js';
 import { RagKnowledge } from './retrieval.js';
 import { execTenantTool } from './tools.js';
-import { raiseIncident } from './incidents.js';
+import { raiseIncident, resolveOpenOfKind } from './incidents.js';
 
 /**
  * عامل الردّ.
@@ -54,6 +54,10 @@ export async function handleReply(job: { conversationId: string }): Promise<void
    */
   /* نموذجٌ بلا صفّ سعرٍ يُفوتَر صفراً — فنجمعه هنا ونُبلّغ بعد المعاملة. */
   let unpriced: { provider: string; model: string } | null = null;
+  /* هل نُودي النموذج ونجح؟ لا يُستنتج من وجود خطّة: معالجُ الأزرار الحتميّ
+     يُنتج خطّةً بلا نداءِ نموذجٍ إطلاقاً. والعلمُ بهذا شرطُ حلِّ حادثة
+     `ai_error` حلّاً صادقاً. */
+  let modelOk = false;
 
   const plan = await withTenant(db, tenantId, async (tx): Promise<SendPlan | null> => {
     const conv = head[0]!.conv;
@@ -261,6 +265,7 @@ export async function handleReply(job: { conversationId: string }): Promise<void
       execTool: (call: ToolCall) =>
         execTenantTool({ tx, call, tenantId, conversationId: conv.id, versionId: ver.id, caps, tools: toolRows, emits, deferred }),
     });
+    modelOk = true;
 
     /* ── القياس: صفٌّ لكلّ ردّ، وكلفةٌ بسعرٍ لحظة العرض ── */
     const price = (await tx.select().from(prices).where(and(
@@ -329,7 +334,34 @@ export async function handleReply(job: { conversationId: string }): Promise<void
       sends: [...emits, ...(result.text ? [{ kind: 'text', body: result.text } as OutboundMessage] : [])]
         .map((message) => ({ source: 'bot' as const, message, aiRunId: run!.id })),
     };
+  }).catch(async (e: unknown): Promise<never> => {
+    /* ★ فشلُ المزوّد كان **صامتاً تماماً**: النوع `ai_error` مسجَّلٌ في
+       `AUTO_RESOLVABLE` وفي شاشة الحوادث ولا موضعَ واحد يرفعه. فمزوّدٌ يعيد
+       ٥٠٠ يُفشل المهمّة، وBullMQ يستهلك المحاولتَين، ثمّ لا شيء: لا صفَّ في
+       `incidents`، ولا `ai_runs` (النداء داخل معاملةٍ تتراجع)، ولا كلمةً
+       للزبون. كشفه `drill-provider.ts`.
+
+       والحادثةُ تُرفع لكلّ محاولة، والبصمة تجمعها: صفٌّ واحدٌ يتزايد عدّاده
+       لا مئتا إشعار. و`causeKey` بكود المزوّد فيُفرَّق 429 عن 503. */
+    if (e instanceof AiError) {
+      await raiseIncident({
+        tenantId,
+        channelId: head[0]!.ch.id,
+        kind: 'ai_error',
+        severity: 'critical',
+        title: `فشل نداء مزوّد النموذج (${e.code})`,
+        detail: {
+          code: e.code, status: e.status ?? null, retryable: e.retryable,
+          message: e.message.slice(0, 300), conversationId: job.conversationId,
+        },
+        causeKey: e.code,
+      }).catch(() => undefined);
+    }
+    throw e; // إعادة المحاولة تتولّاها BullMQ — والحادثة لا تُلغي الفشل
   });
+
+  /* نجاحٌ لاحقٌ يُبطل ما قبله: نداءُ نموذجٍ تمّ يعني أنّ العطل العابر مضى. */
+  if (modelOk) await resolveOpenOfKind(tenantId, 'ai_error').catch(() => 0);
 
   if (unpriced) {
     const u = unpriced as { provider: string; model: string };

@@ -2,7 +2,13 @@ FROM node:22-alpine AS build
 WORKDIR /app
 RUN corepack enable
 ARG GIT_REV=unknown
+# ★ `PUBLIC_URL` وسيطُ **بناء** لا وسيطُ تشغيل: متغيّرات `NEXT_PUBLIC_*` تُحقن
+#   في الحزمة وقت البناء، ورؤوسُ `headers()` تُخبز في `routes-manifest.json`
+#   وقتَه أيضاً. فضبطُها في `environment` وحدَه يصل الخادمَ ولا يصل أيّاً منهما
+#   — ولذلك كان `connect-src` يُشتقّ من قيمةٍ فارغة.
+ARG PUBLIC_URL=https://aibot.masaros.net
 ENV GIT_REV=${GIT_REV} NEXT_TELEMETRY_DISABLED=1
+ENV NEXT_PUBLIC_API_URL=${PUBLIC_URL}/api
 
 COPY package.json pnpm-workspace.yaml pnpm-lock.yaml turbo.json tsconfig.base.json ./
 COPY packages/shared ./packages/shared

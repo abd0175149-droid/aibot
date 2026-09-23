@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { seal, open, fingerprint, safeEqual, publicId, __resetKeyCache } from '../src/index.js';
+import { seal, open, fingerprint, safeEqual, publicId, REDACT_PATHS, __resetKeyCache } from '../src/index.js';
 
 const K1 = Buffer.alloc(32, 1).toString('base64');
 const K2 = Buffer.alloc(32, 2).toString('base64');
@@ -60,5 +60,41 @@ describe('تشفير الأسرار', () => {
     const ids = new Set(Array.from({ length: 500 }, () => publicId()));
     expect(ids.size).toBe(500);
     expect([...ids][0]).toMatch(/^[0-9A-HJKMNP-TV-Z]{26}$/);
+  });
+});
+
+/**
+ * ★ **قائمةُ التنقية سدٌّ لما سيُسجَّل، لا وصفٌ لما يُسجَّل.**
+ *
+ *   لا اسمٌ من هذه الأسماء يُسجَّل في المنصّة اليوم — وهذا بالضبط سببُ وجود
+ *   القائمة: `log.info({ user })` أو `log.error({ body })` في تشخيصٍ عاجلٍ
+ *   بعد ستّة أشهرٍ يكتبها كلَّها نصّاً صريحاً. والسرُّ الذي يدخل السجلّ لا
+ *   يخرج منه: السجلّاتُ تُنسخ وتُقرأ وتُرسَل في تذاكر.
+ *
+ *   والثلاثةُ التي كانت ناقصةً ليست فرضيّة: `tempPassword` **تعود فعلاً** في
+ *   جسم `POST /team` و`POST /team/:id/reset-password` كلمةَ مرورٍ صالحةً نصّاً،
+ *   و`set-cookie` تحمل توكنَ تحديثٍ عمرُه ثلاثون يوماً لا خمسَ عشرةَ دقيقة.
+ *
+ * ⚠️ و`'*.x'` يطابق **مستوًى واحداً** فقط في pino: `body.access` تُنقَّى و
+ *    `a.b.access` لا. فالاعتمادُ على العمق الواحد مقصودٌ ومحدود.
+ */
+describe('مُنقِّي السجلّات', () => {
+  it('ترويستا المصادقة والكوكي — طلباً واستجابة', () => {
+    expect(REDACT_PATHS).toContain('req.headers.authorization');
+    expect(REDACT_PATHS).toContain('req.headers.cookie');
+    // ★ كان ناقصاً: كوكي التحديث يخرج في ترويسة الاستجابة لا في الطلب
+    expect(REDACT_PATHS).toContain('res.headers["set-cookie"]');
+  });
+
+  it('★ كلّ اسمٍ يحمل سرّاً في هذه المنصّة مُغطّى', () => {
+    for (const name of [
+      'token', 'apiKey', 'secret', 'password', 'appSecret',
+      'token_enc', 'app_secret_enc', 'key_enc',
+      'tempPassword', 'access', 'refresh', 'passwordHash', 'refreshHash', 'verifyToken',
+    ]) expect(REDACT_PATHS, name).toContain(`*.${name}`);
+  });
+
+  it('لا مسارَ مكرَّرٌ — pino يرمي على التكرار فيسقط الإقلاع كلُّه', () => {
+    expect(new Set(REDACT_PATHS).size).toBe(REDACT_PATHS.length);
   });
 });

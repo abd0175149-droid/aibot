@@ -324,10 +324,21 @@ export async function registerBot(app: FastifyInstance) {
     },
   );
 
+  /**
+   * ★ **`{ok:true}` على صفٍّ لم يُحذف كذبٌ**، ولذلك `returning()` ثمّ ٤٠٤.
+   *
+   *   قِيس على الخادم الحيّ (٢٣ أيلول ٢٠٢٦): مستأجرٌ يحذف بمعرّف أداةِ مستأجرٍ
+   *   آخر فيعود **٢٠٠ `{"ok":true}`** والأداةُ عند صاحبها سليمة. RLS منعت
+   *   الحذف — والردُّ قال إنّه تمّ. والعزلُ صحيحٌ والردُّ خاطئ، وهذا أسوأُ ما
+   *   يكون: حارسٌ يعمل وواجهةٌ تُبلّغ بعكسه. ونفسُ الشكل يُخفي عطلَ سياقٍ
+   *   حقيقيّاً يوماً ما — استعلامٌ بلا سياقِ مستأجرٍ يحذف صفراً ويقول «تمّ».
+   */
   app.delete<{ Params: { id: string } }>('/bot/tools/:id', { preHandler: auth }, async (req) => {
     const tenantId = tenantOf(req);
     return withTenant(getDb(), tenantId, async (tx) => {
-      await tx.delete(botTools).where(eq(botTools.id, req.params.id));
+      const gone = await tx.delete(botTools)
+        .where(eq(botTools.id, req.params.id)).returning({ id: botTools.id });
+      if (!gone.length) throw new AppError(ErrorCode.VALIDATION, 'أداةٌ غير موجودة', 404);
       return { ok: true };
     });
   });
@@ -465,8 +476,10 @@ export async function registerBot(app: FastifyInstance) {
       const path = await withTenant(getDb(), tenantId, async (tx) => {
         const row = (await tx.select({ p: knowledgeSources.storagePath }).from(knowledgeSources)
           .where(eq(knowledgeSources.id, req.params.id)).limit(1))[0];
+        // نفسُ علّة `DELETE /bot/tools/:id`: صفرُ صفوفٍ لا يُبلَّغ عنه نجاحاً
+        if (!row) throw new AppError(ErrorCode.VALIDATION, 'مصدرٌ غير موجود', 404);
         await tx.delete(knowledgeSources).where(eq(knowledgeSources.id, req.params.id));
-        return row?.p ?? null;
+        return row.p ?? null;
       });
       // الصفّ أوّلاً ثمّ الملفّ: ملفٌّ يتيمٌ أهون من صفٍّ يشير إلى لا شيء
       if (path) await unlink(path).catch(() => undefined);

@@ -116,6 +116,9 @@ export function publicId(): string {
 export const REDACT_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
+  // ★ كوكي التحديث يخرج في ترويسة الاستجابة — وهو توكنُ ثلاثين يوماً لا خمسَ
+  //   عشرةَ دقيقة. أيُّ تسجيلٍ لترويسات الاستجابة يكتبه نصّاً صريحاً في السجلّ.
+  'res.headers["set-cookie"]',
   '*.token',
   '*.apiKey',
   '*.secret',
@@ -124,4 +127,20 @@ export const REDACT_PATHS = [
   '*.token_enc',
   '*.app_secret_enc',
   '*.key_enc',
+  /* ★ أسماءٌ تحملها أجسامُ الاستجابة فعلاً في هذه المنصّة، وكانت خارج القائمة:
+     · `tempPassword` تعود من `POST /team` و`POST /team/:id/reset-password`
+       — كلمةُ مرورٍ صالحةٌ نصّاً صريحاً.
+     · `access` و`refresh` توكنا الجلسة.
+     · `passwordHash` و`refreshHash` تجزئاتٌ تُقرأ من صفوف المستخدمين والجلسات
+       في مسار المصادقة كلِّه.
+     · `verifyToken` تحدّي ميتا.
+     ولا واحدةٌ منها تُسجَّل اليوم — والقائمة ليست وصفاً لما يُسجَّل بل سدّاً
+     لما سيُسجَّل يوم يضيف أحدٌ `log.info({ user })` أو `log.error({ body })`
+     في تشخيصٍ عاجل. والسرُّ الذي يدخل السجلّ لا يخرج منه. */
+  '*.tempPassword',
+  '*.access',
+  '*.refresh',
+  '*.passwordHash',
+  '*.refreshHash',
+  '*.verifyToken',
 ];

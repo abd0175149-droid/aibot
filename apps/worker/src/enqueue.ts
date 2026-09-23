@@ -47,7 +47,23 @@ export function decideEnqueue(state: string | undefined): EnqueueAction {
   return 'clear-then-add';
 }
 
-const REPLY_OPTS = { delay: 2000, attempts: 2, removeOnComplete: 500 } as const;
+/**
+ * ★ `backoff` لم يكن هنا إطلاقاً — وكشفه تمرين المزوّد (`drill-provider.ts`).
+ *   بلا `backoff` تُعيد BullMQ المحاولة **فوراً**: مزوّدٌ يعيد ٥٠٠ يُضرَب
+ *   ضربتَين في أقلّ من ثانية، ثمّ تُستهلك المحاولتان وتموت المهمّة — أي أنّ
+ *   «إعادة المحاولة» كانت اسماً بلا مُسمّى، فالعطل العابر لم يُمنَح وقتاً
+ *   ليمرّ. وخمسُ ثوانٍ أوّلاً ثمّ عشرٌ هي أقلّ ما يُعطي معنىً لكلمة إعادة.
+ *
+ * و`removeOnFail` حدٌّ لا زينة: مجموعةُ الفاشلة بلا حدٍّ تكبر إلى الأبد في
+ * ريدِس، وهو الذاكرة الوحيدة للمهامّ التي لم تُنفَّذ بعد.
+ */
+const REPLY_OPTS = {
+  delay: 2000,
+  attempts: 2,
+  backoff: { type: 'exponential', delay: 5000 },
+  removeOnComplete: 500,
+  removeOnFail: 2000,
+} as const;
 
 /**
  * دمج الرسائل المتتالية بلا مؤقّتٍ في الذاكرة:

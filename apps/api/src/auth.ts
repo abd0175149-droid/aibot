@@ -4,6 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { AppError, ErrorCode, type Role } from '@aibot/shared';
 import { getDb, withPlatform, users, sessions, tenants, auditLog, eq, and, ne, isNull, gt, sql } from '@aibot/db';
 import { sha256 } from '@aibot/crypto';
+import { enforceRate, loginRules } from './ratelimit.js';
 
 const scrypt = promisify(_scrypt) as (p: string, s: Buffer, l: number) => Promise<Buffer>;
 
@@ -188,6 +189,15 @@ export async function registerAuth(app: FastifyInstance) {
     const email = String(req.body?.email ?? '').toLowerCase().trim();
     const password = String(req.body?.password ?? '');
     if (!email || !password) throw new AppError(ErrorCode.VALIDATION, 'البريد وكلمة السرّ مطلوبان', 400);
+
+    /* ★ الحدُّ **قبل** `scrypt` لا بعده: التجزئة هي الكلفة، فحدٌّ يُفحص بعدها
+       يمنع الاختراق ولا يمنع استنزاف المعالج. وقبل قراءة المستخدم أيضاً —
+       فلا يكشف الحدُّ أيَّ بريدٍ مسجَّل. */
+    await enforceRate(
+      loginRules(email, req.ip),
+      'محاولاتُ دخولٍ كثيرةٌ في وقتٍ قصير. انتظر دقيقةً ثمّ أعِد المحاولة.',
+      (v) => req.log.warn({ limit: v.rule?.limit, count: v.count }, 'حدُّ معدّلِ الدخول أُطلق'),
+    );
 
     /* المصادقة **عابرةٌ للمستأجرين بطبيعتها**: لا سياق بعد، وصفُّ مالك
        المنصّة بلا `tenant_id` أصلاً. فالبحث عن المستخدم يمرّ بالدور المتجاوز

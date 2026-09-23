@@ -123,17 +123,47 @@ function toGoogleContent(c: GenerateInput['contents'][number]): unknown {
   return { role: 'user', parts: c.parts };
 }
 
+/**
+ * مفتاح تبديلٍ بيئيّ لتمارين الفشل: `AI_FAULT_STATUS=500`.
+ *
+ * ★ ولماذا يُصنع **ردٌّ** بالحالة المطلوبة بدل رمي خطأٍ مباشرةً: المقيس في
+ *   التمرين هو تعامل النظام مع ٥٠٠ من المزوّد — أي تحويلُ الحالة إلى
+ *   `AiError` وقرارُ «قابلٌ لإعادة المحاولة». ورميٌ مباشر يتخطّى ذلك التحويل
+ *   فيختبر فرعاً موازياً لا وجود له في الإنتاج. الحقنةُ تدخل من نفس الباب.
+ *
+ * 🔴 لا يُضبط في `docker-compose.yml` أبداً — يُمرَّر لحاوية تمرينٍ وحدها،
+ *    وكلّ حقنةٍ تُعلن نفسها بسطر خطأٍ في السجلّ. وقيمةٌ خارج 400–599 تُهمَل:
+ *    خطأٌ مطبعيٌّ في متغيّر بيئة لا يجوز أن يُعطّل مزوّداً.
+ */
+export function faultStatus(env: Record<string, string | undefined> = process.env): number | null {
+  const raw = env.AI_FAULT_STATUS;
+  if (!raw) return null;
+  const n = Number(raw);
+  return Number.isInteger(n) && n >= 400 && n <= 599 ? n : null;
+}
+
 async function call(url: string, apiKey: string, body: unknown, signal?: AbortSignal): Promise<any> {
   let res: Response;
-  try {
-    res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-      body: JSON.stringify(body),
-      signal: signal ?? AbortSignal.timeout(60_000),
-    });
-  } catch (e) {
-    throw new AiError('NETWORK', `تعذّر الوصول إلى المزوّد: ${(e as Error).message}`, true);
+  const fault = faultStatus();
+  if (fault !== null) {
+    console.error(JSON.stringify({
+      level: 'error', svc: 'ai', msg: '⚠ حقن فشل مزوّدٍ مفعَّل — AI_FAULT_STATUS', status: fault,
+    }));
+    res = new Response(
+      JSON.stringify({ error: { code: fault, status: 'UNAVAILABLE', message: `حقن فشل تمرين (${fault})` } }),
+      { status: fault, headers: { 'content-type': 'application/json' } },
+    );
+  } else {
+    try {
+      res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify(body),
+        signal: signal ?? AbortSignal.timeout(60_000),
+      });
+    } catch (e) {
+      throw new AiError('NETWORK', `تعذّر الوصول إلى المزوّد: ${(e as Error).message}`, true);
+    }
   }
 
   const text = await res.text();

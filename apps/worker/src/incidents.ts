@@ -96,6 +96,30 @@ async function recordIncident(i: IncidentInput): Promise<{ id: string; isNew: bo
  */
 const AUTO_RESOLVABLE = new Set(['channel_down', 'token_invalid', 'webhook_silent', 'send_failed', 'ai_error']);
 
+/**
+ * حلٌّ آليٌّ **بالنوع** لا بالبصمة.
+ *
+ * ★ وُلدت من `ai_error`: النوع كان مسجَّلاً في `AUTO_RESOLVABLE` وفي شاشة
+ *   الحوادث، ولا أحد يرفعه ولا أحد يحلّه — دلالةٌ ميّتةٌ في الطرفين. وحين
+ *   صار يُرفع لم تكفِ `resolveIfAuto`: بصمتُها تشمل `causeKey`، وكود خطأ
+ *   المزوّد يتغيّر بين فشلٍ وفشل (‏503 ثمّ 429)، فتبقى حوادثُ مفتوحةً إلى
+ *   الأبد على أكوادٍ لم تتكرّر. ونجاحُ نداءِ نموذجٍ لهذا المستأجر يُبطل كلَّ
+ *   ما سبقه من فشلٍ عليه — وهذا هو الفحص السليم بعينه.
+ */
+export async function resolveOpenOfKind(tenantId: string, kind: string): Promise<number> {
+  if (!AUTO_RESOLVABLE.has(kind)) return 0;
+  const res = await withPlatform(getDb(), 'حوادث: حلٌّ آليٌّ بعد نجاحٍ لاحق',
+    (tx) => tx.update(incidents).set({
+      status: 'resolved',
+      resolvedAt: new Date(),
+    }).where(and(
+      eq(incidents.tenantId, tenantId),
+      eq(incidents.kind, kind),
+      sql`${incidents.status} <> 'resolved'`,
+    )).returning({ id: incidents.id }));
+  return res.length;
+}
+
 export async function resolveIfAuto(i: Pick<IncidentInput, 'tenantId' | 'channelId' | 'kind' | 'causeKey'>): Promise<boolean> {
   if (!AUTO_RESOLVABLE.has(i.kind)) return false;
   const fingerprint = fingerprintOf(i as IncidentInput);

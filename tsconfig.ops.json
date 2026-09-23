@@ -1,0 +1,6 @@
+{
+  "//": "★ ops/ ليست حزمةً ولا تدخل صورةَ دوكر، فلم تكن تحت tsc إطلاقاً — ونفسُ الغفلة شحنت مرجعاً ميّتاً من apps/worker/scripts يوماً. تُشغَّل بـ`pnpm typecheck:ops`.",
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": { "noEmit": true },
+  "include": ["ops"]
+}

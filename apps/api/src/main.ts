@@ -13,6 +13,7 @@ import { registerPlayground } from './routes/playground.js';
 import { registerTeam } from './routes/team.js';
 import { attachRealtime, closeRealtime } from './realtime.js';
 import { pingRedis, closeQueues, queueDepths } from './queues.js';
+import { closeRateLimiter } from './ratelimit.js';
 
 const PORT = Number(process.env.PORT ?? 4100);
 const GIT_REV = process.env.GIT_REV ?? 'unknown';
@@ -91,6 +92,7 @@ for (const sig of ['SIGTERM', 'SIGINT'] as const) {
     await app.close();
     await closeRealtime();
     await closeQueues();
+    await closeRateLimiter();
     await closeDb();
     process.exit(0);
   });

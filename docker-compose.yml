@@ -86,6 +86,15 @@ services:
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?}
       PUBLIC_URL: ${PUBLIC_URL:-https://aibot.masaros.net}
+      # ★ مفتاحُ الثقة بالوكيل — كان يُقرأ في الكود ولا يُمرَّر هنا إطلاقاً،
+      #   فضبطُه في `.env` لا يفعل شيئاً. والقيمة الافتراضيّة `127.0.0.1` لا
+      #   تُطابق قرينَ الاتّصال الحقيقيّ (بوّابةُ جسر دوكر)، فتُهمَل
+      #   `X-Forwarded-For` ويعود `req.ip` بوّابةَ الجسر لكلّ زائر — ومن ثمّ
+      #   كلُّ صفوف `audit_log.ip` قيمةٌ واحدة، وأيُّ حدِّ معدّلٍ لكلّ IP يصير
+      #   حدّاً واحداً للمنصّة كلّها. المنفذُ منشورٌ على 127.0.0.1 وحده فلا يصله
+      #   إلّا النفق، فالثقةُ بشبكة الجسر آمنة: اضبط CIDR الجسر ثمّ تحقّق من
+      #   أنّ `audit_log.ip` صار عنوانَ الزائر.
+      TRUST_PROXY: ${TRUST_PROXY:-127.0.0.1}
       PLATFORM_AI_KEY: ${PLATFORM_AI_KEY:?مفتاح Gemini للمنصّة}
       EMBED_MODEL: ${EMBED_MODEL:-gemini-embedding-001}
     ports:
@@ -131,6 +140,8 @@ services:
       dockerfile: apps/web/Dockerfile
       args:
         GIT_REV: ${GIT_REV:-unknown}
+        # يُمرَّر وقت البناء أيضاً — منه يُشتقّ `connect-src` في رؤوس الأمن
+        PUBLIC_URL: ${PUBLIC_URL:-https://aibot.masaros.net}
     restart: always
     environment:
       NODE_ENV: production

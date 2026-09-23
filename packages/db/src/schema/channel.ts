@@ -177,6 +177,14 @@ export const conversationWindows = pgTable('conversation_windows', {
 }, (t) => [
   index('windows_period_idx').on(t.tenantId, t.billingPeriod),
   index('windows_expiry_idx').on(t.conversationId, t.expiresAt),
+  /**
+   * ★ نافذةٌ مفتوحةٌ واحدةٌ لكلّ محادثة — وهو **قيدُ فوترة** لا فهرسُ أداء.
+   *   `openOrExtendWindow` تقرأ ثمّ تكتب بلا قفل، فرسالتان متزامنتان على
+   *   محادثةٍ نافذتُها مغلقة تفتحان نافذتَين ⟶ ختمان في نفس الـ٢٤ ساعة ⟶
+   *   فاتورةٌ مزدوجة. كان هذا القيد مذكوراً في تعليق الدالّة وغائباً عن
+   *   القاعدة، وكشفه اختبار التحمّل. راجع 0006_windows_one_open_uq.sql.
+   */
+  uniqueIndex('windows_one_open_uq').on(t.conversationId).where(sql`${t.closedAt} is null`),
 ]);
 
 export const optouts = pgTable('optouts', {

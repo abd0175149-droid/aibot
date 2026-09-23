@@ -82,16 +82,44 @@ export async function enqueueReply(conversationId: string, delayMs = 2000): Prom
     jobId,
     delay: delayMs,
     attempts: 2,
+    /* ★ كان ناقصاً هنا كما في `apps/worker/src/enqueue.ts`، وكشفه تمرين
+       المزوّد: بلا `backoff` تُعاد المحاولة **فوراً**، فمزوّدٌ يعيد ٥٠٠
+       يُضرَب ضربتَين في أقلّ من ثانية ثمّ تموت المهمّة. والقيمة نفسها في
+       الموضعَين عن قصد: مسارٌ واحد بسلوكَين هو عطلٌ ينتظر ساعته. */
+    backoff: { type: 'exponential', delay: 5000 },
     removeOnComplete: 500,
     removeOnFail: 2000,
   });
 }
 
+/**
+ * ★ المهلة ليست احتياطاً — هي الفرق بين «٥٠٣» و«لا جواب أبداً».
+ *
+ * كشفه بناءُ تمرين ريدِس (`apps/worker/scripts/drill-redis.ts`): الاتّصال
+ * مضبوطٌ بـ`maxRetriesPerRequest: null` وطابورُ عدم الاتّصال مفتوح، فأمرٌ
+ * يُصدَر وريدِس مطفأ **لا يفشل ولا ينجح — ينتظر إلى الأبد**. فكان
+ * `/api/health` يتوقّف على `Promise.all` بلا نهاية: مراقبٌ خارجيّ يرى مهلةً
+ * منقضية لا 503، و`deploy.sh` يحرس على نفس البوّابة فيُقرأ «الخادم لا يردّ»
+ * بدل «ريدِس مقطوع» — وهما تشخيصان مختلفان تماماً.
+ *
+ * والمهلة **هنا وحدها**، لا على `enqueueInbound`: انتظارُ الدفع هو ما يحفظ
+ * رسالةً وصلت أثناء انقطاعٍ قصير، فقطعُه يُحوّل التأخيرَ إلى فقدان. البوّابةُ
+ * تُخبر، والدفعُ يصبر.
+ */
+const PING_TIMEOUT_MS = Number(process.env.REDIS_PING_TIMEOUT_MS ?? '2000');
+
 export async function pingRedis(): Promise<boolean> {
+  let timer: NodeJS.Timeout | undefined;
   try {
-    return (await connection().ping()) === 'PONG';
+    const pong = await Promise.race([
+      connection().ping(),
+      new Promise<'timeout'>((resolve) => { timer = setTimeout(() => resolve('timeout'), PING_TIMEOUT_MS); }),
+    ]);
+    return pong === 'PONG';
   } catch {
     return false;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
