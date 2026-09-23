@@ -192,6 +192,14 @@ CREATE POLICY tenant_isolation ON usage_daily
   WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 GRANT SELECT, INSERT, UPDATE, DELETE ON usage_daily TO aibot_app;
 
+ALTER TABLE quota_alerts ENABLE ROW LEVEL SECURITY;
+ALTER TABLE quota_alerts FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON quota_alerts;
+CREATE POLICY tenant_isolation ON quota_alerts
+  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
+  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
+GRANT SELECT, INSERT, UPDATE, DELETE ON quota_alerts TO aibot_app;
+
 GRANT USAGE ON SCHEMA public TO aibot_app, aibot_platform;
 GRANT SELECT ON tenants, plans TO aibot_app;
 -- audit_log إضافةٌ فقط: لا واجهة تحذف منه ولا تعدّله

@@ -9,7 +9,7 @@ import {
   PageHead, Grid, Stack, Row, Card, Pill, Tag, Note, Button, Sheet,
   Skeleton, ErrorBox, KV, KVRow, type Tone,
 } from '@/components/ui';
-import { Band, Hero, Vital, Fold, ScreenDock, MARK, SEV, type Sev } from '../_parts';
+import { Band, Hero, Vital, Fold, ScreenDock, MARK, SEV, type Sev } from '@/components/screen';
 
 /**
  * القنوات.

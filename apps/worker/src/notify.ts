@@ -190,6 +190,7 @@ function humanize(kind: string): string {
     no_reply: 'رسائل تصل بلا ردّ — الأرجح أنّ عاملاً متوقّف',
     send_failed: 'فشل إرسال رسالة',
     quota_exceeded: 'بلغ الحساب سقف الباقة',
+    quota_threshold: 'العميل قارب سقف باقته أو بلغه — راجع استهلاكه وسياسة باقته',
     kb_embed_failed: 'فشل تجهيز المعرفة — النسخة السابقة ما زالت تعمل',
   };
   return map[kind] ?? kind;

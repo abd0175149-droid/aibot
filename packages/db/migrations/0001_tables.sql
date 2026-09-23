@@ -667,4 +667,32 @@ CREATE UNIQUE INDEX IF NOT EXISTS "prices_uq" ON "prices" USING btree ("provider
 CREATE INDEX IF NOT EXISTS "health_channel_idx" ON "health_checks" USING btree ("tenant_id","channel_id","checked_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "incidents_tenant_idx" ON "incidents" USING btree ("tenant_id","status","last_seen_at");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "notif_user_idx" ON "notifications" USING btree ("user_id","created_at");--> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "push_user_idx" ON "push_subscriptions" USING btree ("user_id");
+CREATE INDEX IF NOT EXISTS "push_user_idx" ON "push_subscriptions" USING btree ("user_id");--> statement-breakpoint
+-- ════════════════════════════════════════════════════════════════
+-- إنذارُ السقف — مكتوبٌ بيدٍ لا مولَّد، وموضعُه هنا **قصد**.
+--
+-- `0002_rls.sql` مولَّدٌ من `TENANT_SCOPED` ويطبّق السياسة على كلّ جدولٍ فيها.
+-- فجدولٌ يُنشأ في ترحيلٍ **بعده** يمرّ بلا RLS: صفوفُ عميلٍ تُقرأ من سياق
+-- عميلٍ آخر بلا خطأ. ولذلك يُنشأ الجدول في ترحيل الجداول نفسِه — قبل RLS.
+--
+-- ⚠️ متماثِل: النشر يُطبّق كلّ الترحيلات في كلّ مرّة.
+-- ════════════════════════════════════════════════════════════════
+CREATE TABLE IF NOT EXISTS "quota_alerts" (
+	"id" uuid PRIMARY KEY DEFAULT gen_uuid_v7() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"billing_period" varchar(7) NOT NULL,
+	"threshold" integer NOT NULL,
+	"windows_used" integer NOT NULL,
+	"windows_limit" integer NOT NULL,
+	"policy" text NOT NULL,
+	"fired_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "quota_alerts" ADD CONSTRAINT "quota_alerts_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+-- ★ الفريدُ هو ما يجعل الإنذار مرّةً واحدةً لكلّ عتبةٍ لكلّ دورة: الإدراج
+--    بـON CONFLICT DO NOTHING … RETURNING يُرجع صفّاً للفائز وحده، فلا
+--    إنذارَ مكرّرٌ ولو تسابق عاملان. والدورةُ في المفتاح ⟵ شهرٌ جديد يُنذر.
+CREATE UNIQUE INDEX IF NOT EXISTS "quota_alerts_uq" ON "quota_alerts" USING btree ("tenant_id","billing_period","threshold");

@@ -8,7 +8,7 @@ import {
   PageHead, Stack, Row, Pill, Tag, Dot, Note, Meter,
   Skeleton, ErrorBox, type Tone,
 } from '@/components/ui';
-import { Band, Hero, Section, Rows, MetricRow, Fold, ScreenDock, type Sev } from './_parts';
+import { Band, Hero, Section, Rows, MetricRow, Fold, ScreenDock, type Sev } from '@/components/screen';
 
 /**
  * رئيسيّة العميل — «نبض اليوم».
@@ -43,6 +43,10 @@ interface Overview {
   botEnabled: boolean;
   channels: Array<{ kind: string; status: string; displayName: string | null }>;
   overagePolicy: string;
+  /** نصُّ العاقبة من الخادم — نفسُ نصّ الإشعار الذي يدفعه العامل. */
+  capConsequence: string;
+  /** عتباتٌ أُنذر بها فعلاً في هذه الدورة (من `quota_alerts`)، تصاعديّاً. */
+  quotaAlerts: Array<{ threshold: number; firedAt: string }>;
 }
 
 interface Gap {
@@ -70,13 +74,17 @@ const CH_STATE: Record<string, { label: string; tone: Tone }> = {
  */
 const SAMPLE_MIN = 10;
 
-const OVERAGE: Record<string, string> = {
-  handoff_only:
-    'البوت توقّف، والرسائل ما زالت تصل وتُوسَم «يحتاج تدخّلاً». فريقك يردّ يدويّاً بلا حدّ — '
-    + 'لا زبونٌ يُترك بلا ردّ، ولا فاتورةٌ مفاجئة.',
-  block: 'البوت يرسل رسالةً واحدة مهذّبة ثمّ يصمت.',
-  bill: 'البوت يستمرّ، والتجاوز يُسجَّل ويُفوتَر.',
-};
+/**
+ * ★ نصُّ العاقبة **حُذف من هنا** وصار يأتي من الخادم (`capConsequence`).
+ *
+ * الجدولُ الذي كان محلَّه يَعِد بما لا يفعله الكود: «فريقك يردّ يدويّاً بلا حدّ»
+ * — وحارسُ السقف في طبقة الإرسال لا يستثني مصدراً ولا دوراً، فردُّ الموظّف على
+ * محادثةٍ **جديدة** بعد السقف يُرفض كما يُرفض ردُّ البوت. ومفتاحُه `bill` لم
+ * يكن يُطابق قيمة القاعدة `allow_bill` أصلاً، فكان يُقرأ من السقوط الاحتياطيّ.
+ *
+ * وهو الآن نصٌّ واحد في `@aibot/shared` يقرأه العاملُ (إشعاراً) والـAPI
+ * (للشاشتين) — فلا نسختان تتباعدان.
+ */
 
 export default function HomePage() {
   const { me } = useSession();
@@ -106,6 +114,15 @@ export default function HomePage() {
       ③ وعند الهدوء والعيّنة الكافية: النسبة التي تطمئن. */
   const heroKind: 'attn' | 'self' | 'activity' = needs ? 'attn' : enoughSample ? 'self' : 'activity';
 
+  /* ★ آخرُ عتبةٍ أُنذر بها **فعلاً** — تُقرأ من الخادم لا تُستنتج من النسبة.
+     والفرقُ ليس تجميلاً: شاشةٌ تقول «أنذرناك» وهي تستنتج ذلك من الرقم تكذب
+     حين يتعطّل الدفع، وتُسقط أوّلَ ما يُراجَع عند الشكوى. */
+  const alerts = data.quotaAlerts ?? [];
+  const hit = alerts.length ? alerts[alerts.length - 1]! : null;
+  const alertedAt = hit
+    ? <> · وأنذرناك عند <span className="num">{`${hit.threshold}%`}</span> {fmt.when(hit.firedAt)}</>
+    : null;
+
   const chans = data.channels;
   const chBad = chans.filter((c) => c.status !== 'connected').length;
 
@@ -121,15 +138,17 @@ export default function HomePage() {
       ? {
         sev: 'bad',
         head: 'بلغتَ سقف الباقة لهذا الشهر',
-        sub: <>{OVERAGE[data.overagePolicy] ?? OVERAGE.bill}{' '}<Link href="/app/usage">شاهد الاستهلاك</Link></>,
+        sub: <>{data.capConsequence}{alertedAt}{' '}<Link href="/app/usage">شاهد الاستهلاك</Link></>,
       }
       : pct >= 0.8
         ? {
           sev: pct >= 0.95 ? 'bad' : 'warn',
           head: <>استهلكتَ <span className="num">{fmt.pct(pct)}</span> من نوافذ الشهر</>,
+          /* النصُّ يبدأ بـ«عند بلوغ السقف…» من الخادم — فلا تُسبَق بمثلها هنا. */
           sub: <>
-            {pct >= 0.95 ? 'بقي أقلّ من 5٪. عند بلوغ السقف: ' : 'عند بلوغ السقف: '}
-            {OVERAGE[data.overagePolicy] ?? OVERAGE.bill}
+            {pct >= 0.95 && 'بقي أقلّ من 5٪. '}
+            {data.capConsequence}
+            {alertedAt}
           </>,
         }
         : {
@@ -162,15 +181,15 @@ export default function HomePage() {
           الخبرُ مرّتين ولا يُفقد. */}
       {needs && atCap && (
         <Note tone="crit">
-          <b>بلغتَ سقف الباقة لهذا الشهر.</b> {OVERAGE[data.overagePolicy] ?? OVERAGE.bill}{' '}
+          <b>بلغتَ سقف الباقة لهذا الشهر.</b> {data.capConsequence}{alertedAt}{' '}
           <Link href="/app/usage">شاهد الاستهلاك</Link>
         </Note>
       )}
       {needs && !atCap && pct >= 0.8 && (
         <Note tone={pct >= 0.95 ? 'crit' : 'warn'}>
           <b>استهلكتَ {fmt.pct(pct)} من نوافذ الشهر.</b>{' '}
-          {pct >= 0.95 ? 'بقي أقلّ من 5٪. عند بلوغ السقف: ' : 'عند بلوغ السقف: '}
-          {OVERAGE[data.overagePolicy] ?? OVERAGE.bill}
+          {pct >= 0.95 && 'بقي أقلّ من 5٪. '}
+          {data.capConsequence}{alertedAt}
         </Note>
       )}
 
@@ -223,7 +242,7 @@ export default function HomePage() {
         />
       )}
 
-      <Section title="معايير اليوم" count="كلُّ رقمٍ معه مداه أو نسبته — لا رقمَ عارياً">
+      <Section title="معايير اليوم" sub="كلُّ رقمٍ معه مداه أو نسبته — لا رقمَ عارياً">
         <Rows>
           {heroKind !== 'activity' && (
             <MetricRow
@@ -294,7 +313,7 @@ export default function HomePage() {
 
       <Section
         title="قنواتك"
-        count={chans.length
+        sub={chans.length
           ? (chBad
             ? <><span className="num">{fmt.num(chBad)}</span> من <span className="num">{fmt.num(chans.length)}</span> لا تعمل</>
             : 'كلُّها تستقبل وتردّ')
@@ -339,7 +358,7 @@ export default function HomePage() {
 
       <Section
         title="أسئلةٌ عجز عنها بوتك"
-        count={gaps.data?.length
+        sub={gaps.data?.length
           ? <><span className="num">{fmt.num(gaps.data.length)}</span> سؤالاً — أضِفها لمعرفته وترتفع نسبةُ ما يحلّه بنفسه</>
           : 'فرصةُ تحسين — لا عطل'}
         actions={gaps.data?.length

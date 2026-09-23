@@ -1,0 +1,27 @@
+[Unit]
+Description=AiBot — حزمة احتياطيّة مشفَّرة (pg_dump + .env + MASTER_KEY)
+Documentation=file:%h/aibot/docs/plan/19-backup-and-restore.md
+# الحزمة تحتاج حاوية db حيّة. وليست تبعيّةً صلبة: لو كان دوكر ساقطاً فالسكربت
+# يفشل برسالةٍ واضحة في journald — وهذا أفضل من مؤقّتٍ لا يُطلق أبداً بلا سبب.
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/aibot
+# 🔴 لا EnvironmentFile: السكربت يقرأ ~/.config/aibot/backup.env بنفسه.
+#    وسطرٌ هنا يعني تحليل systemd لعبارة المرور — وهو تحليلٌ له قواعد اقتباسٍ
+#    خاصّة تُفسد عبارةً فيها محارف base64 في حالاتٍ لا تظهر إلّا وقت التشغيل.
+#    والأهمّ: لو غاب الملفّ لفشلت الوحدة بـ`status=203` بلا معنى، بدل أن تطبع
+#    رسالة السكربت التي تشرح ما ينقص وكيف يُصنع.
+# ★ رسالةٌ تُقرأ بدل `status=203/EXEC`: الوحدة تُثبَّت في `~/.config/systemd/user`
+#   فتبقى بعد أيّ تنظيفٍ للمستودع، والسكربت يأتي مع `git pull` في `deploy.sh`.
+#   فبين التثبيت وأوّل نشرٍ قد يغيب الملفّ — و`203/EXEC` لا يقول ذلك لأحد.
+ExecStartPre=/bin/bash -c 'test -x %h/aibot/ops/backup-offsite.sh || { echo "ops/backup-offsite.sh غائب أو غير قابلٍ للتنفيذ — يجلبه ./deploy.sh من git"; exit 1; }'
+ExecStart=/bin/bash %h/aibot/ops/backup-offsite.sh
+# النسخ ليس عملاً عاجلاً: لا يُزاحم API ولا العامل على قرصٍ واحدٍ أو نواةٍ واحدة.
+Nice=10
+IOSchedulingClass=idle
+TimeoutStartSec=30min
+
+[Install]
+WantedBy=default.target

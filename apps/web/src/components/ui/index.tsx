@@ -88,8 +88,15 @@ export function isMachineString(s: string): boolean {
   return !ARABIC_RE.test(s) && LATIN_CORE_RE.test(s);
 }
 
-/** يعزل ما يستحقّ العزل وحده — ويترك العربيّة حيث هي. */
-function Iso({ text }: { text: string }) {
+/**
+ * يعزل ما يستحقّ العزل وحده — ويترك العربيّة حيث هي.
+ *
+ * ★ ومُصدَّرةٌ لأنّ القرار نفسَه يلزم خارجَ هذا الملفّ: قيمةٌ تأتي من ميتا
+ *   (اسمُ عرضٍ قد يكون رقماً لاتينيّاً أو اسماً عربيّاً) تُعرض في `KVRow`،
+ *   وبلا عزلٍ ينقلب «+962 7 9000 0000» إلى «0000 9000 7 962+» في صفحةٍ RTL.
+ *   ونسخُ الحساب في موضعٍ ثانٍ هو بعينه التكرارُ الذي يتباعد غداً.
+ */
+export function Iso({ text }: { text: string }) {
   return isMachineString(text) ? <span className="num">{text}</span> : <>{text}</>;
 }
 

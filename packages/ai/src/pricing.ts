@@ -15,6 +15,14 @@ export const SEED_PRICES: Array<{
   { provider: 'google', model: 'gemini-2.5-flash-lite', input: 0.10, output: 0.40, cachedInput: 0.025 },
   { provider: 'google', model: 'gemini-2.5-pro',        input: 1.25, output: 10.00, cachedInput: 0.3125 },
   { provider: 'google', model: 'gemini-embedding-001',  input: 0.15, output: 0.00, cachedInput: null },
+  /* ★ نموذجٌ **مضبوطٌ فعلاً** على الخادم (nuskjo v1) وكان بلا صفّ سعرٍ، فكانت
+     كلفة كلّ ردٍّ تُحسب صفراً وتُرفَع حادثة price_missing مع كلّ ردّ.
+     السعر مُراجَعٌ في 2026-09-23 من ثلاثة مصادر متّفقة (الطبقة المدفوعة،
+     لكلّ مليون توكن): ai.google.dev/gemini-api/docs/pricing ·
+     explainx.ai/models/google/gemini-3.5-flash-lite/cost · openrouter.ai.
+     قراءةُ الكاش ‎$0.03 = خصم ٩٠٪ عن الإدخال. وراجع
+     packages/db/migrations/0005_price_gemini_3_5_flash_lite.sql. */
+  { provider: 'google', model: 'gemini-3.5-flash-lite', input: 0.30, output: 2.50, cachedInput: 0.03 },
 ];
 
 export interface PriceRow {

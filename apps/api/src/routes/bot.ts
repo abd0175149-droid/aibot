@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import {
   getDb, withTenant, withPlatform, botConfigs, botVersions, botTools, knowledgeSources, aiRuns,
-  kbChunks, auditLog, eq, and, desc, sql,
+  kbChunks, auditLog, prices, eq, and, desc, sql,
 } from '@aibot/db';
 import { AppError, ErrorCode } from '@aibot/shared';
 import { seal } from '@aibot/crypto';
@@ -68,14 +68,34 @@ export async function registerBot(app: FastifyInstance) {
       const kbTokens = estimateTokens(kb);
       const mode = decideKnowledgeMode(kbTokens);
 
+      const provider = String(draft.provider ?? 'google');
+      const model = String(draft.model ?? 'gemini-2.5-flash');
+
+      /* ★ لا نشرَ لنموذجٍ بلا سعر.
+         العطل الذي وُلد منه هذا الفحص: نسخةٌ نُشرت على نموذجٍ لا صفَّ سعرٍ له،
+         فصار كلّ ردٍّ يُفوتَر **صفراً** بصمت — والتقارير تُظهر هامشاً كاملاً
+         عن نموذجٍ يُكلّف فعلاً — ويرفع حادثة price_missing مع كلّ ردّ.
+         والمنع هنا لا في العامل: العامل يكتشفه بعد أن يُنفَق المال، وهذا
+         يمنعه قبل أن يُنشر. والرسالة تقول ما يُفعل لا «قيمةٌ غير صالحة». */
+      const priced = await tx.select({ model: prices.model }).from(prices)
+        .where(and(eq(prices.provider, provider), eq(prices.model, model))).limit(1);
+      if (!priced.length) {
+        throw new AppError(
+          ErrorCode.VALIDATION,
+          `لا سعرَ مسجَّلٌ للنموذج ${model} — أضِف صفّه في جدول prices قبل النشر، `
+          + 'وإلّا فكلفة كلّ ردٍّ تُحسب صفراً بصمت.',
+          400,
+        );
+      }
+
       const [ver] = await tx.insert(botVersions).values({
         tenantId,
         version: (last?.v ?? 0) + 1,
         persona: String(draft.persona ?? ''),
         knowledgeBase: kb,
         toolsConfig: (draft.toolsConfig ?? {}) as object,
-        provider: String(draft.provider ?? 'google'),
-        model: String(draft.model ?? 'gemini-2.5-flash'),
+        provider,
+        model,
         params: (draft.params ?? {}) as object,
         knowledgeMode: mode,
         knowledgeBudget: (draft.knowledgeBudget ?? {}) as object,

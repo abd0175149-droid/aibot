@@ -6,6 +6,7 @@ import { getAdapter, degradeChoices, canRender, type ChannelKind } from '@aibot/
 import type { OutboundMessage } from '@aibot/shared';
 import { open as decrypt } from '@aibot/crypto';
 import { emitToTenant } from './events.js';
+import { announceQuotaCrossing } from './quota.js';
 
 /**
  * ★ طبقة الإرسال — ولا مسار آخر إلى Graph API في هذا النظام.
@@ -81,10 +82,14 @@ export async function sendOutbound(job: SendJob): Promise<{ messageId: string; e
     throw new Error('القناة غير موصولة — راجع صفحة الربط');
   }
 
-  /* ③ السقف — يُفحص قبل الختم لا بعده. */
+  /* ③ السقف — يُفحص قبل الختم لا بعده.
+     والقرارُ يُحفظ لا يُهمَل: هو مصدرُ «كم كان العدّاد **قبل** هذه النافذة»،
+     وبه يُحسب العبور على الحافّة في ⑦. وغيابُه (نافذةٌ مختومةٌ أصلاً) يعني
+     أنّ العدّاد لم يتحرّك — فلا عتبةَ تُعبَر. */
+  let quota: Awaited<ReturnType<typeof checkQuota>> | null = null;
   if (!ctx.win.billedAt) {
-    const decision = await checkQuota(db, job.tenantId);
-    if (!decision.allowed) throw new QuotaExceededError(decision.policy);
+    quota = await checkQuota(db, job.tenantId);
+    if (!quota.allowed) throw new QuotaExceededError(quota.policy);
   }
 
   /* ④ تصيير النيّة إلى ما تفهمه القناة. */
@@ -115,7 +120,8 @@ export async function sendOutbound(job: SendJob): Promise<{ messageId: string; e
   );
 
   /* ⑥ التخزين والختم — في معاملةٍ واحدة. */
-  return withTenant(db, job.tenantId, async (tx) => {
+  const period = billingPeriod(new Date());
+  const result = await withTenant(db, job.tenantId, async (tx) => {
     const [row] = await tx.insert(messages).values({
       tenantId: job.tenantId,
       conversationId: job.conversationId,
@@ -134,7 +140,6 @@ export async function sendOutbound(job: SendJob): Promise<{ messageId: string; e
     const messageId = row?.id ?? '';
 
     /* ختم الفوترة: **أوّل صادرٍ داخل النافذة وحده** يختمها. */
-    const period = billingPeriod(new Date());
     await tx.update(conversationWindows).set({
       messagesOut: sql`${conversationWindows.messagesOut} + 1`,
       botReplies: job.source === 'bot'
@@ -174,6 +179,40 @@ export async function sendOutbound(job: SendJob): Promise<{ messageId: string; e
 
     return { messageId, externalId: sent.externalId };
   });
+
+  /* ⑦ إنذارُ السقف — **بعد الإيداع**، وبعد أن صار العدّاد `quota.used + 1`.
+     هنا وحده يُعرف أنّ نافذةً جديدة فُوتِرت فعلاً: الختم في ⑥ هو الحدث الذي
+     يحرّك العدّاد، وقبله كلُّ حسابٍ تخمين.
+
+     ⚠️ وخارج المعاملة قصداً: الإنذار يدفع Web Push عبر الشبكة، ومعاملةٌ مفتوحة
+        أثناء ذلك تحتجز اتّصالاً لثوانٍ — وهو الدرس الذي جمّد عامل الردّ.
+
+     وفشلُ الإنذار لا يُسقط رسالةً أُرسلت أصلاً: الزبون استلمها، والنافذة
+     مختومة. فيُسجَّل ويُمضى — وإلّا أعادت BullMQ إرسال الرسالة نفسها. */
+  if (quota) {
+    /* ★ العدّادُ **يُقرأ من القاعدة بعد الإيداع** لا يُحسب `used + 1`.
+       السبب سباقٌ حقيقيّ: نافذتان تُختمان في نفس اللحظة تقرآن العدّاد نفسه في
+       ③ (78 مثلاً)، فتحسب كلٌّ منهما 79 — والحقيقةُ 80. فتُفلت عتبةُ الثمانين
+       بلا إنذارٍ أصلاً، وهو العطل الذي يُصلحه هذا الملفّ كلُّه.
+       وقراءةُ ما بعد الإيداع تشمل نافذةَ الشريك، فيغطّي مدى أحدِهما العتبةَ
+       قطعاً — والحجزُ الفريد يضمن أن يُنذر واحدٌ لا اثنان. */
+    const post = await checkQuota(db, job.tenantId).catch(() => null);
+    await announceQuotaCrossing({
+      tenantId: job.tenantId,
+      before: quota.used,
+      after: Math.max(post?.used ?? 0, quota.used + 1),
+      limit: post?.limit ?? quota.limit,
+      policy: post?.policy ?? quota.policy,
+      period,
+    }).catch((e) => {
+      console.error(JSON.stringify({
+        level: 'error', svc: 'worker', msg: 'فشل إنذارُ عتبةِ السقف',
+        tenantId: job.tenantId, err: String(e),
+      }));
+    });
+  }
+
+  return result;
 }
 
 /**

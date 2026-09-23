@@ -6,7 +6,8 @@ import {
   PageHead, Stack, Row as UiRow, Pill, Tag, Note, DataView, Button, Table, Sheet, Dock,
   Meter, type Column, type Tone,
 } from '@/components/ui';
-import { Hero, MetricRow, Delta, Section, Bar } from '../parts';
+import { Bar } from '../parts';
+import { Hero, MetricRow, Delta, Section } from '@/components/screen';
 
 /**
  * لوحة الهامش — إيرادٌ مقابل كلفة، لكلّ عميلٍ ولكلّ شهر.
@@ -269,7 +270,7 @@ export default function MarginPage() {
                   الذي يطمئن. وستّة أرقامٍ متساوية لا تقول أيّها يهمّ. */}
               {risky > 0 ? (
                 <Hero
-                  tone="crit"
+                  sev="bad"
                   href="#tbl"
                   value={fmt.num(risky)}
                   label={`عملاءُ يحتاجون مراجعةً ماليّة — دون هدف ${fmt.pct(TARGET)} أو بلا اشتراك ←`}

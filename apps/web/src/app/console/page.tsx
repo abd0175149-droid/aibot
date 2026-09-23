@@ -9,7 +9,8 @@ import {
   PageHead, Stack, Row, Meter, Pill, Tag, Dot, Note, Button, Table, DataView,
   ErrorBox, Sheet, Dock, KV, KVRow, Field, Input, type Column, type Tone,
 } from '@/components/ui';
-import { Hero, MetricRow, Delta, Section, Bar } from './parts';
+import { Bar } from './parts';
+import { Hero, MetricRow, Delta, Section } from '@/components/screen';
 
 /**
  * لوحة المالك — جدول العملاء.
@@ -432,7 +433,7 @@ export default function TenantsPage() {
                   سياقٌ ملاصقٌ دائماً — «2» بلا «من كم» لا يُقرَّر عليه. */}
               {critical > 0 ? (
                 <Hero
-                  tone="crit"
+                  sev="bad"
                   href="/console/incidents"
                   value={fmt.num(critical)}
                   label="عملاءُ عندهم حادثةٌ حرجةٌ مفتوحة ←"
@@ -448,7 +449,7 @@ export default function TenantsPage() {
                 />
               ) : broken > 0 ? (
                 <Hero
-                  tone="crit"
+                  sev="bad"
                   href="/console/incidents"
                   value={fmt.num(broken)}
                   label="عملاءُ قناتُهم معطوبة — بوتٌ صامتٌ الآن ←"
@@ -463,7 +464,7 @@ export default function TenantsPage() {
                 />
               ) : nearCap > 0 ? (
                 <Hero
-                  tone="warn"
+                  sev="warn"
                   value={fmt.num(nearCap)}
                   label="عملاءُ بلغوا 80٪ من سقفهم"
                   ctx={(

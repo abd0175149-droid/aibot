@@ -2,19 +2,34 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import {
   getDb, withTenant, conversations, conversationWindows, messages, aiRuns,
   tenantChannels, contacts, channelIdentities, botConfigs, subscriptions, plans, tenants,
-  auditLog, withPlatform,
-  eq, and, desc, isNull, sql,
+  auditLog, withPlatform, quotaAlerts,
+  eq, and, asc, desc, isNull, sql,
 } from '@aibot/db';
 import { capabilitiesFor, getAdapter, type ChannelKind } from '@aibot/channels';
 import { open as decrypt, seal, fingerprint, publicId } from '@aibot/crypto';
 import { requireAuth, tenantOf } from '../auth.js';
-import { AppError, ErrorCode } from '@aibot/shared';
+import { AppError, ErrorCode, capConsequence } from '@aibot/shared';
 
 /** الشهر بتوقيت المستأجر — نافذةٌ تُفتح آخر الشهر تُفوتَر على شهر فتحها. */
 function period(tz = 'Asia/Amman'): string {
   const p = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit' })
     .formatToParts(new Date());
   return `${p.find((x) => x.type === 'year')!.value}-${p.find((x) => x.type === 'month')!.value}`;
+}
+
+/**
+ * العتباتُ التي أُنذر بها العميل في هذه الدورة.
+ *
+ * ★ تُقرأ من نفس الجدول الذي يكتبه العامل (`quota_alerts`) — فالشاشة تعرض
+ *   **ما أُرسل فعلاً** لا ما كان يُفترض أن يُرسَل. وشاشةٌ تقول «أنذرناك» وهي
+ *   تستنتج ذلك من النسبة تكذب حين يتعطّل الدفع، وهي أسوأ كذبةٍ ممكنة هنا.
+ */
+async function alertsOf(tx: never, period: string): Promise<Array<{ threshold: number; firedAt: Date }>> {
+  return (tx as unknown as ReturnType<typeof getDb>)
+    .select({ threshold: quotaAlerts.threshold, firedAt: quotaAlerts.firedAt })
+    .from(quotaAlerts)
+    .where(eq(quotaAlerts.billingPeriod, period))
+    .orderBy(asc(quotaAlerts.threshold));
 }
 
 async function limitsOf(tx: never, tenantId: string): Promise<Record<string, number>> {
@@ -84,6 +99,10 @@ export async function registerReports(app: FastifyInstance) {
         .where(and(eq(subscriptions.tenantId, tenantId), eq(subscriptions.status, 'active')))
         .limit(1))[0];
 
+      const alerts = await alertsOf(tx as never, p);
+
+      const wLimit = Number(lim.windows ?? 0);
+      const wUsed = used?.n ?? 0;
       const totalConvs = Number(today?.total_convs ?? 0);
       return {
         conversationsToday: Number(today?.conversations ?? 0),
@@ -91,10 +110,22 @@ export async function registerReports(app: FastifyInstance) {
         needsAttention: Number(today?.needs_attention ?? 0),
         medianLatencyMs: Number(today?.median_latency ?? 0),
         selfResolvedRate: totalConvs ? Number(today?.self_resolved ?? 0) / totalConvs : 0,
-        windowsUsed: used?.n ?? 0,
-        windowsLimit: Number(lim.windows ?? 0),
+        windowsUsed: wUsed,
+        windowsLimit: wLimit,
         botEnabled: Boolean(cfg?.enabled),
         overagePolicy: sub?.policy ?? 'handoff_only',
+        /* ★ نصُّ العاقبة يأتي **من الخادم** لا من جدولٍ في الواجهة: هو نفسُه
+           النصُّ الذي يدفعه العامل إشعاراً، ونسختان منه تتباعدان — وقد تباعدتا
+           فعلاً، فكانت الواجهة تَعِد بأنّ «فريقك يردّ يدويّاً بلا حدّ» والحارسُ
+           يرفض ردَّ الموظّف على محادثةٍ جديدة كما يرفض ردَّ البوت. */
+        capConsequence: capConsequence(
+          sub?.policy ?? 'handoff_only',
+          wLimit > 0 && wUsed >= wLimit,
+        ),
+        /* ★ حالةُ العتبة: متى أُنذر العميل وبأيّ عتبة. الشاشةُ تفرّق بين
+           «أنت على 84٪» و«أنذرناك عند 80٪ يوم الثلاثاء» — والثانية هي التي
+           تُسقط «ما حذّرني أحد». */
+        quotaAlerts: alerts,
         channels,
       };
     });
@@ -142,7 +173,16 @@ export async function registerReports(app: FastifyInstance) {
          WHERE tenant_id = ${tenantId} AND billing_period = ${p}
       `) as unknown as Array<Record<string, number>>;
 
+      const alerts = await alertsOf(tx as never, p);
+      const pol = await tx.select({ policy: plans.overagePolicy }).from(subscriptions)
+        .innerJoin(plans, eq(plans.id, subscriptions.planId))
+        .where(and(eq(subscriptions.tenantId, tenantId), eq(subscriptions.status, 'active')))
+        .orderBy(desc(subscriptions.periodEnd))
+        .limit(1);
+
       const billed = Number(agg?.billed ?? 0);
+      const policy = pol[0]?.policy ?? 'handoff_only';
+      const wLimit = Number(lim.windows ?? 0);
       return {
         period: p,
         windowsBilled: billed,
@@ -152,6 +192,12 @@ export async function registerReports(app: FastifyInstance) {
         aiTokensLimit: Number(lim.aiTokens ?? 0),
         aiCostUsd: Number(agg?.cost ?? 0),
         avgRepliesPerWindow: billed ? Number(agg?.avg_replies ?? 0) / billed : 0,
+        /* ★ السياسةُ والعتباتُ معاً: شاشةُ الاستهلاك كانت تُحيل إلى الرئيسيّة
+           لتقول «ماذا يحدث عند السقف» — وهي الشاشة التي يُفتحها العميل وقت
+           القلق. فصارت تحمل عاقبتَها بنفسها. */
+        overagePolicy: policy,
+        capConsequence: capConsequence(policy, wLimit > 0 && billed >= wLimit),
+        quotaAlerts: alerts,
         items,
       };
     });

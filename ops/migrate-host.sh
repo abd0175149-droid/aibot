@@ -21,7 +21,7 @@ docker compose stop api worker web
 
 say "2/7 — نسخة القاعدة"
 mkdir -p "$WORK"
-docker compose exec -T db pg_dump -U "${DB_USER}" "${DB_NAME:-aibot}" | gzip > "${WORK}/db.sql.gz"
+docker compose exec -T db pg_dump -U "${DB_USER}" "${DB_NAME:-aibot}" < /dev/null | gzip > "${WORK}/db.sql.gz"
 SZ=$(stat -c%s "${WORK}/db.sql.gz")
 [ "$SZ" -gt 10000 ] || { echo "❌ النسخة ${SZ} بايت — pg_dump فشل صامتاً"; docker compose start api worker web; exit 1; }
 

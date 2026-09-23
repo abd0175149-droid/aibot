@@ -5,7 +5,7 @@ import { post, ApiError } from '@/lib/api';
 import { PERSONA_TEMPLATES } from '@/lib/personas';
 import {
   Modal, Button, Field, Input, TextArea, Select, Stack, Row,
-  Pill, Note, CodeBlock, KV, KVRow,
+  Pill, Note, CodeBlock, KV, KVRow, Iso,
 } from '@/components/ui';
 
 /**
@@ -244,8 +244,13 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
           <Stack gap="sm">
             {conn && (
               <KV>
-                <KVRow k="الرقم">{conn.displayName ?? '—'}</KVRow>
-                <KVRow k="جودة الرقم">{conn.qualityRating ?? '—'}</KVRow>
+                {/* ★ قيمتان تأتيان من ميتا فلا يُعرف شكلُهما قبل الوصول: «الرقم» قد
+                    يكون رقماً لاتينيّاً أو اسمَ عرضٍ عربيّاً موثّقاً. وبلا عزلٍ ينقلب
+                    «+962 7 9000 0000» إلى «0000 9000 7 962+» في فقرةٍ أساسُها RTL
+                    (رأيتُها منقلبةً في لقطة الخطوة الثالثة) — ومع عزلٍ مفروضٍ تنكسر
+                    العربيّة. فالقرار محسوبٌ في `Iso` لا مكتوبٌ هنا. */}
+                <KVRow k="الرقم">{conn.displayName ? <Iso text={conn.displayName} /> : '—'}</KVRow>
+                <KVRow k="جودة الرقم">{conn.qualityRating ? <Iso text={conn.qualityRating} /> : '—'}</KVRow>
                 <KVRow k="اشتراك الويبهوك">
                   {conn.webhookSubscribed === null
                     ? <Pill tone="neutral" label="تعذّر التحقّق" />

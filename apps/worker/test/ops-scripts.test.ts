@@ -1,0 +1,164 @@
+import { describe, it, expect } from 'vitest';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, relative } from 'node:path';
+
+/**
+ * ★ حارسٌ ساكن على سكربتات التشغيل — من عائلة `db-context.test.ts` نفسها،
+ *   ويسكن معه لأنّ `vitest run` في هذه الحزمة هو ما يُشغّله `turbo run test`.
+ *   حارسٌ في مجلّدٍ لا تمرّ عليه CI طمأنينةٌ كاذبة، وهذا المشروع لا يشتريها.
+ *
+ * والأعطال الثلاثة التي وُلد منها كلّ فحصٍ هنا **حدثت فعلاً** في يوم كتابته:
+ *
+ * ① **`docker compose exec -T` يأكل stdin المنادي.** الراية `-T` تمرّر stdin
+ *    إلى الحاوية وتستهلكه كلّه. فنداءٌ داخل `while read` يسرق بقيّة الأسطر،
+ *    والحلقة تنتهي بعد صفٍّ واحد **بلا خطأ**: تمرينُ الاستعادة فحص جدولاً من
+ *    تسعة وطبع ✅، وسكربتُ اختبارٍ مُرِّر بـ`bash -s` توقّف في منتصفه صامتاً.
+ *    فالقاعدة: كلّ نداءٍ يعلن مصدر stdin — أنبوبٌ يغذّيه، أو `< …` صريحة.
+ *
+ * ② **عبارة المرور في `argv`.** `--passphrase X` يجعل السرّ مرئيّاً لكلّ من
+ *    يقرأ `ps` على خادمٍ فيه ٥٩ حاوية. `--passphrase-fd` وحده مقبول.
+ *
+ * ③ **سرٌّ حرفيٌّ في المستودع.** المستودع عامّ (`02`)، وسطرٌ واحدٌ فيه
+ *    `MASTER_KEY=<القيمة>` يُنهي تشفير توكنات كلّ العملاء. والخطأ يحدث بلصقةٍ
+ *    في وثيقةٍ أو مثالٍ، لا بقرار — ولهذا يُمسك بالشكل لا بالنيّة.
+ */
+
+const REPO = join(__dirname, '..', '..', '..');
+
+function shellScripts(): Array<{ file: string; src: string }> {
+  const out: Array<{ file: string; src: string }> = [];
+  const walk = (dir: string): void => {
+    for (const name of readdirSync(dir)) {
+      const p = join(dir, name);
+      if (statSync(p).isDirectory()) walk(p);
+      else if (name.endsWith('.sh')) {
+        out.push({ file: relative(REPO, p).replace(/\\/g, '/'), src: readFileSync(p, 'utf8') });
+      }
+    }
+  };
+  walk(join(REPO, 'ops'));
+  out.push({ file: 'deploy.sh', src: readFileSync(join(REPO, 'deploy.sh'), 'utf8') });
+  return out;
+}
+
+/**
+ * يطوي أسطر الاستمرار (`\` في آخر السطر) إلى سطرٍ منطقيٍّ واحد مع رقم بدايته.
+ * ★ بلا الطيّ يكذب الفحص في الاتّجاهين: أمرٌ إعادةُ توجيهه في السطر التالي
+ *   يُقرأ مخالفةً، وأنبوبٌ رأسه في السطر السابق يُقرأ سليماً.
+ */
+export function logicalLines(src: string): Array<{ n: number; text: string }> {
+  const raw = src.split(/\r?\n/);
+  const out: Array<{ n: number; text: string }> = [];
+  let buf = '';
+  let start = 1;
+  raw.forEach((line, i) => {
+    if (buf === '') start = i + 1;
+    if (/\\$/.test(line)) {
+      buf += `${line.replace(/\\$/, '')} `;
+      return;
+    }
+    out.push({ n: start, text: buf + line });
+    buf = '';
+  });
+  if (buf !== '') out.push({ n: start, text: buf });
+  return out;
+}
+
+const DOCKER_EXEC = /docker\s+compose\s+exec\s+-T\b/;
+/** أنبوبٌ يغذّي النداء — stdin مقصودٌ ومُعلَن. */
+const PIPED_IN = /\|\s*docker\s+compose\s+exec/;
+/** إعادة توجيهٍ صريحة: `< file` أو `< /dev/null`. */
+const REDIRECTED = /(?<![0-9<])<\s*[^<\s]/;
+/** `gpg` في موضع أمرٍ لا داخل نصٍّ معروض. */
+const GPG_CALL = /(?:^|[;|&(]|\|)\s*gpg\s/;
+const COMMENT = /^\s*#/;
+
+describe('سكربتات التشغيل — الشكل الذي يفشل صامتاً', () => {
+  it('كلّ `docker compose exec -T` يُعلن مصدر stdin', () => {
+    const offences: string[] = [];
+    for (const { file, src } of shellScripts()) {
+      for (const { n, text } of logicalLines(src)) {
+        if (COMMENT.test(text) || !DOCKER_EXEC.test(text)) continue;
+        if (PIPED_IN.test(text) || REDIRECTED.test(text)) continue;
+        offences.push(`${file}:${n} → ${text.trim().slice(0, 90)}`);
+      }
+    }
+    expect(
+      offences,
+      '`-T` يمرّر stdin إلى الحاوية ويستهلكه كلّه، فيسرق من حلقةٍ تقرأ أو من '
+      + 'سكربتٍ مُرَّر عبر stdin — بلا خطأ ولا أثر. أضِف `< /dev/null` إن لم '
+      + 'يكن النداء بحاجةٍ إلى إدخال، أو غذِّه بأنبوبٍ صريح.',
+    ).toEqual([]);
+  });
+
+  it('لا عبارة مرورٍ في سطر الأوامر — `--passphrase-fd` وحده', () => {
+    const offences: string[] = [];
+    for (const { file, src } of shellScripts()) {
+      src.split(/\r?\n/).forEach((text, i) => {
+        if (COMMENT.test(text)) return;
+        if (/--passphrase(?!-fd)/.test(text)) offences.push(`${file}:${i + 1} → ${text.trim()}`);
+      });
+    }
+    expect(offences, 'سطر أوامر عمليّةٍ تعمل يقرأه كلّ مستخدمٍ على الخادم بـps').toEqual([]);
+  });
+
+  it('كلّ تشفيرٍ تناظريّ بـAES256 صراحةً', () => {
+    for (const { file, src } of shellScripts()) {
+      for (const { text } of logicalLines(src)) {
+        // GPG_CALL لا `/gpg/` وحدها: بلا موضع الأمر يُقرأ `say "gpg --symmetric …"`
+        // نداءً فيسقط الاختبار على نصٍّ معروض. الشكل يُمسك في موضعه لا في أيّ موضع.
+        if (COMMENT.test(text) || !GPG_CALL.test(text) || !/--symmetric\b/.test(text)) continue;
+        expect(text, `${file}: --symmetric بلا --cipher-algo AES256 يتبع افتراض gpg`)
+          .toMatch(/--cipher-algo\s+AES256/);
+      }
+    }
+  });
+
+  it('لا سرَّ حرفيّاً في السكربتات ولا في وثيقة النسخ', () => {
+    const files = shellScripts();
+    for (const rel of ['docs/plan/19-backup-and-restore.md', 'ops/systemd/aibot-backup.service',
+      'ops/systemd/aibot-backup.timer', 'ops/show-master-key.ts']) {
+      files.push({ file: rel, src: readFileSync(join(REPO, rel), 'utf8') });
+    }
+    const SECRET = /\b(MASTER_KEY|BACKUP_PASSPHRASE|JWT_SECRET|APP_DB_PASSWORD)\s*=\s*['"]?[A-Za-z0-9+/]{20,}/;
+    const offences: string[] = [];
+    for (const { file, src } of files) {
+      src.split(/\r?\n/).forEach((text, i) => {
+        if (SECRET.test(text)) offences.push(`${file}:${i + 1}`);
+      });
+    }
+    expect(offences, 'المستودع عامّ — سرٌّ حرفيٌّ فيه ليس خطأً بل حادثةُ أمن').toEqual([]);
+  });
+
+  it('كلّ سكربتٍ يسقط على الخطأ وعلى الأنبوب', () => {
+    for (const { file, src } of shellScripts()) {
+      expect(src, `${file}: بلا set -Eeuo pipefail يتابع السكربت بعد فشل خطوة`)
+        .toMatch(/set -Eeuo pipefail/);
+    }
+  });
+
+  it('الماسح يمسك الشكل فعلاً — وإلّا فهو اختبارٌ يمرّ دائماً', () => {
+    // المخالفة الحقيقيّة التي كسرت تمرين الاستعادة
+    const bad = 'psql_test() { docker compose exec -T db psql -At "$@"; }';
+    expect(DOCKER_EXEC.test(bad) && !PIPED_IN.test(bad) && !REDIRECTED.test(bad)).toBe(true);
+    // وإصلاحها
+    const fixed = 'psql_test() { docker compose exec -T db psql -At "$@" < /dev/null; }';
+    expect(REDIRECTED.test(fixed)).toBe(true);
+    // أنبوبٌ يغذّي النداء — مقبول
+    expect(PIPED_IN.test('gunzip -c x.gz | docker compose exec -T db psql -d y')).toBe(true);
+    // `2>&1` و`>/dev/null` ليسا إعادة توجيهٍ للإدخال
+    expect(REDIRECTED.test('docker compose exec -T db psql -c "x" >/dev/null 2>&1')).toBe(false);
+    // الطيّ يجمع الأنبوب مع النداء الذي في السطر التالي
+    const folded = logicalLines('if ! gunzip -c f.gz \\\n  | docker compose exec -T db psql \\\n  > log; then');
+    expect(folded).toHaveLength(1);
+    expect(PIPED_IN.test(folded[0]!.text)).toBe(true);
+    // و`gpg` في موضع أمرٍ يُمسك، وفي نصٍّ معروضٍ لا يُمسك
+    expect(GPG_CALL.test("printf '%s' \"$P\" | gpg --batch --symmetric")).toBe(true);
+    expect(GPG_CALL.test('say "gpg --symmetric AES256"')).toBe(false);
+    // والسرّ الحرفيّ يُمسك، والمتغيّر لا يُمسك
+    const S = /\b(MASTER_KEY|BACKUP_PASSPHRASE)\s*=\s*['"]?[A-Za-z0-9+/]{20,}/;
+    expect(S.test('MASTER_KEY=Zm9vYmFyYmF6cXV1eDEyMzQ1Njc4OTA=')).toBe(true);
+    expect(S.test('echo "MASTER_KEY=${MASTER_KEY}"')).toBe(false);
+    expect(S.test('MASTER_KEY_VERSION=2')).toBe(false);
+  });
+});

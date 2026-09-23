@@ -7,7 +7,8 @@ import {
   PageHead, Stack, Row, Field, Input, Button, Pill, Tag, Dot, Note, Empty,
   DataView, KV, KVRow, CodeBlock, Sheet, Dock, type Tone,
 } from '@/components/ui';
-import { Hero, Section, Group } from '../parts';
+import { Group } from '../parts';
+import { Hero, Section } from '@/components/screen';
 
 /**
  * سيل الحوادث.
@@ -57,7 +58,7 @@ interface Incident {
  * حادثةٌ بلا خطوةٍ تالية ليست تنبيهاً — هي قلق.
  *
  * ★ والأنواع مأخوذةٌ من مصدرها لا من الذاكرة: `worker/src/health.ts` و
- *   `reply.ts` و`embed.ts` هي وحدها ما يرفع حادثة. وكانت أربعةُ أنواعٍ منها
+ *   `reply.ts` و`embed.ts` و`quota.ts` هي وحدها ما يرفع حادثة. وكانت أربعةُ أنواعٍ منها
  *   بلا خطوةٍ واحدة — `channel_down` و`send_failure_rate` و`price_missing`
  *   و`ai_error` — أي أنّ أشيعَ عطلٍ في الفحص الدوريّ كان يُعرض عنواناً بلا
  *   طريق. أُكملت هنا.
@@ -108,6 +109,14 @@ const RUNBOOK: Record<string, string[]> = {
     'افتح «ما يميّز هذه الحادثة»: النسبة والقناة فيه',
     'الأشيع: 131047 نافذة مغلقة (صحيحٌ ومقصود) · 190 توكن منتهٍ ⟵ جدّد الربط',
     'وإن كان الفشل على كلّ القنوات وعند أكثر من عميل فالعطل عندنا: افحص عامل الإرسال والطوابير',
+  ],
+  quota_threshold: [
+    'العميل عبر 95٪ أو بلغ سقفه — وقد أُشعِر بنفسه ومعه نصُّ ما يحدث بحسب سياسة باقته',
+    'التفصيل يحمل العتبة والعدّاد والسقف والسياسة — اقرأه قبل أن تتّصل',
+    'handoff_only و block: الردُّ على المحادثات الجديدة يتوقّف عند السقف ⟵ اتّصل قبل أن يتوقّف بوته',
+    'allow_bill: بوته يستمرّ والزائد يُفوتَر ⟵ أبلِغه بالمبلغ لا بالنسبة',
+    'وهي تُطلق **مرّةً واحدةً لكلّ عتبةٍ في الشهر**، فتكرارُها في نفس الدورة يعني عطلاً لا نموّاً',
+    'ولا تُغلق نفسها: رفعُ السقف أو الترقية قرارٌ بشريّ',
   ],
   quota_exceeded: [
     'راجع استهلاك العميل وسياسة باقته',
@@ -431,7 +440,7 @@ export default function IncidentsPage() {
               />
             ) : openCrit.length > 0 ? (
               <Hero
-                tone="crit"
+                sev="bad"
                 value={fmt.num(openCrit.length)}
                 label="حادثةٌ حرجةٌ مفتوحةٌ الآن"
                 ctx={(
@@ -447,7 +456,7 @@ export default function IncidentsPage() {
               />
             ) : openWarn.length > 0 ? (
               <Hero
-                tone="warn"
+                sev="warn"
                 value={fmt.num(openWarn.length)}
                 label="تحذيرٌ مفتوح — ولا حادثةَ حرجة"
                 ctx={(

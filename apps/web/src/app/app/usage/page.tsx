@@ -9,7 +9,7 @@ import {
   PageHead, Stack, Row, Pill, Tag, Note, Meter, Button, Sheet, Table, Empty,
   Skeleton, ErrorBox, KV, KVRow, type Column, type Tone,
 } from '@/components/ui';
-import { Band, Hero, Section, Rows, MetricRow, Fold, ScreenDock, type Sev } from '../_parts';
+import { Band, Hero, Section, Rows, MetricRow, Fold, ScreenDock, ChipRow, type Sev } from '@/components/screen';
 
 /**
  * الاستهلاك.
@@ -46,6 +46,12 @@ interface Window {
   aiCostUsd: string;
 }
 
+/** عتبةٌ أُنذر بها فعلاً — من `quota_alerts`، لا مستنتَجةٌ من النسبة. */
+interface QuotaAlert {
+  threshold: number;
+  firedAt: string;
+}
+
 interface Usage {
   period: string;
   windowsBilled: number;
@@ -55,6 +61,9 @@ interface Usage {
   aiTokensLimit: number;
   aiCostUsd: number;
   avgRepliesPerWindow: number;
+  /** نصُّ العاقبة من الخادم — نفسُ نصّ الإشعار، فلا نسختان تتباعدان. */
+  capConsequence: string;
+  quotaAlerts: QuotaAlert[];
   items: Window[];
 }
 
@@ -191,6 +200,22 @@ export default function UsagePage() {
   const atCap = pct >= 1;
   const paceOver = pace !== null && data.windowsLimit > 0 && pace > data.windowsLimit;
 
+  /**
+   * ★ **حالةُ العتبة** — وهي ما كان ناقصاً من هذه الشاشة.
+   *
+   * كانت العتباتُ 80٪ و95٪ غائبةً هنا تماماً: الشريطُ يعرف «تجاوزتَ السقف»
+   * و«وتيرتك تتجاوزه»، فيُفتح على 88٪ من السقف بشريطٍ **أخضر** ما دامت الوتيرة
+   * تُنهي الشهر تحته. والعميلُ يقرأ الأخضر طمأنينةً وهو على بعد اثنتي عشرة
+   * نافذةً من الصمت.
+   *
+   * و`hit` تُقرأ من الخادم لا تُستنتج من النسبة: «أنذرناك عند 80٪» تقولها
+   * الشاشةُ فقط إن أُرسل الإنذار فعلاً — وإلّا فهي تُغطّي عطلاً في الدفع
+   * بادّعاءٍ مطمئن، وهو أسوأ ما يمكن أن تفعله شاشةُ فاتورة.
+   */
+  const alerts = data.quotaAlerts ?? [];
+  const hit = alerts.length ? alerts[alerts.length - 1]! : null; // مرتّبةٌ تصاعديّاً من الخادم
+  const near = pct >= 0.8;
+
   const perWindow = data.windowsBilled ? data.aiCostUsd / data.windowsBilled : null;
 
   const sum = view.reduce(
@@ -211,13 +236,28 @@ export default function UsagePage() {
       .map((k) => ({ f: k as Filt, label: CH[k]?.label ?? k })),
   ];
 
+  /* ★ ترتيبُ الشريط: **ما وقع** يسبق ما يُتوقَّع. السقفُ المبلوغ أوّلاً، ثمّ
+     العتبةُ المعبورة (خبرٌ واقعٌ اليوم)، ثمّ الوتيرة (إسقاطٌ قد لا يقع). وكان
+     الإسقاطُ يسبق العتبة، فيُقرأ «تُنهي الشهر تحت سقفك» على 88٪. */
   const band: { sev: Sev; head: ReactNode; sub: ReactNode } = atCap
     ? {
       sev: 'bad',
-      head: <>تجاوزتَ سقف باقتك: <span className="num">{fmt.num(data.windowsBilled)}</span> من <span className="num">{fmt.num(data.windowsLimit)}</span></>,
-      sub: 'ما بعد السقف يُعامَل بسياسة باقتك — والرئيسيّة تقول ماذا يحدث لزبائنك الآن.',
+      head: <>بلغتَ سقف باقتك: <span className="num">{fmt.num(data.windowsBilled)}</span> من <span className="num">{fmt.num(data.windowsLimit)}</span></>,
+      sub: <>
+        {data.capConsequence}
+        {hit && <> · وأنذرناك عند <span className="num">{`${hit.threshold}%`}</span> {fmt.when(hit.firedAt)}</>}
+      </>,
     }
-    : paceOver
+    : near
+      ? {
+        sev: pct >= 0.95 ? 'bad' : 'warn',
+        head: <>استهلكتَ <span className="num">{fmt.pct(pct)}</span> من نوافذ باقتك</>,
+        sub: <>
+          {data.capConsequence}
+          {hit && <> · وأنذرناك عند <span className="num">{`${hit.threshold}%`}</span> {fmt.when(hit.firedAt)}</>}
+        </>,
+      }
+      : paceOver
       ? {
         sev: 'bad',
         head: 'بهذه الوتيرة تتجاوز سقفك قبل آخر الشهر',
@@ -315,7 +355,7 @@ export default function UsagePage() {
         />
       )}
 
-      <Section title="على ماذا تُحاسَب" count="النافذةُ وحدةُ الفوترة، لا الرسالة">
+      <Section title="على ماذا تُحاسَب" sub="النافذةُ وحدةُ الفوترة، لا الرسالة">
         <Rows>
           <MetricRow
             k="نوافذُ فُتحت"
@@ -326,6 +366,36 @@ export default function UsagePage() {
                 منها <span className="num">{fmt.num(unbilled)}</span> لم تُفوتَر — لم يردّ فيها أحد
               </span>
             )}
+          />
+
+          {/* ★ سجلُّ الإنذار صفٌّ مستقلّ: الشريطُ يقول آخرَ عتبةٍ وحدها ويختفي
+              حين يُحلّ ما هو أعجل، والسجلُّ يبقى. و«لم تبلغ عتبةً بعد» خبرٌ
+              نافع لا فراغ: يقول إنّ النظام يراقب، فلا يُقرأ الصمتُ عطلاً.
+              وترميزٌ مزدوج: وسمٌ بلونٍ **ومعه** نصُّه، لا لونٌ وحده. */}
+          <MetricRow
+            k="إنذاراتُ السقف — هذه الدورة"
+            note="مرّةً واحدةً لكلّ عتبةٍ في الشهر، وتتصفّر مع الدورة الجديدة"
+            value={hit ? `${hit.threshold}%` : '—'}
+            mid={alerts.length
+              ? (
+                <span className="sc-ctx">
+                  {alerts.map((a) => (
+                    <span key={a.threshold}>
+                      {' '}
+                      <Tag
+                        tone={a.threshold >= 100 ? 'crit' : a.threshold >= 95 ? 'serious' : 'warn'}
+                        label={`${a.threshold}% · ${fmt.when(a.firedAt)}`}
+                      />
+                    </span>
+                  ))}
+                </span>
+              )
+              : (
+                <span className="sc-ctx">
+                  لم تبلغ عتبةً بعد — نُنذرك عند <span className="num">80%</span> و
+                  <span className="num">95%</span> و<span className="num">100%</span> من سقفك
+                </span>
+              )}
           />
 
           <MetricRow
@@ -370,7 +440,7 @@ export default function UsagePage() {
 
       <Section
         title="أصل الرقم"
-        count={(
+        sub={(
           <>
             <span className="num">{fmt.num(view.length)}</span> من
             {' '}<span className="num">{fmt.num(data.windowsOpened)}</span> نافذة —
@@ -437,7 +507,7 @@ export default function UsagePage() {
 
       {/* ★ الرصيف: مرشّحاتُ الشاشة وفعلُها الأوّل معاً في مدى الإبهام. */}
       <ScreenDock hint="الملفُّ يحمل نوافذ الشهر كلَّها — لا الصفحةَ المعروضة.">
-        <div className="sc-chips" role="group" aria-label="مرشّحات">
+        <ChipRow label="مرشّحات">
           {chips.map((c) => (
             <button
               key={c.f}
@@ -449,7 +519,7 @@ export default function UsagePage() {
               {c.label}
             </button>
           ))}
-        </div>
+        </ChipRow>
         <Button variant="primary" size="lg" wide busy={exporting} onClick={() => void exportCsv()}>
           نزِّل الجدول (CSV)
         </Button>

@@ -61,12 +61,44 @@ done
 say "نسخة احتياطيّة"
 mkdir -p "$BACKUP_DIR"
 BK="${BACKUP_DIR}/db-${STAMP}.sql.gz"
-docker compose exec -T db pg_dump -U "${DB_USER}" "${DB_NAME:-aibot}" | gzip > "$BK"
+# 🔴 `< /dev/null` على كلّ `docker compose exec -T` لا يحتاج إدخالاً: الراية `-T`
+#    تمرّر stdin إلى الحاوية و**تستهلكه كلّه**. فهذا السطر بلاها يأكل بقيّة
+#    السكربت لو شُغِّل بـ`bash -s < deploy.sh` أو من حلقةٍ تقرأ من stdin —
+#    فيُنشر نصفُ السكربت ويُعلَن النجاح. (يحرسه apps/worker/test/ops-scripts.)
+docker compose exec -T db pg_dump -U "${DB_USER}" "${DB_NAME:-aibot}" < /dev/null | gzip > "$BK"
 # فشل pg_dump الصامت يُنتج ملفّاً ضئيلاً. بلا هذا الفحص تنشر فوق حالةٍ لا تُستعاد.
 SZ=$(stat -c%s "$BK" 2>/dev/null || echo 0)
 [ "$SZ" -gt 10000 ] || { fail "النسخة ${SZ} بايت فقط — pg_dump فشل صامتاً"; exit 1; }
 echo "  ✔ ${BK} (${SZ} بايت)"
 ls -t "${BACKUP_DIR}"/db-*.sql.gz | tail -n +15 | xargs -r rm -f
+
+# ── 1ب. حزمةٌ مشفَّرة تُسحب خارج الخادم ─────────────────────────
+# ★ اللقطة أعلاه تحمي من «ترحيلٌ أفسد جدولاً». وهي **لا تحمي من موت القرص**:
+#   هي على نفس القرص، و`MASTER_KEY` في `.env` بجانبها. فلو مات القرص ضاعت
+#   البيانات وضاع المفتاح، ولا تُفكّ نسخةٌ لو وُجدت. راجع 19-backup-and-restore.
+#
+# 🔴 ولا تُفشل النشر مهما حدث: النسخ الاحتياطيّ ليس بوّابة إصدار، وإسقاطُ
+#    إصلاحٍ عاجلٍ لأنّ عبارة مرورٍ غير مضبوطة عقوبةٌ في المكان الخطأ. لكنّه
+#    يصرخ — ويُعاد الصراخ في الملخّص الأخير، لأنّ تحذيراً في السطر ٣٠ من
+#    مخرَجٍ طويل لا يراه أحد.
+OFFSITE_NOTE="لم تُنشأ"
+if [ -x ops/backup-offsite.sh ]; then
+  say "حزمةٌ مشفَّرة خارج الخادم"
+  OFF_LOG="${BACKUP_DIR}/offsite-${STAMP}.log"
+  if ops/backup-offsite.sh > "$OFF_LOG" 2>&1; then
+    OFFSITE_NOTE="$(grep -o 'aibot-[0-9]\{8\}-[0-9]\{6\}\.tar\.gz\.gpg' "$OFF_LOG" | head -1)"
+    echo "  ✔ ${OFFSITE_NOTE}"
+    rm -f "$OFF_LOG"
+  else
+    OFFSITE_NOTE="فشلت — راجع ${OFF_LOG}"
+    {
+      echo "⚠ ⚠ ⚠  الحزمة المشفَّرة لم تُنشأ. النشر يتابع، والخطرُ يبقى:"
+      echo "        نسخُك كلّها على هذا القرص وحده، والمفتاح معها."
+      echo "        السبب في: ${OFF_LOG}"
+      echo "        الأرجح: BACKUP_PASSPHRASE غير مضبوطة — ops/install-backup-timer.sh"
+    } >&2
+  fi
+fi
 
 # ── 2. الشيفرة — pull فقط ────────────────────────────────────────
 # 🔴 git reset --hard ممنوع: يحذف docker-compose.override.yml فتُنشئ Docker
@@ -119,7 +151,9 @@ done
 
 # ── 5ب. كلمة سرّ دور التطبيق ──
 # تُضبط بعد الترحيل لأنّ الدور يُنشأ فيه. ومتَماثِلة: تكرارها لا يضرّ.
-docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "${DB_USER}" -d "${DB_NAME:-aibot}"   -c "ALTER ROLE aibot_app LOGIN PASSWORD '${APP_DB_PASSWORD}';" >/dev/null
+docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "${DB_USER}" \
+  -d "${DB_NAME:-aibot}" -c "ALTER ROLE aibot_app LOGIN PASSWORD '${APP_DB_PASSWORD}';" \
+  < /dev/null > /dev/null
 echo "  ✔ دور التطبيق مضبوط (غير سوبريوزر — سياسات RLS تسري عليه)"
 
 # ── 6. بوّابة الصحّة — هي التي تقرّر النجاح، لا نهاية السكربت ───
@@ -163,6 +197,7 @@ cat <<EOF
 ✅ نُشرت النسخة ${GIT_REV:0:8}
    الرابط:        ${PUBLIC_URL}
    النسخة:        ${BK}
+   الحزمة:        ${OFFSITE_NOTE}  ← اسحبها من جهاز العمل: ops/pull-backups.sh
    أمر التراجع:   for s in ${SERVICES}; do docker tag aibot-\$s:rollback-${STAMP} aibot-\$s:latest; done \\
                   && docker compose rm -sf ${SERVICES} && docker compose up -d --no-build ${SERVICES}
 EOF

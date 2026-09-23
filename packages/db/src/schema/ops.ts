@@ -1,5 +1,5 @@
 import {
-  pgTable, uuid, text, boolean, integer, timestamp, jsonb, numeric, date,
+  pgTable, uuid, text, varchar, boolean, integer, timestamp, jsonb, numeric, date,
   index, uniqueIndex, primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
@@ -95,3 +95,31 @@ export const usageDaily = pgTable('usage_daily', {
   aiCostUsd: numeric('ai_cost_usd', { precision: 12, scale: 6 }).notNull().default('0'),
   avgLatencyMs: integer('avg_latency_ms'),
 }, (t) => [primaryKey({ columns: [t.tenantId, t.channelId, t.day] })]);
+
+/**
+ * عتباتُ السقف التي أُنذر بها العميل — صفٌّ لكلّ (مستأجر · دورة · عتبة).
+ *
+ * ★ لماذا جدولٌ لا عمود: **الفريدُ هو الضمانة.** `ON CONFLICT DO NOTHING …
+ *   RETURNING` يُرجع صفّاً للفائز وحده، فتُطلَق العتبةُ مرّةً واحدةً ولو
+ *   تسابق عاملان على نافذتين في نفس اللحظة. وقراءةٌ ثمّ كتابةٌ في عمودٍ
+ *   jsonb تُنتج إنذارَين في هذا السباق بالضبط.
+ *
+ * ★ ولا تصفيرَ مجدولاً: **الدورة جزءٌ من المفتاح.** فشهرٌ جديد لا صفوفَ له،
+ *   فيُنذر من جديد بلا مهمّةٍ تنظيفٍ تُنسى أو تفشل.
+ *
+ * والصفّ يحمل `windowsUsed`/`windowsLimit` وقتَ الإطلاق: بلا هذا لا تعرف
+ * لاحقاً على أيّ سقفٍ أُنذر العميل — والسقف يتغيّر بترقيةٍ أو بتجاوزٍ خاصّ.
+ */
+export const quotaAlerts = pgTable('quota_alerts', {
+  id: uuid('id').primaryKey().default(uuid7),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  /** نفسُ صيغة `conversation_windows.billing_period` — «YYYY-MM» بتوقيت المستأجر. */
+  billingPeriod: varchar('billing_period', { length: 7 }).notNull(),
+  /** 80 · 95 · 100 — نسبةٌ مئويّة صحيحة لا كسر. */
+  threshold: integer('threshold').notNull(),
+  windowsUsed: integer('windows_used').notNull(),
+  windowsLimit: integer('windows_limit').notNull(),
+  /** سياسةُ الباقة وقتَ الإنذار — لأنّ نصّ العاقبة مبنيٌّ عليها. */
+  policy: text('policy').notNull(),
+  firedAt: timestamp('fired_at', { withTimezone: true }).notNull().default(now),
+}, (t) => [uniqueIndex('quota_alerts_uq').on(t.tenantId, t.billingPeriod, t.threshold)]);

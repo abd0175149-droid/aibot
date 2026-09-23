@@ -377,24 +377,42 @@ td.n, th.n { white-space: nowrap; }
 /* ★ `min-height: 0` صراحةً: الافتراضُ `auto` يمنع الابنَ المُمرِّر من الصغر
    عن محتواه في عمودٍ مرن، فلا يفيض ولا يمرّ — ويُدفع الذيلُ خارج الصندوق. */
 .modal-b { padding: 18px; overflow-y: auto; min-height: 0; }
+/* ★ `align-items` معلنٌ لا متروك: فعلٌ معطّلٌ يحمل سببَه يُغلَّف بـ`.btn-wrap`
+   (وهو عمودٌ: الزرّ ثمّ سطرُ السبب) — ومع `stretch` الافتراضيّة يتمدّد إخوتُه
+   إلى ارتفاعه فيصير زرُّ «السابق» أطولَ من الفعل الأساس بلا معنى. رأيتُه في
+   معالج التهيئة (خطوة المعرفة) وفي باني الأدوات. وهي نفسُ القاعدة المكتوبة
+   سلفاً لـ`.row:has(.btn-wrap)` — وذيلُ الحوار صفٌّ مثلُه. */
 .modal > footer {
-  display: flex; gap: 7px; flex-wrap: wrap; flex: none;
+  display: flex; gap: 7px; flex-wrap: wrap; flex: none; align-items: flex-start;
   padding: 13px 18px; border-top: 1px solid var(--rule); background: var(--surface-2);
 }
 
 /* ══════════════ الكود والفرق ══════════════ */
 /* غائرٌ لا مرتفع: كتلةُ آلةٍ تُنسخ ولا تُقرأ للفهم — فأرضيّةُ الصفحة داخلها */
+/* ★ زرُّ النسخ كان **يغطّي الشيفرة نفسَها**، وهذا عطلٌ رُئي في لقطةٍ ولم
+   يُرَ في القراءة: الزرُّ مطلقٌ عند `inset-inline-end`، والكتلة `dir="ltr"` داخل
+   صفحةٍ RTL — فطرفُ «النهاية» المنطقيّة هو اليسار، وهو بعينه حيث يبدأ نصُّ
+   `pre`. فالزرّ يقف فوق أوّل القيمة دائماً.
+   وما يُخفى ليس زينة: في شاشة «تمّ» من معالج التهيئة يُقرأ عنوانُ الويبهوك
+   `//aibot.…` بلا `https:`، وتوكنُ التحقّق تسقط أوائلُه — وهما قيمتان لا غرضَ
+   للشاشة إلّا نسخُهما، وكلمةُ المرور المؤقّتة معهما **تُعرض مرّةً واحدة**.
+   فصار الزرّ عنصراً في شبكة: لا يغطّي شيئاً في أيّ اتّجاهٍ ولا عند أيّ طول،
+   ولا حشوَ محجوزاً يُخمّن عرضَ كلمة «انسخ». */
 .codeb {
-  position: relative; background: var(--bg);
+  display: grid; grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px 10px; align-items: start;
+  background: var(--bg);
   border: 1px solid var(--rule-soft); border-radius: var(--radius-sm); padding: 11px 13px;
 }
-.codeb-l { display: block; font-size: var(--t-label); color: var(--muted); margin-bottom: 6px; }
+/* الوسمُ يمتدّ على العمودَين فيبقى سطراً فوقهما، والفراغُ من `gap` لا من هامش */
+.codeb-l { grid-column: 1 / -1; font-size: var(--t-label); color: var(--muted); }
 /* مكدّسُ الخطّ من توكِنٍ واحد — كان سلسلةً مكرَّرةً في موضعَين في هذا الملفّ */
 .codeb pre {
+  grid-column: 1;
   margin: 0; font-family: var(--font-mono);
   font-size: var(--t-label); line-height: 1.7; white-space: pre-wrap; word-break: break-all;
 }
-.codeb .btn { position: absolute; inset-block-start: 8px; inset-inline-end: 8px; }
+.codeb .btn { grid-column: 2; }
 
 .diff {
   border: 1px solid var(--rule-soft); border-radius: var(--radius-sm); overflow: hidden;

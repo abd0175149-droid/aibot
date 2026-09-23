@@ -474,3 +474,95 @@ describe('عقدُ RTL — الخاصيّةُ منطقيّةٌ لا فيزيائ
     expect(physicalOffenders('a { border-start-end-radius: 3px; }')).toHaveLength(0);
   });
 });
+
+/* ═════════════════════════════════════════════════════════════════════════
+   ★ حارسُ الاسم الواحد: **لا مكوّنَ يُصدَّر من ملفَّين.**
+
+   العطل الذي وُلد منه هذا الملفّ: أربعة مكوّنات (`Hero` · `MetricRow` ·
+   `Delta` · `Section`) كانت معرَّفةً **مرّتين** بتوقيعَين مختلفَين: في
+   `app/app/_parts.tsx` وفي `app/console/parts.tsx`. و`Delta` تأخذ نصّها خاصيّةً
+   هنا وأبناءً هناك، وترسم `↑` هنا و`▲` هناك — و`▲` هي بعينها علامةُ
+   «تحذير» في `MARK`. أي أنّ النسختَين **تباعدتا فعلاً** قبل أن يُمسكا.
+
+   ولا تُمسك هذه بالمراجعة: كلُّ ملفٍّ وحده سليم، والمكرّر لا يُرى إلّا
+   من فوق، ومن يقرأ استدعاءً لا يعرف أيّ `Hero` يقرأ حتّى يفتح سطرَ الاستيراد.
+   وهو نفسُ العطل الذي وُلد منه حارسُ الصنف الميّت حين تعايشت مفردتان
+   للأصناف: إصلاحٌ يُكتب في نسخةٍ ويُنسى في الأخرى، بلا أن يفشل شيء.
+
+   ── وما يُعدُّ تصديراً ───────────────────────────────────────────
+   · **التعريفُ وإعادةُ التصدير سواءٌ** هنا: `export { X } from './y'` تعطي المكوّنَ
+     مسارًا ثانياً، ومساران يعيدان السؤال الذي أُريد للتوحيد أن يُنهيه.
+   · **و`export default` لا يُعدُّ**: كلّ صفحةٍ في Next تُصدّر واحداً، والاسمُ محليٌّ
+     لا يُستورد به — فلا التباس أصلاً.
+   · **والأنواع داخلة**: `Sev` معرَّفاً مرّتين بقيمٍ مختلفة هو نفسُ التباعد،
+     وأخطرُ منه أنّه يُرضي المُترجم في الموضعَين.
+   · والمعيار حرفٌ كبير أوّلاً: مكوّنٌ أو نوعٌ أو ثابتٌ مشترك. والدوالُ الصغيرة
+     (`fmt` · `useApi`) خارجٌ: اسمٌ مثل `post` يتكرّر بلا أن يدّعي أنّه نفسُ الشيء.
+   ═════════════════════════════════════════════════════════════════════════ */
+
+/** أسماءُ ما يُصدّره ملفٌّ واحد باسمه (بعد إعماء التعليقات). */
+function namedExports(src: string): string[] {
+  const out = new Set<string>();
+  const clean = stripComments(src);
+  const decl = /^export\s+(?:async\s+)?(?:function|const|let|class|type|interface|enum)\s+([A-Z]\w*)/gm;
+  for (const m of clean.matchAll(decl)) out.add(m[1]!);
+  /* قائمةُ تصديرٍ أو إعادةُ تصدير: والاسمُ المعتبر ما يُرى من الخارج —
+     أي ما بعد `as` متى وجد، لا ما قبله. و`export type { … }` كالقيمة سواء. */
+  for (const m of clean.matchAll(/^export\s+(?:type\s+)?\{([^}]*)\}/gm)) {
+    for (const part of m[1]!.split(',')) {
+      const name = part.trim().split(/\s+as\s+/).pop()?.trim();
+      if (name && /^[A-Z]\w*$/.test(name)) out.add(name);
+    }
+  }
+  return [...out];
+}
+
+describe('لا مكوّنَ من موضعَين — التكرار لا يُكتشف بالعين مرّتَين', () => {
+  it('كلّ اسمٍ مصدَّرٍ من ملفٍّ واحد', () => {
+    const where = new Map<string, string[]>();
+    for (const { rel, src } of files) {
+      if (rel.endsWith('.d.ts')) continue;
+      for (const name of namedExports(src)) {
+        const list = where.get(name) ?? [];
+        list.push(rel);
+        where.set(name, list);
+      }
+    }
+    const dup = [...where]
+      .filter(([, fs]) => fs.length > 1)
+      .map(([name, fs]) => `${name}: ${fs.join(' · ')}`)
+      .sort();
+
+    expect(
+      dup,
+      'اسمٌ مصدَّرٌ من ملفَّين — وحّده في موضعٍ واحد واستورده منه. '
+      + 'والنسختان لا تتصادمان اليوم ولكنّهما تتباعدان غداً بلا أن يفشل شيء.',
+    ).toEqual([]);
+  });
+
+  it('الماسح يمسك الشكل ويترك ما ليس منه', () => {
+    expect(namedExports('export function Hero() {}')).toEqual(['Hero']);
+    expect(namedExports('export const MARK = {};')).toEqual(['MARK']);
+    expect(namedExports('export type Sev = 1;')).toEqual(['Sev']);
+    expect(namedExports('export interface Column<T> {}')).toEqual(['Column']);
+    // إعادةُ التصدير تُعدُّ بالاسم المرئيّ من الخارج
+    expect(namedExports("export { Skeleton as Loading, Empty } from './ui';")).toEqual(['Loading', 'Empty']);
+    expect(namedExports("export type { Tone } from './ui';")).toEqual(['Tone']);
+    // وما ليس تصديراً باسمٍ مشترك
+    expect(namedExports('export default function Page() {}')).toEqual([]);
+    expect(namedExports('export function useApi() {}')).toEqual([]);
+    expect(namedExports('function Hero() {}')).toEqual([]);
+    // والتعليقُ يذكر الممنوع ليشرحه ولا يُعدُّ — وهو واقعٌ في `console/parts.tsx`
+    expect(namedExports(`/* وكان هنا
+export function Hero() {} */`)).toEqual([]);
+  });
+
+  it('الحارس يمسح ملفّاتٍ فعلاً ويرى المكوّنات الموحّدة', () => {
+    const shared = files.find((f) => f.rel === 'components/screen.tsx');
+    expect(shared, 'ملفُّ النحو المشترك غائب').toBeDefined();
+    const names = namedExports(shared!.src);
+    for (const n of ['Hero', 'Section', 'MetricRow', 'Delta', 'ChipRow']) {
+      expect(names, `${n} يُصدَّر من النحو المشترك`).toContain(n);
+    }
+  });
+});

@@ -237,23 +237,29 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
               المعلومات التي يستخرجها البوت من كلام الزبون ويمرّرها للأداة. اتركها فارغةً إن كانت
               الأداة لا تحتاج شيئاً (مثل «كلّ العروض»).
             </p>
+            {/* ★ **كلُّ مدخلٍ مجموعةٌ مسمّاة.** كان صفّاً عارياً — وعلى الهاتف يلتفّ
+                إلى أربعة أسطرٍ بلا حدٍّ ولا عنوان، فيستوي مدخلان في القراءة. رأيتُها في
+                لقطة 390: ستّة ضوابطَ متتالية لا يُعرف أيُّها لأيّ. والعاقبة ليست جمالاً:
+                في كلّ مجموعةٍ **زرُّ حذف**، وزرُّ حذفٍ لا يُعرف ما يحذف يُضغط على الخطأ. */}
             {d.params.map((p, i) => (
-              <Row key={i} gap="sm">
-                <Input id={`p-n-${i}`} value={p.name} dir="ltr"
-                  onChange={(v) => set('params', d.params.map((x, j) => (j === i ? { ...x, name: v } : x)))} />
-                <Select id={`p-t-${i}`} value={p.type}
-                  onChange={(v) => set('params', d.params.map((x, j) => (j === i ? { ...x, type: v as 'string' } : x)))}
-                  options={[
-                    { value: 'string', label: 'نصّ' }, { value: 'number', label: 'رقم' },
-                    { value: 'integer', label: 'عددٌ صحيح' }, { value: 'boolean', label: 'نعم/لا' },
-                  ]} />
-                <Input id={`p-d-${i}`} value={p.desc}
-                  onChange={(v) => set('params', d.params.map((x, j) => (j === i ? { ...x, desc: v } : x)))} />
-                <Toggle id={`p-r-${i}`} label="إلزاميّ" checked={p.required}
-                  onChange={(v) => set('params', d.params.map((x, j) => (j === i ? { ...x, required: v } : x)))} />
-                <Button size="sm" variant="danger"
-                  onClick={() => set('params', d.params.filter((_, j) => j !== i))}>حذف</Button>
-              </Row>
+              <Field key={i} labelless id={`p-g-${i}`} label={`مدخل ${i + 1}`}>
+                <Row gap="sm">
+                  <Input id={`p-n-${i}`} value={p.name} dir="ltr"
+                    onChange={(v) => set('params', d.params.map((x, j) => (j === i ? { ...x, name: v } : x)))} />
+                  <Select id={`p-t-${i}`} value={p.type}
+                    onChange={(v) => set('params', d.params.map((x, j) => (j === i ? { ...x, type: v as 'string' } : x)))}
+                    options={[
+                      { value: 'string', label: 'نصّ' }, { value: 'number', label: 'رقم' },
+                      { value: 'integer', label: 'عددٌ صحيح' }, { value: 'boolean', label: 'نعم/لا' },
+                    ]} />
+                  <Input id={`p-d-${i}`} value={p.desc}
+                    onChange={(v) => set('params', d.params.map((x, j) => (j === i ? { ...x, desc: v } : x)))} />
+                  <Toggle id={`p-r-${i}`} label="إلزاميّ" checked={p.required}
+                    onChange={(v) => set('params', d.params.map((x, j) => (j === i ? { ...x, required: v } : x)))} />
+                  <Button size="sm" variant="danger"
+                    onClick={() => set('params', d.params.filter((_, j) => j !== i))}>حذف</Button>
+                </Row>
+              </Field>
             ))}
             <Row>
               <Button size="sm" onClick={() => set('params', [...d.params, { name: '', type: 'string', desc: '', required: false }])}>
@@ -309,15 +315,18 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
               الحقول التي يراها البوت من الجواب. ما لا تذكره هنا لا يراه — وهذا يقلّل التوكنز
               ويمنع تسريب حقولٍ لا تريدها.
             </p>
+            {/* ونفسُ السبب هنا: مجموعةٌ مسمّاةٌ لكلّ حقل، فلا يُضغط حذفُ غيره */}
             {d.responseMap.map((r, i) => (
-              <Row key={i} gap="sm">
-                <Input id={`r-f-${i}`} value={r.field} dir="ltr"
-                  onChange={(v) => set('responseMap', d.responseMap.map((x, j) => (j === i ? { ...x, field: v } : x)))} />
-                <Input id={`r-p-${i}`} value={r.path} dir="ltr"
-                  onChange={(v) => set('responseMap', d.responseMap.map((x, j) => (j === i ? { ...x, path: v } : x)))} />
-                <Button size="sm" variant="danger"
-                  onClick={() => set('responseMap', d.responseMap.filter((_, j) => j !== i))}>حذف</Button>
-              </Row>
+              <Field key={i} labelless id={`r-g-${i}`} label={`حقل ${i + 1}`}>
+                <Row gap="sm">
+                  <Input id={`r-f-${i}`} value={r.field} dir="ltr"
+                    onChange={(v) => set('responseMap', d.responseMap.map((x, j) => (j === i ? { ...x, field: v } : x)))} />
+                  <Input id={`r-p-${i}`} value={r.path} dir="ltr"
+                    onChange={(v) => set('responseMap', d.responseMap.map((x, j) => (j === i ? { ...x, path: v } : x)))} />
+                  <Button size="sm" variant="danger"
+                    onClick={() => set('responseMap', d.responseMap.filter((_, j) => j !== i))}>حذف</Button>
+                </Row>
+              </Field>
             ))}
             <Row>
               <Button size="sm" onClick={() => set('responseMap', [...d.responseMap, { field: '', path: '$.' }])}>

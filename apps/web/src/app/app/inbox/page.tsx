@@ -12,6 +12,7 @@ import { useSocket } from '@/lib/socket';
 import {
   Button, Dock, Empty, ErrorBox, Meter, Note, Sheet, Skeleton, Tag,
 } from '@/components/ui';
+import { ChipRow } from '@/components/screen';
 
 /**
  * الإنبوكس.
@@ -615,14 +616,14 @@ function InboxScreen() {
           </div>
 
           {/* المرشّحات صفٌّ واحدٌ يُمرَّر — والالتفاف يغيّر ارتفاع الرصيف فتقفز القائمة */}
-          <div className="ibx-chips" role="group" aria-label="مرشّحات">
+          <ChipRow label="مرشّحات">
             {FILTERS.map((f) => (
               <button key={f.id} type="button" className="chipf"
                 aria-pressed={filter === f.id} onClick={() => setFilter(f.id)}>
                 {f.label}
               </button>
             ))}
-          </div>
+          </ChipRow>
         </Dock>
       </section>
 
