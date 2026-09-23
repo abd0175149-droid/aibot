@@ -84,6 +84,14 @@ ls -t "${BACKUP_DIR}"/db-*.sql.gz | tail -n +15 | xargs -r rm -f
 OFFSITE_NOTE="لم تُنشأ"
 if [ -x ops/backup-offsite.sh ]; then
   say "حزمةٌ مشفَّرة خارج الخادم"
+  # ★ عبارة المرور تعيش في ملفّ المؤقّت، والنشر لا يرثها.
+  #
+  #   بلا هذا السطر تُنشأ الحزم اليوميّة وحدها، **وتسقط بالضبط الحزمةُ الأثمن**:
+  #   التي تسبق تغييراً خطراً بثوانٍ. وأوّل نشرةٍ بعد بناء النظام أثبتت ذلك —
+  #   قالت «الحزمة: لم تُنشأ» وتابعت.
+  [ -z "${BACKUP_PASSPHRASE:-}" ] && [ -r "${HOME}/.config/aibot/backup.env" ] \
+    && . "${HOME}/.config/aibot/backup.env"
+  export BACKUP_PASSPHRASE
   OFF_LOG="${BACKUP_DIR}/offsite-${STAMP}.log"
   if ops/backup-offsite.sh > "$OFF_LOG" 2>&1; then
     OFFSITE_NOTE="$(grep -o 'aibot-[0-9]\{8\}-[0-9]\{6\}\.tar\.gz\.gpg' "$OFF_LOG" | head -1)"
