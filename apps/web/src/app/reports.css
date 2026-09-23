@@ -1,0 +1,274 @@
+/*
+ * التقارير
+ *
+ * المشترك في `components.css`، وهنا ما يخصّ هذه الشاشة وحدها.
+ * القواعد سارية: حشوٌ وحدودٌ **منطقيّة** · `min-height: 0` على كلّ حاوٍ مُمرِّرٍ
+ * في شبكةٍ أو عمودٍ مرن · ولا كلمةَ عربيّةٍ داخل عازل `.num`/`.mono`.
+ *
+ * ── لماذا كلّ صنفٍ هنا يبدأ بـ`rp-` ───────────────────────────────────────
+ *   حارسُ الصنف الميّت يسأل «هل هذا الصنف معرَّفٌ في **أيّ** ورقة؟» فلا يمسك
+ *   التصادمَ المعاكس: اسمٌ عامٌّ (`.fig` · `.line` · `.bar`) يُكتب هنا وفي
+ *   ورقةٍ أخرى بقيمٍ مختلفة، فيصير رسمُ الشاشة رهينةَ ترتيب الاستيراد في
+ *   `layout.tsx`. والبادئةُ تُنهي الاحتمال بنيويّاً ولا تكلّف حرفاً في القراءة.
+ *   و`.rp-line` و`.rp-bar` بالذات: `.line` و`.mg-bar` موجودتان فعلاً في
+ *   `components.css` بمعنيَين آخرَين.
+ *
+ * ── وما يُستعمل هنا ولا يُعرَّف هنا ────────────────────────────────────────
+ *   `.sect` · `.rows` · `.row-m` · `.delta` · `.meter` · `.tbl` · `.note` ·
+ *   `.chipf` · `.dock` — في `components.css`.
+ *   و`.sc-ctx` · `.sc-mw` · `.sc-band` · `.sc-hero` · `.sc-dock` — في
+ *   `screens.css`. فلا تُعاد كتابتُها، ويُكتب هنا ما ينقصها فقط.
+ *
+ * ══════════════════════════════════════════════════════════════════════════
+ * ★ عقدُ الرسم اليدويّ — وهو ما يجعل SVG مكتوبةً بالید أرخصَ من مكتبة
+ * ══════════════════════════════════════════════════════════════════════════
+ *
+ * ① **اللوحُ يمتدّ ولا يُقاس في JS.** `preserveAspectRatio="none"` مع
+ *    `width: 100%` وارتفاعٍ ثابت: العنصرُ يأخذ عرضَ حاويه بلا سطرٍ واحدٍ
+ *    يسأل النافذةَ عن مقاسها — وهو بعينه الادّعاء الذي يحرسه اختبار «لا
+ *    تفريعَ على عرض الشاشة». وثمنُه أنّ السَّمكَ يُمَطّ أفقيّاً، فيُلغى
+ *    بـ`vector-effect="non-scaling-stroke"` على كلّ خطٍّ في الشجرة.
+ *
+ * ② **ولا نصَّ داخل اللوح.** النصُّ يُمَطّ مع اللوح فيصير حروفاً عريضةً على
+ *    شاشةٍ واسعة، ويصغر تحت أرضيّة الاثني عشر على هاتف. فالتسمياتُ عناصرُ
+ *    HTML: تحمل توكِنات الثيم فتُقرأ في الثيمَين، وتحمل رُتبةَ السلّم فلا
+ *    تنزل عن الأرضيّة. والمقياسُ الواحدُ في `chart.ts` يضع العلامةَ في SVG
+ *    والتسميةَ قبالتها.
+ *
+ * ③ **وارتفاعُ عمود التسميات = ارتفاعُ اللوح** (112px في الاثنين، وهو
+ *    الرقمُ الوحيد المكرَّر في هذه الورقة عن قصد): `space-between` هي ما
+ *    يضع القمّةَ عند الخطّ الأعلى والقاعدةَ عند الأسفل. ولو تغيّر أحدهما
+ *    وحده لانفصلت التسميةُ عن العلامة التي تسمّيها.
+ *
+ * ④ **والسلاسلُ تُفرَّق بالتقطيع لا باللون.** اللونُ مِلكُ الحالة في هذا
+ *    النظام، ولا حالةَ في «المدى السابق». فالمدى حبرٌ صلبٌ، والسابقُ
+ *    منقَّطٌ، والناقصُ مقطَّعٌ، وخطُّ الأساس مقطَّعٌ خافت — ومفتاحُ القراءة
+ *    يرسم **نفسَ العنصر بنفس الصنف** لا مستطيلاً يشبهه.
+ */
+
+/* ══════════════════ إطارُ الرسم ══════════════════ */
+
+.rp-fig {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 12px 13px 11px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.rp-fig-h {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  padding-block-end: 8px;
+}
+.rp-fig-h b { font-size: var(--t-sm); font-weight: 700; line-height: 1.5; }
+.rp-fig-s {
+  font-size: var(--t-label);
+  color: var(--muted);
+  line-height: 1.65;
+  max-width: 54ch;
+  text-wrap: pretty;
+}
+
+/* عمودُ التسميات ثمّ اللوح. والأوّلُ `auto` فيأخذ عرضَ أطول رقمٍ فيه بلا
+   حجزِ عمودٍ ثابتٍ يضيع على «0». */
+/* ★ **والمحورُ صفٌّ ثانٍ في هذه الشبكة، لا أخٌ لها.** عمودُ التسميات الرأسيّة
+   `auto`، فعرضُه يتبدّل بأطول رقمٍ فيه — «63» في رسمٍ و«$0.13230» في آخر.
+   ومحورٌ يمتدّ على عرض الإطار كلِّه يبدأ إذن من حيث لا يبدأ اللوح: قِيس على
+   390 فكانت الإزاحةُ 22px في رسمٍ و**62px** في رسم الكلفة — أي أنّ «25 آب»
+   تقف خارج اللوح كلِّه، و«أحد» تبعد 27px عن عمودها، و«18:00» تسمّي عموداً
+   غيرَه. والشبكةُ الواحدةُ تجعل المحورَ يرث عمودَ اللوح مهما تبدّل الأوّل. */
+.rp-body {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 0 8px;
+  align-items: stretch;
+  min-width: 0;
+}
+.rp-ys { grid-column: 1; grid-row: 1; }
+.rp-plot { grid-column: 2; grid-row: 1; }
+.rp-body > .rp-ax { grid-column: 2; grid-row: 2; }
+
+/* ★ 112px يطابق `.rp-plot` — راجع البند ③ أعلى الورقة قبل تغيير أيٍّ منهما. */
+.rp-ys {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  height: 112px;
+  min-width: 0;
+  font-size: var(--t-label);
+  line-height: 1.15;
+  color: var(--muted);
+  /* الأرقامُ متراصفةٌ عموديّاً: القمّةُ والقاعدةُ يُقارَنان بالعين لا بالقراءة */
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+/* `.rp-y` تُستعمل مع `.num` دائماً — سلسلةُ آلةٍ خالصةٌ بلا حرفٍ عربيّ،
+   والوحدةُ العربيّة تسكن سطرَ عنوان الرسم لا هنا. */
+.rp-y { display: block; }
+
+.rp-plot {
+  display: block;
+  width: 100%;
+  height: 112px;
+  min-width: 0;
+  /* علاماتُ العيّنة تعلو النقطةَ بـ2.5 وحدة، وحدُّ اللوح يقصُّها بلا هذا */
+  overflow: visible;
+}
+
+/* ══════════════════ عناصرُ اللوح — كلُّها توكِنات، فتُقرأ في الثيمَين ══════════════════ */
+
+/* الخطُّ الحاكم: القمّةُ والقاعدة. أخفتُ من السلسلة عمداً — هو مسطرةٌ لا معلومة. */
+.rp-rule { stroke: var(--rule); stroke-width: 1; fill: none; }
+
+/* خطُّ الأساس: متوسّطُ المدى السابق. مقطَّعٌ وأطولُ تقطيعاً من السلسلة الناقصة
+   كي لا يُلبَس بها، وقيمتُه مكتوبةٌ بالرقم في مفتاح القراءة لا محمولةً في
+   الخطّ وحده. */
+.rp-base {
+  stroke: var(--line-2);
+  stroke-width: 1;
+  stroke-dasharray: 7 4;
+  fill: none;
+}
+
+/* السلسلةُ الحاضرة: حبرٌ صلب. */
+.rp-line {
+  stroke: var(--brand);
+  stroke-width: 1.75;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+  fill: none;
+}
+
+/* المدى السابق: نفسُ الحبر منقَّطاً وأنحفَ — خطُّ أساسٍ لا سلسلةٌ ثانية. */
+.rp-prev {
+  stroke: var(--muted);
+  stroke-width: 1.25;
+  stroke-dasharray: 1.5 3;
+  stroke-linecap: round;
+  fill: none;
+}
+
+/* ★ القطعةُ الأخيرة حين لم ينتهِ اليوم: **مقطَّعةٌ لأنّها ناقصةٌ لا مقيسة**.
+   وبلا هذا التفريق يُرسم هبوطٌ كلّ يومٍ سببُه الساعةُ لا البوت — وهو أسوأ
+   أنواع الكذب في تقرير: كذبٌ منتظم. */
+.rp-open {
+  stroke: var(--brand);
+  stroke-width: 1.75;
+  stroke-dasharray: 3 3;
+  stroke-linecap: round;
+  fill: none;
+}
+
+/* علامةُ يومٍ مقيس — تُرسم حيث تُقرأ (المدَيات القصيرة) فتقول «هذه نقاطٌ لا منحنى». */
+.rp-tick { stroke: var(--brand); stroke-width: 1.25; fill: none; }
+
+/* ★ الأعمدة: سطحٌ مرتفع، والذروةُ حبرٌ صلب. والفرقُ **لمعانٌ لا صبغة** —
+   فمن لا يفرّق الأحمر من الأخضر يفرّق الفاتح من الغامق. ومعه ترميزٌ ثانٍ
+   نصّيّ: مفتاحُ القراءة يعرض العمودَين، والملاحظةُ تحت الرسم تسمّي اليومَ
+   أو الساعة بالاسم — فلا معنى محمولٌ في السطح وحده.
+   ★ وكان هنا `stroke: var(--ink)` على الذروة بنيّة «حدٌّ شكليّ»، وهو **حبرٌ
+   ميّت**: في الفاتح `--ink` و`--brand` متجاوران (#121818 و#141b1a) وفي
+   الداكن **متساويان** — أي حدٌّ لا يُرى في أيّ ثيم. وحدٌّ غيرُ مرئيٍّ أسوأ من
+   غيابه: يُحسَب ترميزاً ثانياً وهو لا شيء. */
+.rp-bar { fill: var(--surface-3); stroke: none; }
+.rp-bar.rp-peak { fill: var(--brand); stroke: none; }
+
+/* ══════════════════ المحاورُ والمفتاح ══════════════════ */
+
+/* ★ الزمنُ من اليمين إلى اليسار: الأوّلُ في الشجرة أقدمُ يوم، و«الأوّل» في
+   RTL هو **اليمين**. فلا شيء هنا يقلب شيئاً — الترتيبُ الطبيعيُّ هو المطلوب. */
+.rp-ax {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  margin-block-start: 5px;
+}
+.rp-ax > .rp-dx,
+.rp-ax > .rp-hx { display: grid; flex: 1 1 auto; min-width: 0; }
+.rp-dx { grid-template-columns: repeat(7, minmax(0, 1fr)); }
+/* أربعُ كتلٍ بستّ ساعات: التسميةُ عند **بداية** كتلتها (وهي اليمين في RTL)،
+   فـ«06:00» تسمّي حدّاً لا وسطاً. وأربعٌ لا أربعٌ وعشرون لأنّ 24 تسميةً على
+   هاتفٍ تصير سياجاً لا محوراً. */
+.rp-hx { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.rp-x {
+  font-size: var(--t-label);
+  color: var(--muted);
+  line-height: 1.5;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.rp-dx .rp-x { text-align: center; }
+.rp-hx .rp-x { text-align: start; }
+
+.rp-leg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  min-width: 0;
+  margin-block-start: 9px;
+  font-size: var(--t-label);
+  color: var(--muted);
+  line-height: 1.6;
+}
+.rp-leg-i { display: inline-flex; align-items: center; gap: 6px; min-width: 0; }
+/* العيّنةُ نفسُ العنصر بنفس الصنف — فتقطيعٌ يتغيّر في الورقة يتغيّر هنا معه. */
+.rp-leg-m { flex: none; display: block; overflow: visible; }
+
+.rp-note {
+  margin: 8px 0 0;
+  font-size: var(--t-label);
+  color: var(--muted);
+  line-height: 1.7;
+  max-width: 62ch;
+  text-wrap: pretty;
+}
+.rp-note b { color: var(--ink); font-weight: 700; }
+
+/* ══════════════════ رسمان جنباً إلى جنبٍ حيث يتّسع السلّ ══════════════════ */
+/* ★ القياسُ على **السلّ** لا النافذة (`container-name: sect` في طبقة
+   المكوّنات): رسمان في عمودٍ ضيّقٍ من شاشةٍ عريضةٍ يبقيان مكدَّسَين، وهو
+   الصحيح — ولا سطرَ JS يسأل عن عرضٍ. */
+.rp-2 { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; min-width: 0; }
+@container sect (min-width: 640px) {
+  .rp-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ══════════════════ جدولُ «أين يعجز» ══════════════════ */
+
+/* رأسُ العمود الرقميّ يُحاذى حيث تُحاذى خاناتُه — وإلّا صار العنوانُ في طرفٍ
+   وأرقامُه في الطرف الآخر. والتقييدُ بحاوي هذه الشاشة مقصود: `Table` مشتركٌ
+   وشاشاتٌ أخرى تستعمله، ولا أُغيّر رسمَها من ورقتي. */
+.rp-tbl .tbl th.n { text-align: end; }
+
+.rp-topic { display: flex; flex-direction: column; gap: 3px; min-width: 0; overflow-wrap: anywhere; }
+/* ★ سؤالُ الزبون كما كتبه — `dir="auto"` في JSX لأنّه نصُّ إنسانٍ لا نصُّنا،
+   وحدٌّ على البداية يقول «هذا مقتبَسٌ لا عنوان». */
+.rp-q {
+  font-size: var(--t-label);
+  font-weight: 400;
+  color: var(--muted);
+  line-height: 1.65;
+  max-width: 48ch;
+  padding-inline-start: 8px;
+  border-inline-start: 2px solid var(--rule);
+}
+
+.rp-mrow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+
+/* ══════════════════ البيانُ الصادق — حيث لا يكفي المقيس ══════════════════ */
+/* ★ «٣ محادثات لا تكفي لاتّجاه» تُقال ولا يُرسم تحتها خطّ. وهي داخل `.note`
+   فتأخذ سطحَها وحدَّها؛ وما يلزم هنا سطرٌ ثانٍ وفعلٌ — والفعلُ هو ما يمنعها
+   أن تصير اعتذاراً. */
+.rp-thin { display: block; margin-block-start: 3px; }
+.rp-thin-a { display: block; margin-block-start: 9px; }

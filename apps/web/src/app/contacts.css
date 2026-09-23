@@ -1,0 +1,180 @@
+/*
+ * جهات الاتّصال — الشخص الواحد عبر قنواته
+ *
+ * المشترك في `components.css`، وهنا ما يخصّ هذه الشاشة وحدها.
+ * القواعد سارية: حشوٌ وحدودٌ **منطقيّة** · `min-height: 0` على كلّ حاوٍ مُمرِّرٍ
+ * في شبكةٍ أو عمودٍ مرن · ولا كلمةَ عربيّةٍ داخل عازل `.num`/`.mono`.
+ */
+
+/* ══════════════════ وسومٌ متجاورةٌ وسطرٌ خافت ══════════════════ */
+/* خانةُ «القنوات» في الجدول تحمل شارتين ووسماً — فتلتفّ ولا تمدّ العمود. */
+.ct-tags {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px; min-width: 0;
+}
+/* ما لا يُقرأ للفهم: وقتٌ ووسمُ قناةٍ وشرحُ سطر. والأرضيّة 12px لا تُخرَق. */
+.ct-dim {
+  font-size: var(--t-label); color: var(--muted); line-height: 1.6;
+  min-width: 0; overflow-wrap: anywhere;
+}
+
+/* ══════════════════ زوجُ المرشَّح — لا صفٌّ واحد ══════════════════ */
+/* ★ **المرشَّح زوجٌ لا سطر.** قائمةُ «مكرّرين محتملين» بسطرٍ لكلّ بطاقةٍ
+   تطلب من القارئ أن يحمل الطرفَ الأوّل في رأسه حتّى يجد الثاني — وهذا
+   بعينه ما يجعل الدمجَ يُضغط بلا قراءة. فالطرفان في لوحٍ واحدٍ وسببُ
+   الاقتراح فوقهما، ثمّ الفعلُ تحتهما.
+   ولا زرَّ دمجٍ هنا: الزرُّ يفتح **المراجعة** — القيد ① بنيةً لا نصيحة. */
+.ct-pair {
+  display: flex; flex-direction: column; gap: 9px; min-width: 0;
+  padding: 12px 13px;
+  background: var(--surface); border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+.ct-pair-h {
+  display: flex; align-items: center; gap: 7px; min-width: 0;
+  font-size: var(--t-sm); font-weight: 600; color: var(--ink-2);
+}
+/* علامةٌ هندسيّةٌ مع نصّها — ولا لونَ يحمل المعنى وحده. */
+.ct-pair-m { flex: none; width: 14px; text-align: center; color: var(--muted); }
+.ct-pair-w { min-width: 0; overflow-wrap: anywhere; }
+
+/* عمودٌ على الضيّق، وعمودان مع فاصلٍ حين يتّسع **القسم** لا النافذة. */
+.ct-sides {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 9px;
+  align-items: stretch; min-width: 0;
+}
+.ct-vs {
+  align-self: center; justify-self: center;
+  font-size: var(--t-sm); color: var(--muted);
+}
+@container sect (min-width: 640px) {
+  .ct-sides { grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); }
+}
+
+.ct-side {
+  display: flex; flex-direction: column; gap: 4px; min-width: 0;
+  padding: 10px 11px;
+  background: var(--bg); border: 1px solid var(--rule-soft);
+  border-radius: var(--radius-sm);
+}
+/* ★ «التي تبقى» مُرمَّزةٌ **ثلاثاً**: نصُّ الدور («تبقى») وحدٌّ أقوى وترتيبٌ
+   أوّلاً. فلا حدٌّ وحده يحمل الفرق — من لا يراه يقرأ الدور مكتوباً. */
+.ct-side-keep { border-color: var(--rule-strong); background: var(--surface-2); }
+.ct-side-r { font-size: var(--t-label); font-weight: 600; color: var(--muted); }
+/* ★ **الاسمُ اللاتينيُّ كان يقفز إلى الحافّة المقابلة.** يحمل `dir="auto"`
+   لأنّه نصُّ الزبون لا نصُّنا (مقبضُ إنستجرام · رقمٌ · اسمٌ عربيّ)، و`dir`
+   يجرّ **المحاذاة** معه لا الترتيبَ وحده: فـ«ahmad.masri» يُرسم على يسار
+   بطاقته ودورُه («تُدمَج فيها») على يمينها — وادٍ ميّتٌ بعرض البطاقة بين
+   العنوان وقيمته، وبطاقتان متجاورتان تُقرآن بمحاذاتَين مختلفتَين. رأيتُه في
+   الرسم على 390 و834 و1440.
+   والعلاجُ يُخرج المحاذاةَ من يد الابن ولا يمسّ ترتيبَه: المدى يلتفّ على
+   محتواه، و`align-self` يقرأ اتّجاهَ **الحاوي** فيضعه عند بدايته. */
+.ct-side-n {
+  align-self: start; max-width: 100%;
+  font-size: var(--t-body); font-weight: 700; min-width: 0; overflow-wrap: anywhere;
+}
+.ct-side-m {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px 7px; min-width: 0;
+  font-size: var(--t-label); color: var(--muted); line-height: 1.6;
+}
+.ct-pair-a { display: flex; flex-wrap: wrap; gap: 7px; }
+
+/* ══════════════════ ذيلُ القائمة ══════════════════ */
+/* «المزيد» زرٌّ لا تمريرٌ لا نهائيّ: الأخيرُ يخفي أنّه انتهى، ويسرق موضعَ
+   القارئ في كلّ عودةٍ من ورقةٍ صاعدة. */
+.ct-more { display: flex; justify-content: center; padding-block-start: 10px; }
+
+/* ══════════════════ بحثُ الرصيف ══════════════════ */
+/* الحقلُ **موسومٌ** لا placeholder وحده: النائبُ يختفي أوّلَ حرفٍ يُكتب،
+   فيبقى الحقلُ بلا اسمٍ لمن عاد إليه ولمن يسمعه بقارئ شاشة. */
+.ct-search { min-width: 0; }
+.ct-search .field { margin: 0; }
+.ct-search .input { width: 100%; }
+/* ★ الوسمُ يُخفى بصريّاً ويبقى **مسموعاً** — ولا يُحذف.
+   وسببُ إخفائه قياسٌ لا ذوق: الرصيفُ على 390×844 كان يأكل 270 بكسلاً —
+   ثلثَ الشاشة — فيُدفن الرقمُ البطوليُّ خلفه في أوّل رسم. وكلُّ سطرٍ يُحذف
+   من الرصيف يُعيد سطراً إلى الشاشة. و`display: none` ليس بديلاً: يمحو
+   الوسمَ من شجرة الوصول فيفقد الحقلُ اسمَه عند من يسمعه، والنائبُ لا
+   يعوّضه لأنّه يختفي أوّلَ حرفٍ يُكتب. */
+.ct-search .field > label {
+  position: absolute; width: 1px; height: 1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+/* الرصيفُ يدور شريطاً أفقيّاً على الحاسوب (`components.css`)، فيأخذ الحقلُ
+   مدىً مقروءاً بدل أن يمتدّ على الشريط كلّه. والقياسُ في CSS لا في JS. */
+@media (min-width: 1100px) {
+  .ct-search { flex: 0 1 280px; }
+}
+
+/* ══════════════════ مقابضُ الجهة ══════════════════ */
+.ct-ids, .ct-convs, .ct-mv, .ct-flds, .ct-hist {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.ct-id, .ct-mv-i {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px 9px; min-width: 0;
+  padding: 9px 11px;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+  font-size: var(--t-sm);
+}
+.ct-id-k { display: flex; align-items: center; gap: 6px; min-width: 0; }
+/* المقبضُ سلسلةُ آلةٍ خالصة — والعازلُ في `.mono` من الورقة العامّة. */
+.ct-id-v { min-width: 0; overflow-wrap: anywhere; }
+
+/* ══════════════════ محادثاتُ الجهة ══════════════════ */
+/* ★ محادثةٌ لكلّ قناة، و**كلتاهما تبقى مرئيّةً** بعد الدمج: هما محادثتان
+   عند ميتا ونافذةُ كلٍّ منهما تُفوتَر وحدها. ودمجٌ يخلطهما خيطاً واحداً
+   يُنتج تاريخاً لم يحدث. */
+.ct-conv {
+  display: flex; flex-direction: column; gap: 5px; min-width: 0;
+  padding: 10px 12px;
+  background: var(--surface-2); border: 1px solid var(--rule-soft);
+  border-radius: var(--radius-sm);
+}
+.ct-conv-h {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px 8px; min-width: 0;
+  font-size: var(--t-sm); font-weight: 600;
+}
+/* آخرُ ما قيل في المحادثة: سطرٌ واحدٌ يُقتطع — لا فقرةٌ تُغرق البطاقة. */
+.ct-conv-p {
+  min-width: 0; font-size: var(--t-sm); color: var(--ink-2); line-height: 1.6;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ct-conv-m {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 3px 6px;
+  font-size: var(--t-label); color: var(--muted);
+}
+/* الرابطُ يُميَّز بخطٍّ تحته لا بلون — وهدفُه أرضيّةُ اللمس المعلَنة. */
+.ct-open {
+  display: inline-flex; align-items: center; gap: 5px; align-self: flex-start;
+  min-height: var(--tap); font-size: var(--t-sm); font-weight: 600;
+  color: var(--ink); text-decoration: underline; text-underline-offset: 3px;
+}
+
+/* ══════════════════ ما ينتقل وما يتغيّر ══════════════════ */
+/* ★ «ما يتغيّر على البطاقة الباقية» يُعرض **قبل** الضغط لا بعده: هذا هو
+   الفرق بين «راجعتُ» و«اضغط ثمّ اكتشف». وكلّ سطرٍ يحمل سببَه، فالقاعدة
+   تُقرأ مرّةً ولا تُحفظ. */
+.ct-fld {
+  display: grid; grid-template-columns: minmax(0, 1fr); gap: 3px; min-width: 0;
+  padding: 9px 11px;
+  background: var(--surface-2); border-radius: var(--radius-sm);
+}
+.ct-fld-k { font-size: var(--t-label); font-weight: 600; color: var(--muted); }
+/* ★ صفٌّ مرنٌ بثلاثة أبناء لا مدًى واحد: لكلّ طرفٍ عازلُه، فيبقى ترتيبُ
+   «ما كان ← ما سيصير» ترتيبَ الصفحة مهما كان محتوى الطرفين. */
+.ct-fld-v {
+  display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 7px;
+  font-size: var(--t-sm); min-width: 0; overflow-wrap: anywhere;
+}
+/* السهمُ علامةُ تحوّلٍ لا زينة — يقلبه المتصفّح مع اتّجاه الصفحة. */
+.ct-fld-ar { color: var(--muted); }
+.ct-fld-w { font-size: var(--t-label); color: var(--muted); line-height: 1.6; }
+
+/* ══════════════════ سجلُّ ما جرى ══════════════════ */
+/* فعلٌ يغيّر تاريخ زبونٍ لا يكون صامتاً: من فعله، ومتى، وزرُّ التراجع معه. */
+.ct-hist-i {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px 10px; min-width: 0;
+  padding-block: 8px; border-block-end: 1px solid var(--rule-soft);
+  font-size: var(--t-sm);
+}
+.ct-hist-i:last-child { border-block-end: 0; }
+.ct-hist-t { min-width: 0; font-weight: 600; overflow-wrap: anywhere; }

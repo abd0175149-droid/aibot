@@ -5,9 +5,12 @@ import { pingDb, closeDb } from '@aibot/db';
 import { registerWebhooks } from './webhooks.js';
 import { registerAuth } from './auth.js';
 import { registerInbox } from './routes/inbox.js';
+import { registerContacts } from './routes/contacts.js';
 import { registerBot } from './routes/bot.js';
 import { registerConsole } from './routes/console.js';
 import { registerReports } from './routes/reports.js';
+import { registerPlayground } from './routes/playground.js';
+import { registerTeam } from './routes/team.js';
 import { attachRealtime, closeRealtime } from './realtime.js';
 import { pingRedis, closeQueues, queueDepths } from './queues.js';
 
@@ -66,9 +69,12 @@ await app.register(async (api) => {
   await registerWebhooks(api);
   await registerAuth(api);
   await registerInbox(api);
+  await registerContacts(api);
   await registerBot(api);
   await registerConsole(api);
   await registerReports(api);
+  await registerPlayground(api);
+  await registerTeam(api);
 }, { prefix: '/api' });
 
 app.setErrorHandler((err, req, reply) => {

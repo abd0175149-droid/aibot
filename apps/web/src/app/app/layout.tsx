@@ -48,6 +48,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     { href: '/app/bot', label: 'البوت', icon: '✦', needs: 'settings' },
     { href: '/app/channels', label: 'القنوات', icon: '⇄', needs: 'settings' },
     { href: '/app/usage', label: 'الاستهلاك', icon: '▤', needs: 'billing' },
+    { href: '/app/playground', label: 'الساحة', icon: '◐', needs: 'settings' },
+    { href: '/app/contacts', label: 'جهات الاتّصال', icon: '☰' },
+    { href: '/app/reports', label: 'التقارير', icon: '◫', needs: 'billing' },
+    { href: '/app/team', label: 'الفريق', icon: '◇', needs: 'settings' },
   ];
 
   /* كسرٌ لا نسبةٌ مئويّة: `Meter` يملك العتبات (80/95/100) وأرضيّة الشريط

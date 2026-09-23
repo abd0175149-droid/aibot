@@ -8,6 +8,7 @@ import { sendOutbound } from './outbound.js';
 import { runHealthPoll, closeExpiredWindows, negativeSignals } from './health.js';
 import { handleNotify, flushDigest } from './notify.js';
 import { handleIngest } from './extract.js';
+import { runPlayground } from './playground.js';
 
 /**
  * عمّال الطوابير.
@@ -57,6 +58,17 @@ const workers = [
   new Worker('kb-ingest', async (job) => handleIngest(job.data), {
     connection,
     concurrency: 2,
+  }),
+  /* ★ الساحة: جرّبٌ جافّ يُنتظر جوابُه.
+     ولماذا في طابورٍ لا في الـAPI: كلُّ ما يُشغّل البوت هنا (الاسترجاع
+     الهجين وكاشُ التضمين وحلقةُ الوكيل)، ونسخُه إلى الـAPI يُنتج ساحةً
+     تشهد على مسارٍ غير الذي يعمل. والجوابُ **يُعاد** للمنتِج
+     (‏`waitUntilFinished`) فلا يُخزَّن أثرٌ ولا يُبثّ حدث.
+     ومحاولةٌ واحدةٌ لا إعادة: نداءُ النموذج يُحاسَب، وإعادةُ محاولةٍ
+     صامتةٌ تضاعف كلفةَ العميل على ضغطةٍ واحدة. */
+  new Worker('bot-dry', async (job) => runPlayground(job.data), {
+    connection,
+    concurrency: 3,
   }),
   new Worker('maintenance', async (job) => {
     if (job.name === 'windows') {

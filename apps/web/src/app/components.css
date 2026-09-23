@@ -265,6 +265,13 @@ td.n, th.n { white-space: nowrap; }
   font-size: var(--t-body); line-height: 1.7;
 }
 .ta:disabled, .input:disabled { background: var(--surface-2); color: var(--muted); }
+/* ★ **حقلٌ فارغٌ يحمل `dir="auto"` يُحكَم عليه لاتينيّاً.** لا محتوى يُقاس،
+   فيختار المتصفّح LTR — فيهبط النائبُ العربيُّ على الحافّة **المقابلة**
+   ويبدأ المؤشّرُ من اليسار، ثمّ يقفز السطرُ كلُّه عند أوّل حرفٍ عربيّ يُكتب.
+   والفارغُ لا محتوى له يُرتَّب أصلاً، فيتبع اتّجاهَ الصفحة حتّى يُكتب فيه —
+   و`dir="auto"` يستأنف عملَه من أوّل محرف. و`inherit` لا `rtl`: الاتّجاه
+   يُقرأ من الشجرة ولا يُثبَّت في ورقة. */
+.ta:placeholder-shown { direction: inherit; }
 .cnt { font-size: var(--t-label); gap: 10px; flex-wrap: wrap; }
 .cnt.warn { color: var(--warn); }
 .cnt.crit { color: var(--crit); font-weight: 600; }
@@ -580,6 +587,16 @@ a.stat.hero:hover { background: var(--brand-wash); filter: brightness(1.04); }
 /* `title` لا يظهر على الهاتف — والهاتف هو الجهاز المُعلَن أوّلاً. زرٌّ معطَّلٌ
    بلا سببٍ مرئيّ يُقرأ «المنتج معطوب» فيُنتج مكالمة دعم. */
 .btn-wrap { display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; }
+/* ★ **والغلافُ كان يبتلع `wide`.** رأيتُه في الرسم على 390: فعلُ الرصيف
+   الأوّل («جرّب» · «راجِع أقوى مرشَّح» · «ادعُ موظّفاً») ينكمش إلى عرض كلمته
+   ويلتصق بحافّة الشاشة — بينما `wide` مكتوبةٌ حرفيّاً لمنع ذلك («فلا يبحث
+   الإبهامُ عن هدفٍ في وسط الشاشة»). والسبب أنّ الغلافَ يُحقن **حول** الزرّ
+   حين يُعطَّل بسبب، وهو `inline-flex` بـ`align-self: flex-start` — فـ`width:
+   100%` على الزرّ يُقاس على غلافٍ ملتفٍّ على محتواه.
+   وهذه ليست حالةً نادرة: الساحة تفتح **معطَّلةً بسبب** (حقلٌ فارغ)، فالرسمُ
+   الأوّلُ للشاشة هو الرسمُ المعطوب. والغلافُ يرث امتدادَ ابنه ولا يفرضه على
+   غيره — والشرطُ على الابن نفسِه فلا يمسّ زرّاً بلا `wide`. */
+.btn-wrap:has(> .btn.wide) { align-self: stretch; width: 100%; }
 .btn-reason {
   font-size: var(--t-label); line-height: 1.55; color: var(--muted);
   max-width: 34ch; text-wrap: pretty;

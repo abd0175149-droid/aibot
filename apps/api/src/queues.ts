@@ -1,6 +1,7 @@
-import { Queue } from 'bullmq';
+import { Queue, QueueEvents } from 'bullmq';
 import IORedis from 'ioredis';
 import type { ChannelKind, ParsedWebhook } from '@aibot/channels';
+import { AppError, ErrorCode, type PlaygroundJob, type PlaygroundResult } from '@aibot/shared';
 
 /**
  * الطوابير — الأسماء محايدةٌ للقناة عمداً (`ch:` لا `wa:`).
@@ -20,6 +21,7 @@ export const QUEUE = {
   health: 'health-poll',
   notify: 'notify-push',
   ingest: 'kb-ingest',
+  dry: 'bot-dry',
 } as const;
 
 let conn: IORedis | null = null;
@@ -110,8 +112,62 @@ export async function queueDepths(): Promise<Record<string, number>> {
 export async function closeQueues(): Promise<void> {
   await Promise.all([...queues.values()].map((x) => x.close()));
   queues.clear();
+  await dryEvents?.close();
+  dryEvents = null;
   await conn?.quit();
   conn = null;
+}
+
+/* ───────────────────── الساحة: مهمّةٌ يُنتظر جوابُها ───────────────────── */
+
+/**
+ * ★ **لماذا طابورٌ لطلبٍ متزامن.**
+ *
+ *   الجرّب الجافّ يشتغل في العامل لأنّ كلَّ ما يُشغّل البوت هناك: الاسترجاع
+ *   الهجين وكاشُ التضمين وحلقةُ الوكيل والحرّاس. والـAPI لا يستورد من
+ *   `apps/worker` ولا يجوز أن يفعل — فنسخُ الاسترجاع هنا يُنتج ساحةً تشهد
+ *   على مسارٍ **غير** الذي يعمل في الإنتاج، وذاك أسوأ من غياب الساحة.
+ *
+ *   فالمهمّة تُدفع ويُنتظر **ناتجُها** (`waitUntilFinished`) بدل أن يُبثّ
+ *   حدثٌ ويُستعلَم عنه. والانتظارُ محدودٌ بمهلة: عاملٌ ساقطٌ يعني رسالةً
+ *   واضحةً بعد دقيقةٍ ونصف، لا طلباً معلّقاً إلى الأبد.
+ *
+ * ⚠️ `QueueEvents` اتّصالٌ **حاجز** (blocking) لا يُشارَك مع اتّصال الطوابير،
+ *    ولذلك نسخةٌ واحدةٌ مُنشأةٌ تأخيراً تُغلَق مع البقيّة — ونسخةٌ لكلّ طلبٍ
+ *    تعني اتّصالَ ريدِسٍ لكلّ ضغطةِ «جرّب».
+ *
+ * ⚠️ و`removeOnComplete` **بعدد لا بصفر**: `waitUntilFinished` تسأل عن حالة
+ *    المهمّة بعد تسجيل مستمعيها، فمهمّةٌ حُذفت في تلك اللحظة تُترك الطلبَ
+ *    معلّقاً حتّى المهلة.
+ */
+let dryEvents: QueueEvents | null = null;
+
+function events(): QueueEvents {
+  dryEvents ??= new QueueEvents(QUEUE.dry, { connection: connection().duplicate() });
+  return dryEvents;
+}
+
+const DRY_TIMEOUT_MS = 90_000;
+
+export async function runDryReply(payload: PlaygroundJob): Promise<PlaygroundResult> {
+  const job = await q(QUEUE.dry).add('dry', payload, {
+    // محاولةٌ واحدة: النداء يُحاسَب، وإعادةٌ صامتةٌ تضاعف كلفةَ ضغطةٍ واحدة
+    attempts: 1,
+    removeOnComplete: { count: 50 },
+    removeOnFail: { count: 50 },
+  });
+  try {
+    return await job.waitUntilFinished(events(), DRY_TIMEOUT_MS) as PlaygroundResult;
+  } catch (e) {
+    /* فشلُ العامل أو المهلة — لا يُعاد نصُّ الاستثناء للمستخدم: يُسجَّل
+       ويُقال له ما يفعل. */
+    throw new AppError(
+      ErrorCode.INTERNAL,
+      'تعذّر تشغيل التجربة الآن. حاول ثانيةً بعد لحظات — وإن تكرّر فأبلغنا.',
+      503,
+      { cause: (e as Error).message },
+    );
+  }
 }
 
 export interface OutboundJob {

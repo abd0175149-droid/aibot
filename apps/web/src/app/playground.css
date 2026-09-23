@@ -1,0 +1,199 @@
+/*
+ * الساحة — تجربة البوت قبل أن يراه زبون
+ *
+ * المشترك في `components.css`، وهنا ما يخصّ هذه الشاشة وحدها.
+ * القواعد سارية: حشوٌ وحدودٌ **منطقيّة** · `min-height: 0` على كلّ حاوٍ مُمرِّرٍ
+ * في شبكةٍ أو عمودٍ مرن · ولا كلمةَ عربيّةٍ داخل عازل `.num`/`.mono`.
+ *
+ * ★ **ولا مفرداتَ ثانيةً للحوار.** الفقاعةُ ووسمُها والأزرارُ المُرسلة كلُّها
+ *   أصنافُ الإنبوكس نفسُها (`.ibx-msg` · `.bub` · `.mt` · `.chips`)، والمُنشئ
+ *   `.ibx-ta` بعينه. فمن يجرّب هنا يرى **ما سيراه في إنبوكسه** لا شكلاً
+ *   ثانياً — ولا يتعلّم لغتَين لشيءٍ واحد. وما في هذا الملفّ هو ما لا وجود
+ *   له في المنتج قبل هذه الشاشة: **لوحُ «لماذا»**.
+ *
+ * ★ **واللوحُ بجانب الردّ حيث يتّسع السلّ، وتحته حيث يضيق — بنفس العلامة.**
+ *   لا لوحٌ للحاسوب وآخرُ للهاتف: شبكةٌ واحدةٌ بعمودٍ واحدٍ تصير عمودَين
+ *   باستعلام **حاوٍ** (`sect`) لا باستعلام نافذة. فلوحُ «لماذا» في عمودٍ
+ *   ضيّقٍ من شاشةٍ عريضةٍ يبقى تحت الردّ، وهو الصحيح.
+ */
+
+/* ══════════════════ الحوار التجريبيّ ══════════════════ */
+
+.pg-thread { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+
+/* الدورةُ وحدةٌ واحدة: سؤالٌ وردُّه ولوحُ سببه. والخطُّ الفاصل يقول أين
+   تنتهي دورةٌ وتبدأ أخرى — فلا يُقرأ لوحُ دورةٍ تفسيراً لردِّ التالية. */
+.pg-turn {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding-block-end: 18px;
+  border-block-end: 1px solid var(--rule-soft);
+}
+.pg-turn:last-child { padding-block-end: 0; border-block-end: 0; }
+
+.pg-said { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
+.pg-why { min-width: 0; }
+
+/* عمودان حين يتّسع سلُّ القسم — والقياسُ على الحاوي لا على النافذة.
+ *
+ * ★ **والعتبةُ 900 لا 1100 — وهي مقيسةٌ لا مختارة.** سقفُ عرض المحتوى
+ *   1180 بكسلاً (`.main > *`)، وعلى الحاسوب يأخذ الرصيفُ الجانبيُّ نحو
+ *   210 منها — فسلُّ القسم لا يبلغ 1100 إلّا على شاشةٍ تتجاوز 1550. أي أنّ
+ *   عتبة 1100 كانت تعني **لوحاً لا يظهر بجانب ردّه أبداً** على حاسوبٍ
+ *   عاديّ. رأيتُ ذلك في الرسم: سلُّ القسم 1098 على نافذةٍ بعرض 1384.
+ *   و900 تعطي عمودَين بنحو 540 لكلٍّ — والفقاعةُ سقفُها 560. */
+@container sect (min-width: 900px) {
+  .pg-turn {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+    align-items: start;
+    gap: 18px;
+  }
+}
+
+/* ══════════════════ لوحُ «لماذا» — المنتجُ في هذه الشاشة ══════════════════ */
+
+.pg-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--surface);
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+}
+
+.pg-panel-h { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.pg-panel-h b { font-size: var(--t-h2); font-weight: 700; color: var(--ink); }
+
+/* ذيلُ اللوح: فعلٌ واحدٌ ومعه أثرُه قبل الضغط لا بعده. */
+.pg-panel-f {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex-wrap: wrap;
+  padding-block-start: 11px;
+  border-block-start: 1px solid var(--rule-soft);
+}
+.pg-foot { font-size: var(--t-label); color: var(--muted); line-height: 1.5; }
+
+.pg-blk { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.pg-blk-t {
+  display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap;
+  margin: 0; font-size: var(--t-sm); font-weight: 700; color: var(--ink);
+}
+/* عدٌّ ملاصقٌ للعنوان: «٣ من ٢٤ مقطعاً» تُقرأ قبل النزول إلى القائمة. */
+.pg-blk-c { font-size: var(--t-label); font-weight: 500; color: var(--muted); }
+
+/* ══════════════════ مقاطعُ المعرفة ودرجاتُها ══════════════════ */
+
+.pg-chunks { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+
+.pg-chunk {
+  min-width: 0;
+  padding: 8px 10px;
+  background: var(--bg);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius-sm);
+}
+.pg-chunk-h { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+
+/* ★ المرتبةُ حبرٌ صلبٌ لا لونُ علامة — وهي العنصرُ النشط في هذا الصفّ.
+   ومقاسُها `--t-badge` وهو استثناءُ الأرضيّة الوحيد: **أرقامٌ لاتينيّةٌ
+   خالصةٌ داخل عازل** (`.num` في العلامة نفسها)، ولا عربيّةَ فيه أبداً. */
+.pg-rank {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 20px; height: 20px; flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--fill); color: var(--on-fill);
+  font-size: var(--t-badge); font-weight: 700;
+}
+.pg-chunk-k { min-width: 0; font-size: var(--t-label); font-weight: 600; color: var(--ink); }
+.pg-chunk-s { font-size: var(--t-label); color: var(--muted); }
+/* الحجمُ إلى الطرف: هو آخرُ ما يُقرأ في الصفّ وأوّلُ ما يُقارَن عموديّاً. */
+.pg-chunk-t { margin-inline-start: auto; font-size: var(--t-label); color: var(--muted); white-space: nowrap; }
+.pg-chunk-b {
+  margin: 6px 0 0;
+  font-size: var(--t-label);
+  color: var(--ink-2);
+  line-height: 1.75;
+  /* معاينةٌ لا نصّ: سطرانِ يكفيان للحكم، والكاملُ في شاشة المعرفة. */
+  overflow-wrap: anywhere;
+}
+
+/* ══════════════════ نداءاتُ الأدوات ══════════════════ */
+
+.pg-tool {
+  display: flex; flex-direction: column; gap: 7px; min-width: 0;
+  padding: 9px 10px;
+  background: var(--bg);
+  border: 1px solid var(--rule-soft);
+  border-radius: var(--radius-sm);
+}
+.pg-tool-h { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; }
+.pg-tool-m { margin-inline-start: auto; font-size: var(--t-label); color: var(--muted); white-space: nowrap; }
+.pg-tool-b { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pg-tool-k { font-size: var(--t-label); font-weight: 700; color: var(--ink-2); }
+
+/* غيابٌ يُقال لا فراغٌ يُترك. */
+.pg-none { margin: 0; font-size: var(--t-label); color: var(--muted); line-height: 1.6; }
+.pg-bad { color: var(--crit); font-weight: 600; }
+
+/* ══════════════════ شريطُ الرصيف: ما تُجرّبه ثمّ ما تكتبه ══════════════════ */
+
+/* ★ **غلافٌ واحدٌ لهما، ولهذا سببٌ هندسيٌّ لا تنظيميّ.**
+ *   الرصيفُ يدور شريطاً أفقيّاً على الفأرة، و`.dock > *` يمنع النموَّ عن
+ *   أبنائه المباشرين — فالرقاقاتُ (`.sc-chips-w`) و المُنشئُ يتنافسان على
+ *   العرض نفسِه، وقد رأيتُ النتيجة في الرسم: **حقلُ الكتابة 28 بكسلاً**
+ *   بينما الرقاقاتُ تأخذ نصفَ الشريط. فصارا ابناً واحداً ينمو، والقسمةُ
+ *   بينهما مكتوبةٌ هنا صراحةً: الرقاقاتُ بقدرها والمُنشئُ بالباقي. */
+.pg-bar { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+@media (min-width: 1100px) {
+  /* ★ `wrap` ليس احتياطاً: عند 1100 بالضبط يبقى للشريط نحو 830 بكسلاً (الرصيفُ
+     الجانبيّ 238 وذيلُ الشرح 313 لا ينكمش)، فبلا التفافٍ يفيض المُنشئُ خارج
+     الرصيف. وبه ينزل سطراً ويأخذ عرضَ الشريط كاملاً — ولا أفقيَّ يُمرَّر. */
+  .dock .pg-bar {
+    flex: 1; flex-direction: row; align-items: flex-end;
+    flex-wrap: wrap; gap: 8px 10px;
+  }
+  /* الرقاقاتُ بقدرها: مُمرِّرٌ أفقيٌّ بتلاشٍ يقول «خلفي مزيد»، فتقليصُه مقصودٌ
+     لا خسارة. ومقيَّدٌ داخل شريط هذه الشاشة وحدها — ولا يمسّ رصيفَ غيرها. */
+  .dock .pg-bar .sc-chips-w { flex: 0 1 200px; }
+  /* وذيلُ الشرح ينكمش ويلتفّ سطرَين بدل أن يأخذ 313 بكسلاً من حقل الكتابة:
+     هو شرحٌ يُقرأ مرّةً، والحقلُ يُستعمل في كلّ تجربة. ومقيَّدٌ بهذا الرصيف. */
+  .dock .pg-bar + .dock-h { flex: 0 1 240px; }
+}
+
+/* `.ibx-ta` يحمل مقاسَ المُنشئ وحدَّه — وهذا الصفُّ يضعه مع فعله.
+ *
+ * ★ **عمودٌ على الإصبع لا صفّ.** كُتب صفّاً أوّلاً فانهار المُنشئ إلى شريطٍ
+ *   بعرض ثمانيةٍ وعشرين بكسلاً: الفعلُ الأساس في رصيفٍ يحمل `wide`
+ *   (‏`width: 100%`) فيأكل السطر، و`flex: 1; min-width: 0` على الحقل تعني
+ *   أنّه يتقلّص إلى صفر بلا أن يفشل شيء — **حقلُ الكتابة يختفي والزرُّ
+ *   باقٍ**. رآه أوّلُ رسمٍ للشاشة، ولا يُرى في قراءة CSS أبداً.
+ *   فالمُنشئ عمودٌ: الحقلُ بعرضه كاملاً وفعلُه تحته في مدى الإبهام. وحين
+ *   يدور الرصيفُ شريطاً أفقيّاً على الفأرة (نفسُ عتبة `.dock`) يعود صفّاً،
+ *   ويرتدّ الزرُّ هناك إلى عرض محتواه بقاعدةٍ قائمةٍ في طبقة المكوّنات.
+ */
+.pg-comp {
+  display: flex; flex-direction: column; align-items: stretch;
+  gap: 8px; min-width: 0;
+}
+@media (min-width: 1100px) {
+  .dock .pg-comp { flex: 1 1 400px; flex-direction: row; align-items: flex-end; }
+  /* أرضيّةٌ للحقل: `min-width: 0` عليه تعني أنّه يتقلّص إلى الصفر بلا شكوى.
+     و160 حدٌّ يُبقيه حقلَ كتابةٍ لا شريطاً — ودونه يلتفّ الصفُّ كلُّه. */
+  .dock .pg-comp .ibx-ta { min-width: 160px; }
+}
+
+/* سؤالُ الزبون في ورقة التصحيح: عرضٌ للقراءة لا حقلٌ يُكتب. */
+.pg-q {
+  margin: 0;
+  padding: 9px 12px;
+  background: var(--surface-2);
+  border-radius: var(--radius-sm);
+  font-size: var(--t-sm);
+  line-height: 1.7;
+  color: var(--ink);
+}

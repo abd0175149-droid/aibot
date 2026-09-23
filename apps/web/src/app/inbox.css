@@ -373,6 +373,13 @@
 }
 .ibx-ta::placeholder { color: var(--muted); }
 .ibx-ta:disabled { background: var(--surface-2); }
+/* ★ **المُنشئُ الفارغُ كان يُرسم لاتينيّاً.** يحمل `dir="auto"` (وهو صحيح:
+   نصُّ الموظّف قد يكون عربيّاً أو لاتينيّاً)، ولا محتوى في الفارغ يُقاس —
+   فيحكم المتصفّح LTR، فيلتصق النائبُ العربيُّ («اكتب رسالةَ الزبون…») بالحافّة
+   **المقابلة** ويبدأ المؤشّرُ من اليسار، ثمّ يقفز السطرُ كلُّه عند أوّل
+   حرف. رأيتُه في رسم الساحة على 390 و834 و1440 في الثيمَين.
+   والفارغُ يتبع اتّجاهَ الصفحة، و`dir="auto"` يستأنف من أوّل محرفٍ يُكتب. */
+.ibx-ta:placeholder-shown { direction: inherit; }
 .ibx-send { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex: none; }
 .ibx-count { font-size: var(--t-label); color: var(--muted); }
 .ibx-count.over { color: var(--crit); font-weight: 600; }

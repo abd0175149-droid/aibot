@@ -9,6 +9,31 @@ import { capabilitiesFor, getAdapter, type ChannelKind } from '@aibot/channels';
 import { open as decrypt, seal, fingerprint, publicId } from '@aibot/crypto';
 import { requireAuth, tenantOf } from '../auth.js';
 import { AppError, ErrorCode, capConsequence } from '@aibot/shared';
+import {
+  REPORT_TZ, MIN_FOR_TREND, PRESET_DAYS, parseRange, shiftDay, fillDays,
+  type Range,
+} from './reports-range.js';
+
+/**
+ * ★ **تعريفٌ واحدٌ للاكتفاء الذاتيّ** — لا نسختان تتباعدان.
+ *
+ * «أنهاها البوت وحده» = نافذةٌ ردَّ فيها البوت **ولم يكتب فيها موظّفٌ بعد
+ * فتحها**. وكان هذا المسند مكتوباً داخل استعلام «نبض اليوم» وحده؛ ولمّا
+ * جاءت شاشةُ الاتّجاه احتاجته يوماً بيوم — ونسخُه كان يعني أنّ الرئيسيّة
+ * والتقارير تعرضان **رقمَين مختلفَين لنفس المقياس** بعد أوّل تصحيحٍ يُكتب
+ * في أحدهما. فصار جزءاً واحداً يُحقَن في الاستعلامَين.
+ *
+ * ⚠️ يستعمل اسمَ الجدول عارياً (`conversation_windows`) لا كنيةً: فمن يحقنه
+ *    يستعلم `FROM conversation_windows` بلا `AS` — وكنيةٌ هنا تكسر الاستعلام
+ *    بخطإٍ صريحٍ لا بصمت، وذاك مقصود.
+ */
+const SOLO = sql`(
+        conversation_windows.bot_replies > 0
+        AND NOT EXISTS (SELECT 1 FROM messages m
+                         WHERE m.conversation_id = conversation_windows.conversation_id
+                           AND m.source = 'agent'
+                           AND m.created_at >= conversation_windows.opened_at)
+      )`;
 
 /** الشهر بتوقيت المستأجر — نافذةٌ تُفتح آخر الشهر تُفوتَر على شهر فتحها. */
 function period(tz = 'Asia/Amman'): string {
@@ -69,11 +94,7 @@ export async function registerReports(app: FastifyInstance) {
             WHERE tenant_id = ${tenantId} AND created_at > now() - interval '7 days') AS median_latency,
           (SELECT count(*)::int FROM conversation_windows
             WHERE tenant_id = ${tenantId} AND billing_period = ${p}
-              AND billed_at IS NOT NULL AND bot_replies > 0
-              AND NOT EXISTS (SELECT 1 FROM messages m
-                               WHERE m.conversation_id = conversation_windows.conversation_id
-                                 AND m.source = 'agent'
-                                 AND m.created_at >= conversation_windows.opened_at)) AS self_resolved,
+              AND billed_at IS NOT NULL AND ${SOLO}) AS self_resolved,
           (SELECT count(*)::int FROM conversation_windows
             WHERE tenant_id = ${tenantId} AND billing_period = ${p} AND billed_at IS NOT NULL) AS total_convs
       `) as unknown as Array<Record<string, number>>;
@@ -130,6 +151,326 @@ export async function registerReports(app: FastifyInstance) {
       };
     });
   });
+
+  /* ══════════════════════════════════════════════════════════════════════
+     التقارير — السؤال الثالث: **هل بوتي يتحسّن؟**
+
+     ★ ولماذا هنا لا في نقطةٍ موازية: `/reports/overview` تجيب «اليوم»،
+       و`/usage` تجيب «الفاتورة». وكلتاهما **لقطة**. والاتّجاه ليس لقطةً
+       ثالثةً بل نفسُ المقاييس مقسومةً على الزمن ومقارنةً بمدًى سابقٍ بطوله.
+       ولذلك تعريفُ «الاكتفاء الذاتيّ» يُحقَن من `SOLO` نفسِه الذي تستعمله
+       `overview` — ورقمانِ لنفس المقياس في شاشتَين عطلٌ يُبطل الشاشتَين معاً.
+
+     ★ **والرقمُ بلا خطِّ أساسٍ ليس تقريراً.** فكلُّ استعلامٍ هنا يمسح
+       **المدى والمدى السابق معاً** في نداءٍ واحدٍ ويُقسَم في الذاكرة: لا
+       استعلامَين متماثلَين بحدَّين، ولا رحلةَ ذهابٍ ثانية.
+     ══════════════════════════════════════════════════════════════════════ */
+
+  /** صفُّ يومٍ واحد — مُدمَجٌ من عدّادَي الرسائل والنوافذ، فالمصدران يومٌ واحد. */
+  interface TrendDay {
+    day: string;
+    /** رسائلُ الزبائن الواردة — هي وحدها ما يقول «متى تحتاج موظّفاً» */
+    cust: number;
+    bot: number;
+    agent: number;
+    msgs: number;
+    /** محادثاتٌ فُتحت — نافذةُ الفوترة هي وحدةُ «محادثة» في هذا المنتج */
+    opened: number;
+    billed: number;
+    /** أنهاها البوت وحده */
+    solo: number;
+    cost: number;
+  }
+
+  const ZERO: Omit<TrendDay, 'day'> = {
+    cust: 0, bot: 0, agent: 0, msgs: 0, opened: 0, billed: 0, solo: 0, cost: 0,
+  };
+
+  function addUp(rows: TrendDay[]): Omit<TrendDay, 'day'> {
+    return rows.reduce((a, r) => ({
+      cust: a.cust + r.cust, bot: a.bot + r.bot, agent: a.agent + r.agent,
+      msgs: a.msgs + r.msgs, opened: a.opened + r.opened, billed: a.billed + r.billed,
+      solo: a.solo + r.solo, cost: a.cost + r.cost,
+    }), { ...ZERO });
+  }
+
+  /**
+   * الحسابُ كلُّه في دالّةٍ واحدة — تقرؤها الشاشةُ ويقرؤها الملفّ.
+   *
+   * ★ وهذا شرطُ «الرقمُ وأصله معاً»: لو حسب الملفُّ نسبةَ الاكتفاء بنفسه
+   *   لأمكن أن يختلف عن الشاشة بعد أوّل تعديل — والعميل يفتح الملفّ **ليطابق**
+   *   لا ليقرأ رقماً ثانياً. فالمصدرُ واحدٌ والمخرجان صيغتان له.
+   */
+  async function trend(tenantId: string, r: Range) {
+    const tz = REPORT_TZ;
+    /* حدُّ اليوم يتحوّل لحظةً **في Postgres** لا عندنا: هو من يملك جدول
+       المناطق الحقيقيّ، ونحن نملك نصّ التاريخ وحده. */
+    const at = (day: string) => sql`(${day}::timestamp AT TIME ZONE ${tz})`;
+
+    return withTenant(getDb(), tenantId, async (tx) => {
+      /* ① الرسائل يوماً بيوم — المدى والسابق معاً. والدلوُ يومٌ **عند
+            المستأجر**: بلا `AT TIME ZONE` يُقسَم «أمس» بين دلوَين عند
+            الساعة الثالثة صباحاً، فيُقرأ هبوطٌ لم يحدث. */
+      const msgRows = await tx.execute<{
+        day: string; cust: number; bot: number; agent: number; msgs: number;
+      }>(sql`
+        SELECT (created_at AT TIME ZONE ${tz})::date::text        AS day,
+               count(*)::int                                      AS msgs,
+               count(*) FILTER (WHERE source = 'customer')::int    AS cust,
+               count(*) FILTER (WHERE source = 'bot')::int         AS bot,
+               count(*) FILTER (WHERE source = 'agent')::int       AS agent
+          FROM messages
+         WHERE tenant_id = ${tenantId}
+           AND created_at >= ${at(r.prevLo)} AND created_at < ${at(r.hi)}
+         GROUP BY 1 ORDER BY 1
+      `) as unknown as Array<Record<string, string | number>>;
+
+      /* ② النوافذ يوماً بيوم: المفتوحُ والمُفوتَرُ وما أنهاه البوتُ وحده
+            والكلفة — أربعةٌ من جدولٍ واحدٍ لأنّها كلُّها صفاتُ نفس الصفّ. */
+      const winRows = await tx.execute<{
+        day: string; opened: number; billed: number; solo: number; cost: number;
+      }>(sql`
+        SELECT (opened_at AT TIME ZONE ${tz})::date::text               AS day,
+               count(*)::int                                            AS opened,
+               count(*) FILTER (WHERE billed_at IS NOT NULL)::int        AS billed,
+               count(*) FILTER (WHERE billed_at IS NOT NULL
+                                  AND ${SOLO})::int                     AS solo,
+               coalesce(sum(ai_cost_usd), 0)::float                      AS cost
+          FROM conversation_windows
+         WHERE tenant_id = ${tenantId}
+           AND opened_at >= ${at(r.prevLo)} AND opened_at < ${at(r.hi)}
+         GROUP BY 1 ORDER BY 1
+      `) as unknown as Array<Record<string, string | number>>;
+
+      /* ③ متى يكون مشغولاً — رسائلُ الزبائن وحدها: ردُّ البوت يتبع الزبون
+            فلا يقول شيئاً جديداً عن وقت الضغط. و`isodow` لأنّ `dow` تُرجع
+            صفراً للأحد فيسهل خلطُه بـ«لا شيء». */
+      const busyRows = await tx.execute<{ dow: number; hr: number; n: number }>(sql`
+        SELECT extract(isodow FROM (created_at AT TIME ZONE ${tz}))::int AS dow,
+               extract(hour   FROM (created_at AT TIME ZONE ${tz}))::int AS hr,
+               count(*)::int                                             AS n
+          FROM messages
+         WHERE tenant_id = ${tenantId} AND source = 'customer'
+           AND created_at >= ${at(r.lo)} AND created_at < ${at(r.hi)}
+         GROUP BY 1, 2
+      `) as unknown as Array<Record<string, number>>;
+
+      /* ④ أين يعجز — والموضوعُ **من تصنيف العميل نفسِه** لا من تصنيفٍ
+            نخترعه: `heading_path` عنوانُ المقطع في معرفته هو، وسقوطُه إلى
+            «لا يقابله شيء» أقوى إشارةٍ في الشاشة كلِّها — سؤالٌ لا تملك
+            معرفتُك جواباً له. و«انتهى بموظّف» = كتب موظّفٌ في المحادثة خلال
+            24 ساعةً من الاسترجاع، أي داخل نافذةِ نفسِ السؤال لا بعد أسبوع. */
+      const gapRows = await tx.execute<{
+        topic: string; asks: number; handoffs: number; sample: string | null;
+      }>(sql`
+        WITH r AS (
+          SELECT kr.created_at, kr.query_text, (kr.chunk_ids)[1] AS top_chunk,
+                 EXISTS (SELECT 1 FROM messages m
+                          WHERE m.conversation_id = kr.conversation_id
+                            AND m.source = 'agent'
+                            AND m.created_at >= kr.created_at
+                            AND m.created_at <  kr.created_at + interval '24 hours') AS handed
+            FROM kb_retrievals kr
+           WHERE kr.tenant_id = ${tenantId}
+             AND kr.conversation_id IS NOT NULL
+             AND kr.skipped = false
+             AND kr.created_at >= ${at(r.lo)} AND kr.created_at < ${at(r.hi)}
+        )
+        SELECT coalesce(nullif(btrim(ch.heading_path), ''), ks.title,
+                        'سؤالٌ لا يقابله شيءٌ في معرفتك')          AS topic,
+               count(*)::int                                        AS asks,
+               count(*) FILTER (WHERE r.handed)::int                AS handoffs,
+               (array_agg(r.query_text ORDER BY r.created_at DESC)
+                  FILTER (WHERE r.handed AND r.query_text IS NOT NULL))[1] AS sample
+          FROM r
+          LEFT JOIN kb_chunks         ch ON ch.id = r.top_chunk
+          LEFT JOIN knowledge_sources ks ON ks.id = ch.source_id
+         GROUP BY 1
+        HAVING count(*) FILTER (WHERE r.handed) > 0
+         ORDER BY 3 DESC, 2 DESC
+         LIMIT 8
+      `) as unknown as Array<Record<string, string | number | null>>;
+
+      /* ⑤ أعلامُ التشغيل — المدى والسابق في صفَّين، والتفريقُ بعمودٍ منطقيّ
+            لا باستعلامَين. و`source = 'live'` تُخرج الساحةَ: تجربةُ العميل
+            في ساحته ليست محادثةَ زبون، وخلطُها يرفع «العجز» بلا سبب. */
+      const flagRows = await tx.execute<{
+        cur: boolean; runs: number; handoff: number; dunno: number; fail: number; p50: number;
+      }>(sql`
+        SELECT (created_at >= ${at(r.lo)})                                  AS cur,
+               count(*)::int                                                AS runs,
+               count(*) FILTER (WHERE flags->>'handoff' = 'true')::int       AS handoff,
+               count(*) FILTER (WHERE flags->>'unknown' = 'true')::int       AS dunno,
+               count(*) FILTER (WHERE flags->>'fail'    = 'true')::int       AS fail,
+               coalesce(percentile_cont(0.5) WITHIN GROUP (ORDER BY latency_ms), 0)::int AS p50
+          FROM ai_runs
+         WHERE tenant_id = ${tenantId} AND source = 'live'
+           AND created_at >= ${at(r.prevLo)} AND created_at < ${at(r.hi)}
+         GROUP BY 1
+      `) as unknown as Array<Record<string, boolean | number>>;
+
+      /* ── الدمج: مصدران يوميّان يصيران صفّاً واحداً، ثمّ يُملأ الغائب أصفاراً.
+            والملءُ ليس تجميلاً: خطٌّ يصل يومَين متباعدَين يوحي بهبوطٍ تدريجيٍّ
+            لم يقع — والحقيقةُ هبوطٌ إلى صفرٍ وعودة. */
+      const byDay = new Map<string, TrendDay>();
+      const touch = (day: string): TrendDay => {
+        const cur = byDay.get(day) ?? { day, ...ZERO };
+        byDay.set(day, cur);
+        return cur;
+      };
+      for (const m of msgRows) {
+        const d = touch(String(m.day));
+        d.msgs = Number(m.msgs); d.cust = Number(m.cust);
+        d.bot = Number(m.bot); d.agent = Number(m.agent);
+      }
+      for (const w of winRows) {
+        const d = touch(String(w.day));
+        d.opened = Number(w.opened); d.billed = Number(w.billed);
+        d.solo = Number(w.solo); d.cost = Number(w.cost);
+      }
+      const all = [...byDay.values()];
+      const days = fillDays(r.lo, r.hi, all.filter((d) => d.day >= r.lo), ZERO);
+      const prevDays = fillDays(r.prevLo, r.lo, all.filter((d) => d.day < r.lo), ZERO);
+
+      const cur = addUp(days);
+      const prv = addUp(prevDays);
+
+      /* نسبةٌ لا تُحسب على صفر: صفرُ مُفوترٍ يعني «لا مقياس» لا «صفرٌ بالمئة» —
+         و`null` تُقرأ في الشاشة «لا بيانات» بدل «سقط إلى الصفر». */
+      const rate = cur.billed ? cur.solo / cur.billed : null;
+      const prevRate = prv.billed ? prv.solo / prv.billed : null;
+      const perConv = cur.billed ? cur.cost / cur.billed : null;
+      const prevPerConv = prv.billed ? prv.cost / prv.billed : null;
+
+      /* أعمدةُ الأسبوع والساعة: الأسبوعُ يبدأ بالأحد عربيّاً، و`isodow`
+         تُرجع 7 للأحد — فالترتيبُ صريحٌ لا مأخوذٌ من تصاعد الأرقام. */
+      const WEEK = [7, 1, 2, 3, 4, 5, 6];
+      const byDow = WEEK.map((dow) => ({
+        dow,
+        n: busyRows.filter((b) => Number(b.dow) === dow).reduce((a, b) => a + Number(b.n), 0),
+      }));
+      const byHour = Array.from({ length: 24 }, (_, hour) => ({
+        hour,
+        n: busyRows.filter((b) => Number(b.hr) === hour).reduce((a, b) => a + Number(b.n), 0),
+      }));
+      const peak = busyRows.reduce<{ dow: number; hour: number; n: number } | null>(
+        (best, b) => (best && best.n >= Number(b.n)
+          ? best
+          : { dow: Number(b.dow), hour: Number(b.hr), n: Number(b.n) }),
+        null,
+      );
+
+      const flagOf = (want: boolean) => flagRows.find((f) => Boolean(f.cur) === want);
+      const fc = flagOf(true);
+      const fp = flagOf(false);
+
+      /* عددُ الأيّام التي فيها **أثرٌ فعليّ** — وهو ما يُقرَّر به هل يُرسم خطّ.
+         ثلاثُ نقاطٍ أدنى ما يُقرأ اتّجاهاً؛ ونقطتان خطٌّ مستقيمٌ بلا معنى. */
+      const liveDays = days.filter((d) => d.msgs > 0).length;
+      const billedDays = days.filter((d) => d.billed > 0).length;
+
+      return {
+        range: {
+          from: r.lo, to: r.last, days: r.days,
+          preset: r.preset, openEnd: r.openEnd, tz, presets: [...PRESET_DAYS],
+        },
+        prev: { from: r.prevLo, to: shiftDay(r.lo, -1), days: r.days },
+        days,
+        prevDays,
+        total: cur,
+        prevTotal: prv,
+        volume: { byDow, byHour, peak },
+        selfServe: {
+          rate, prevRate,
+          solo: cur.solo, billed: cur.billed,
+          prevSolo: prv.solo, prevBilled: prv.billed,
+        },
+        cost: { total: cur.cost, prevTotal: prv.cost, perConv, prevPerConv },
+        gaps: {
+          items: gapRows.map((g) => ({
+            topic: String(g.topic),
+            asks: Number(g.asks),
+            handoffs: Number(g.handoffs),
+            sample: g.sample == null ? null : String(g.sample),
+          })),
+          runs: Number(fc?.runs ?? 0),
+          prevRuns: Number(fp?.runs ?? 0),
+          handoff: Number(fc?.handoff ?? 0),
+          prevHandoff: Number(fp?.handoff ?? 0),
+          unknown: Number(fc?.dunno ?? 0),
+          fail: Number(fc?.fail ?? 0),
+          medianLatencyMs: Number(fc?.p50 ?? 0),
+        },
+        /* ★ **البيانُ الصادق مِلكُ الخادم لا الشاشة.** من يملك الأرقام يملك
+           الحكمَ على كفايتها — وإلّا اختلفت عتبةُ الشاشة عن عتبة الملفّ،
+           فقال أحدهما «لا تكفي» ورسم الآخرُ خطّاً يوحي بمعنى. */
+        enough: {
+          minBilled: MIN_FOR_TREND,
+          /** النسبةُ نفسُها تُقرأ رقماً */
+          rate: cur.billed >= MIN_FOR_TREND,
+          /** والمقارنةُ بالسابق تحتاج مدًى سابقاً فيه بياناتٌ أيضاً */
+          delta: cur.billed >= MIN_FOR_TREND && prv.billed >= MIN_FOR_TREND,
+          /** وخطُّ الاتّجاه يحتاج ثلاثَ نقاطٍ فيها أثر */
+          line: billedDays >= 3,
+          volume: liveDays >= 3,
+          busy: cur.cust >= 20,
+          gaps: gapRows.length > 0,
+          liveDays,
+          billedDays,
+        },
+      };
+    });
+  }
+
+  app.get<{ Querystring: { days?: string; from?: string; to?: string } }>(
+    '/reports/trend',
+    { preHandler: requireAuth({ billing: true }) },
+    async (req) => {
+      const parsed = parseRange(req.query ?? {});
+      if (!parsed.ok) throw new AppError(ErrorCode.VALIDATION, parsed.message, 400);
+      return trend(tenantOf(req), parsed.range);
+    },
+  );
+
+  /**
+   * تصديرُ الاتّجاه — يومٌ في كلّ سطر.
+   *
+   * ★ يتبع `/usage/windows.csv` حرفيّاً: BOM أوّلاً (وبلاه يعرض إكسل العربيّةَ
+   *   محارفَ مشوّهة، فيُقرأ الملفُّ معطوباً لا الترميز)، ورأسٌ عربيّ،
+   *   و`content-disposition` باسمٍ يحمل المدى — فملفّان لمدَيَين لا يتراكبان
+   *   في مجلّد التنزيلات كما يتراكب `export.csv` مع نفسه.
+   *
+   * ★ والنسبةُ تُكتب **كسراً** لا نصّاً بعلامة مئة: الملفُّ يُفتح ليُحسَب
+   *   عليه، و«84%» في خليّةٍ نصٌّ لا رقم. ويومٌ بلا محادثةٍ مُفوترةٍ يُترك
+   *   **فارغاً** لا صفراً — فصفرُ الاكتفاء حكمٌ، والفراغُ «لا مقياس».
+   */
+  app.get<{ Querystring: { days?: string; from?: string; to?: string } }>(
+    '/reports/trend.csv',
+    { preHandler: requireAuth({ billing: true }) },
+    async (req, reply) => {
+      const parsed = parseRange(req.query ?? {});
+      if (!parsed.ok) throw new AppError(ErrorCode.VALIDATION, parsed.message, 400);
+      const data = await trend(tenantOf(req), parsed.range);
+
+      const head = [
+        'اليوم', 'رسائل الزبائن', 'ردود البوت', 'ردود الموظّف',
+        'محادثات فُتحت', 'محادثات مُفوترة', 'أنهاها البوت وحده',
+        'نسبة الاكتفاء', 'كلفة الذكاء',
+      ].join(',');
+      const body = data.days.map((d) => [
+        d.day, d.cust, d.bot, d.agent, d.opened, d.billed, d.solo,
+        d.billed ? (d.solo / d.billed).toFixed(4) : '',
+        d.cost.toFixed(6),
+      ].join(',')).join('\n');
+
+      const name = `trend-${data.range.from}_${data.range.to}.csv`;
+      // BOM ليفتح إكسل العربيّة سليمةً — بدونه يعرض محارف مشوّهة
+      return reply
+        .header('content-type', 'text/csv; charset=utf-8')
+        .header('content-disposition', `attachment; filename="${name}"`)
+        .send('﻿' + head + '\n' + body);
+    },
+  );
 
   /** الاستهلاك — جدول النوافذ نفسه، لا ملخّصاً مشتقّاً منه. */
   app.get('/usage', { preHandler: requireAuth({ billing: true }) }, async (req) => {

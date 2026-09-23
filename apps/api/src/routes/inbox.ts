@@ -4,7 +4,8 @@ import {
   conversationWindows, tenantChannels, eq, and, isNull, desc, lt, sql,
 } from '@aibot/db';
 import { AppError, ErrorCode, SendMessageBody } from '@aibot/shared';
-import { requireAuth, tenantOf } from '../auth.js';
+import { requireAuth, tenantOf, PERMISSIONS } from '../auth.js';
+import { applyMerge, isUuid } from './contacts.js';
 import { emitToTenant } from '../realtime.js';
 import { enqueueOutbound } from '../queues.js';
 
@@ -194,33 +195,73 @@ export async function registerInbox(app: FastifyInstance) {
   );
 
   /**
-   * ★ دمج هويّتين في إنسانٍ واحد.
-   * زرٌّ في الواجهة لا ترحيل — وهذا بالضبط ما اشتراه جدول `channel_identities`.
-   * والنوافذ تبقى منفصلة: الفوترة لكلّ قناة لا لكلّ إنسان.
+   * ★ دمج جهتين في إنسانٍ واحد — **نقطةُ الدمج القائمة، وقد صارت لها واجهة.**
+   *
+   * والعقدُ محفوظٌ كما كان: نفسُ المسار، و`keepContactId` مع `mergeIdentityId`
+   * (وأُضيف `mergeContactId` لأنّ الواجهة تدمج **أشخاصاً** لا مقابض). وثلاثةٌ
+   * تغيّرت، كلٌّ منها لأنّ غيابه كان عطلاً:
+   *  ① **المنطقُ في موضعٍ واحد** (`routes/contacts.ts` → `applyMerge`)، وهو
+   *    نفسُه الذي تحسب به ورقةُ المراجعة (`/contacts/merge-preview`) — فما
+   *    يُرى قبل الضغط هو ما يُنفَّذ بعده، لا نسختان تتباعدان.
+   *  ② **الدمجُ على مستوى البطاقة لا المقبض.** كان يحوّل مقبضاً واحداً ثمّ
+   *    يحذف البطاقة التي كانت تحمله — و`channel_identities` و`conversations`
+   *    و`conversation_windows` تتسلسل من `contacts`، و`messages` من
+   *    `conversations`. فبطاقةٌ لها مقبضان: يُنقل أحدهما ويُمحى الآخرُ
+   *    ومحادثتُه وكلُّ رسائلها. الشرحُ كاملاً عند `applyMerge`.
+   *  ③ **سطرٌ في `audit_log`** بصورةٍ تكفي للتراجع (`POST /contacts/merge-undo`)
+   *    — فعلٌ يغيّر تاريخ زبونٍ لا يكون صامتاً ولا بلا رجعة.
    */
-  app.post<{ Body: { keepContactId?: string; mergeIdentityId?: string } }>(
+  app.post<{ Body: { keepContactId?: string; mergeIdentityId?: string; mergeContactId?: string } }>(
     '/contacts/merge',
     { preHandler: requireAuth({ settings: true }) },
     async (req) => {
       const tenantId = tenantOf(req);
-      const { keepContactId, mergeIdentityId } = req.body ?? {};
-      if (!keepContactId || !mergeIdentityId) {
-        throw new AppError(ErrorCode.VALIDATION, 'keepContactId و mergeIdentityId مطلوبان', 400);
+      const { keepContactId, mergeIdentityId, mergeContactId } = req.body ?? {};
+      if (!keepContactId || !(mergeIdentityId || mergeContactId)) {
+        throw new AppError(
+          ErrorCode.VALIDATION,
+          'keepContactId ومعه mergeContactId أو mergeIdentityId مطلوبان',
+          400,
+        );
       }
-      return withTenant(getDb(), tenantId, async (tx) => {
-        const ident = (await tx.select().from(channelIdentities)
-          .where(eq(channelIdentities.id, mergeIdentityId)).limit(1))[0];
-        if (!ident) throw new AppError(ErrorCode.VALIDATION, 'هويّةٌ غير موجودة', 404);
-        const orphan = ident.contactId;
-
-        await tx.update(channelIdentities).set({ contactId: keepContactId })
-          .where(eq(channelIdentities.id, mergeIdentityId));
-        await tx.update(conversations).set({ contactId: keepContactId })
-          .where(eq(conversations.identityId, mergeIdentityId));
-        if (orphan !== keepContactId) {
-          await tx.delete(contacts).where(eq(contacts.id, orphan));
+      /* معرّفٌ مشوّهٌ يصل إلى القاعدة يرجع خطأَ نوعٍ (22P02) فيُقرأ 500 —
+         والمستخدم يرى «خطأ عندنا» على مدخلٍ غير صالح. فالفحص هنا. */
+      for (const v of [keepContactId, mergeIdentityId, mergeContactId]) {
+        if (v !== undefined && !isUuid(v)) {
+          throw new AppError(ErrorCode.VALIDATION, 'معرّفٌ غير صالح', 400);
         }
-        return { ok: true, contactId: keepContactId };
+      }
+
+      return withTenant(getDb(), tenantId, async (tx) => {
+        let absorbContactId = mergeContactId ?? null;
+        if (!absorbContactId) {
+          const ident = (await tx.select({ contactId: channelIdentities.contactId })
+            .from(channelIdentities)
+            .where(eq(channelIdentities.id, mergeIdentityId!)).limit(1))[0];
+          if (!ident) throw new AppError(ErrorCode.VALIDATION, 'هويّةٌ غير موجودة', 404);
+          absorbContactId = ident.contactId;
+        }
+
+        const { auditId, plan } = await applyMerge(tx, tenantId, {
+          keepContactId,
+          absorbContactId,
+          actorUserId: req.auth!.sub,
+          ip: req.ip,
+          withCost: PERMISSIONS[req.auth!.role].billing,
+        });
+
+        return {
+          ok: true,
+          contactId: keepContactId,
+          /* المعرّفُ يرجع إلى الواجهة لأنّه **مفتاحُ التراجع** — لا للسجلّ. */
+          auditId,
+          moved: {
+            identities: plan.moves.identities.length,
+            conversations: plan.moves.conversations.length,
+            windows: plan.moves.windows,
+            messages: plan.moves.messages,
+          },
+        };
       });
     },
   );
