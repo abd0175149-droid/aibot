@@ -320,7 +320,12 @@ export async function incidentsSince(db: Db, since: Date): Promise<IncidentRow[]
       firstSeenAt: incidents.firstSeenAt,
     })
     .from(incidents)
-    .where(sql`${incidents.lastSeenAt} >= ${since}`)
+    /* ★ `toISOString()` صريحاً لا `since` خاماً.
+       الوسمُ الحرفيّ يمرّر الكائن مُعامِلاً إلى `pg`، وهو يطلب نصّاً أو
+       `Buffer` فيرمي «Received an instance of Date» — **في خطوة الحكم**،
+       بعد أن يكون التمرين قد قُتل وأُعيد. أي أنّ العطل يقع حيث تُقرأ النتيجة
+       لا حيث تُصنع: التمرين يعمل كلُّه ثمّ يموت قبل أن يقول ماذا رأى. */
+    .where(sql`${incidents.lastSeenAt} >= ${since.toISOString()}`)
     .orderBy(incidents.firstSeenAt));
 }
 
