@@ -74,11 +74,21 @@ describe('إعادة المحاولة بلا تراجعٍ ليست إعادة م
     const api = read('apps/api/src/queues.ts');
     for (const [name, src] of [['worker', worker], ['api', api]] as const) {
       expect(src, `${name}: تأخيرُ الدمج 2000ms`).toMatch(/delay:\s*(2000|delayMs)/);
-      expect(src, `${name}: محاولتان`).toMatch(/attempts:\s*2/);
       expect(src, `${name}: تراجعٌ أُسّيٌّ بخمس ثوانٍ`)
         .toMatch(/backoff:\s*\{\s*type:\s*'exponential',\s*delay:\s*5000\s*\}/);
       expect(src, `${name}: حدٌّ لمجموعة الفاشلة`).toMatch(/removeOnFail:\s*\d+/);
     }
+
+    /* ★ العددُ يُقارَن بأخيه لا برقمٍ مثبَّتٍ هنا.
+       كان الحارس يثبّت `attempts: 2` حرفيّاً، فلمّا رفعه تمرينُ الشبكة إلى
+       أربعٍ **فشل الحارس على الإصلاح نفسه**. وغرضُه لم يكن العددَ قطّ بل
+       **ألّا يتباعد الموضعان**: مسارٌ واحدٌ بسلوكَين هو العطل. فيبقى الغرض
+       محروساً ويتحرّر الرقم — وحارسُ «كلّ attempts يجاوره backoff» أعلاه
+       يمنع أن يعود العددُ بلا تراجع. */
+    const n = (src: string) => /attempts:\s*(\d+)/.exec(src)?.[1];
+    expect(n(worker), 'عددُ المحاولات معلَنٌ في العامل').toBeDefined();
+    expect(n(api), 'عددُ المحاولات في الموضعَين واحد').toBe(n(worker));
+    expect(Number(n(worker)), 'أكثرُ من محاولةٍ واحدة').toBeGreaterThan(1);
   });
 
   it('الماسح يمسك الشكل فعلاً — وإلّا فهو اختبارٌ يمرّ دائماً', () => {

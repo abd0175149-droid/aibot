@@ -81,11 +81,14 @@ export async function enqueueReply(conversationId: string, delayMs = 2000): Prom
   await queue.add('reply', { conversationId }, {
     jobId,
     delay: delayMs,
-    attempts: 2,
-    /* ★ كان ناقصاً هنا كما في `apps/worker/src/enqueue.ts`، وكشفه تمرين
-       المزوّد: بلا `backoff` تُعاد المحاولة **فوراً**، فمزوّدٌ يعيد ٥٠٠
-       يُضرَب ضربتَين في أقلّ من ثانية ثمّ تموت المهمّة. والقيمة نفسها في
-       الموضعَين عن قصد: مسارٌ واحد بسلوكَين هو عطلٌ ينتظر ساعته. */
+    attempts: 4,
+    /* ★ كان `backoff` ناقصاً هنا كما في `apps/worker/src/enqueue.ts`، وكشفه
+       تمرين المزوّد: بلا تراجعٍ تُعاد المحاولة **فوراً** فتُستهلك المحاولتان
+       على نفس اللحظة الفاشلة. ثمّ رفع تمرينُ الشبكة العددَ من اثنتين إلى
+       أربع: محاولتان بتراجعِ خمسٍ تغطّيان خمسَ ثوانٍ من انقطاعٍ لا غير،
+       وقد ماتت مهمّةٌ حقيقيّةٌ بسببها في التمرين. والقيمة نفسها في الموضعَين
+       عن قصد: مسارٌ واحد بسلوكَين هو عطلٌ ينتظر ساعته — والحارس في
+       `apps/worker/test/retry-policy.test.ts` يفشل إن تباعدا. */
     backoff: { type: 'exponential', delay: 5000 },
     removeOnComplete: 500,
     removeOnFail: 2000,
