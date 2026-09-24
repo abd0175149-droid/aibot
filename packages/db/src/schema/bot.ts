@@ -134,6 +134,11 @@ export const kbChunks = pgTable('kb_chunks', {
   index('kb_chunks_version_idx').on(t.tenantId, t.versionId),
 ]);
 
+/* ★ `kb_chunks.tsv` عمودٌ **مولَّدٌ مخزَّن** يُنشأ في `0007_kb_chunks_tsv.sql`
+   ولا يُعلَن هنا: drizzle لا يعرف الأعمدة المولَّدة، وإعلانُه حقلاً عاديّاً
+   يجعل أيّ `insert` يحاول الكتابة فيه فترفض القاعدة. والاستعلام الوحيد الذي
+   يقرؤه نصٌّ خامٌّ في `apps/worker/src/retrieval.ts`. */
+
 /** قياس الاسترجاع. احتفاظ 30 يوماً ثمّ تجميع. */
 export const kbRetrievals = pgTable('kb_retrievals', {
   id: uuid('id').primaryKey().default(uuid7),

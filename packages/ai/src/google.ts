@@ -19,9 +19,25 @@ export class GoogleProvider implements AiProvider {
     const body: Record<string, unknown> = {
       systemInstruction: { parts: [{ text: input.system }] },
       contents: input.contents.map(toGoogleContent),
+      /**
+       * ★ **ميزانيّةُ تفكيرٍ مضبوطة، وسقفُ إخراجٍ يسعها.**
+       *
+       *   عائلةُ 2.5 تفكّر ديناميكيّاً ما لم يُضبط `thinkingBudget`، و**توكنز
+       *   التفكير تُحسب ضمن `maxOutputTokens`**. فسؤالٌ مركّبٌ يستهلك السقف
+       *   كلَّه في التفكير ويخرج بنصٍّ فارغ (`finishReason: MAX_TOKENS`) —
+       *   والحلقةُ لا تميّز الفراغ فترسل نصّ العجز الذي يَعِد بالتحويل لموظّف
+       *   ولا يحوّل أحد. والكلفةُ تُدفع كاملةً عن ردٍّ لم يصل: التفكيرُ
+       *   يُفوتَر بسعر الإخراج (‏`computeCost` يجمعه صراحةً).
+       *
+       *   فالميزانيّة تُقيَّد بثُلث السقف تقريباً، والسقفُ يرتفع إلى 2048:
+       *   يبقى للردّ متّسعٌ حقيقيٌّ بعد أشدّ تفكيرٍ مسموح.
+       *
+       * ⚠️ والنماذج التي لا تعرف `thinkingConfig` تتجاهله — ولا ترفض الطلب.
+       */
       generationConfig: {
         temperature: input.temperature ?? 0.7,
-        maxOutputTokens: input.maxOutputTokens ?? 1024,
+        maxOutputTokens: input.maxOutputTokens ?? 2048,
+        thinkingConfig: { thinkingBudget: input.thinkingBudget ?? 512 },
       },
     };
     if (input.tools.length) {

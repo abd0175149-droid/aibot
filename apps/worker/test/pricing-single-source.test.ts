@@ -1,0 +1,77 @@
+import { describe, it, expect } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+/**
+ * ★ حرّاسُ السعر — **موضعٌ واحدٌ، وشرطُ سريانٍ لا يُنسى**.
+ *
+ * العطل الأصليّ اثنان في واحد: كتلتا حلِّ المفتاح والسعر منسوختان حرفيّاً بين
+ * الحيّ (`reply.ts`) والساحة (`playground.ts`)، وفي كلتيهما يُختار السعرُ
+ * بأحدث `effective_from` **مطلقاً** بلا شرطٍ على الحاضر. فصفُّ سعرٍ يُدخل
+ * بتاريخ سريانٍ لاحق — وهو ما صُمّم له الفهرس الفريد — يُطبَّق فوراً: كلفةُ
+ * اليوم بسعر الغد، والهامشُ خاطئٌ في التقارير بلا أن يلاحظ أحد.
+ *
+ * والحرّاس ساكنون عمداً: كلُّ ما يُحرَس هنا **شكلٌ** — استعلامٌ في موضعٍ لا
+ * ينبغي أن يكون فيه، أو شرطٌ غائبٌ من الاستعلام الوحيد.
+ */
+
+const REPO = join(__dirname, '..', '..', '..');
+const read = (rel: string) => readFileSync(join(REPO, rel), 'utf8');
+
+const CONSUMERS = [
+  'apps/worker/src/reply.ts',
+  'apps/worker/src/playground.ts',
+];
+
+describe('السعرُ يُقرأ من موضعٍ واحد', () => {
+  it('لا استعلامَ أسعارٍ خارج pricing.ts', () => {
+    for (const rel of CONSUMERS) {
+      expect(
+        read(rel),
+        `${rel} يستعلم جدولَ الأسعار بنفسه. ونسختان لقرارٍ واحدٍ تعنيان أنّ `
+        + 'تصحيح كلفةِ الحيّ لا يصل الساحة — فتشهد الساحةُ على كلفةٍ غيرِ التي تُحاسَب.',
+      ).not.toMatch(/from\(prices\)/);
+    }
+  });
+
+  it('لا قراءةَ مفتاحِ ذكاءٍ خارج pricing.ts', () => {
+    for (const rel of CONSUMERS) {
+      expect(read(rel), `${rel} يقرأ جدولَ المفاتيح بنفسه`).not.toMatch(/from\(aiKeys\)/);
+    }
+  });
+
+  it('★ ولا `PLATFORM_AI_KEY!` في أيٍّ منهما — الغيابُ يُقال لا يُمرَّر', () => {
+    for (const rel of CONSUMERS) {
+      expect(read(rel), `${rel} يمرّر مفتاحاً قد يكون undefined إلى المزوّد`)
+        .not.toMatch(/PLATFORM_AI_KEY/);
+    }
+  });
+
+  it('والاثنان ينادِيان الدالّتين المشتركتَين فعلاً', () => {
+    for (const rel of CONSUMERS) {
+      const src = read(rel);
+      expect(src, `${rel} لا ينادي resolveAiKey`).toMatch(/resolveAiKey\(/);
+      expect(src, `${rel} لا ينادي priceAt`).toMatch(/priceAt\(/);
+      expect(src).toMatch(/from '\.\/pricing\.js'/);
+    }
+  });
+});
+
+describe('السعرُ المختار ساريٌ الآن', () => {
+  const src = read('apps/worker/src/pricing.ts');
+
+  it('الاستعلامُ يشترط effectiveFrom <= at', () => {
+    expect(
+      src,
+      'بلا هذا الشرط يُطبَّق سعرٌ مستقبليٌّ فوراً — كلفةُ اليوم بسعر الغد',
+    ).toMatch(/\$\{prices\.effectiveFrom\}\s*<=\s*\$\{at\}/);
+  });
+
+  it('ويأخذ الأحدثَ من السارية لا الأقدم', () => {
+    expect(src).toMatch(/orderBy\(desc\(prices\.effectiveFrom\)\)/);
+  });
+
+  it('★ و`at` وسيطٌ لا now() مغروسةٌ — إعادةُ التسعير تسأل عن لحظة الشوط', () => {
+    expect(src).toMatch(/at:\s*Date\s*=\s*new Date\(\)/);
+  });
+});

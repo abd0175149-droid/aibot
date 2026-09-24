@@ -74,13 +74,15 @@ interface BotState {
   published: {
     version: number; persona: string; knowledgeBase: string;
     knowledgeMode: 'full' | 'hybrid' | 'rag'; embedStatus: string; model: string;
+    /** مجموع أحرف الملفّات التي دخلت النسخة المنشورة — ومنه يُعرف أنّ ملفّاً رُفع بعدها. */
+    sourceChars?: number;
   } | null;
   /** المسوّدة jsonb — وهذه الشاشة تكتب الحقلَين معاً دائماً. */
   draft: { persona?: string; knowledgeBase?: string } | null;
 }
 
 interface KB {
-  sources: Array<{ id: string; kind: string; title: string; charCount: number; status: string; createdAt: string }>;
+  sources: Array<{ id: string; kind: string; title: string; charCount: number; status: string; createdAt: string; error?: string | null }>;
   chunks: number; chars: number; tokens: number;
   suggestedMode: 'full' | 'hybrid' | 'rag';
 }
@@ -494,7 +496,17 @@ export default function BotPage() {
   const personaChanged = persona !== (pub?.persona ?? '');
   const kbChanged = knowledge !== (pub?.knowledgeBase ?? '');
   /** ★ المعيار فرقٌ حقيقيّ عن المنشورة — لا وجودُ صفّ مسوّدةٍ في القاعدة. */
-  const changed = personaChanged || kbChanged;
+  /* ★ والملفّات طرفٌ في الفرق — ولم تكن.
+     كان `changed` يُقاس على الشخصيّة ونصّ الحقل وحدهما، فرفعُ ملفٍّ بعد
+     آخر نشرٍ لا يفتح زرّ النشر: الملاحظة تقول «انشر من جديد» والزرّ يقول
+     «لا شيء لتنشره» — طريقٌ مسدودٌ بنصَّين متناقضَين.
+     والمقارنة بمجموع أحرف الملفّات الجاهزة مقابل ما دخل النسخة المنشورة. */
+  const readyChars = (kb.data?.sources ?? [])
+    .filter((x) => x.status === 'ready')
+    .reduce((n, x) => n + (x.charCount ?? 0), 0);
+  const publishedFileChars = pub?.sourceChars ?? null;
+  const filesChanged = publishedFileChars !== null && readyChars !== publishedFileChars;
+  const changed = personaChanged || kbChanged || filesChanged;
   /**
    * ★ «غير محفوظ» = **فرقٌ عن نصّ القاعدة**، لا غيابُ صفّ مسوّدة.
    *

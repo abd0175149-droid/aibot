@@ -1,6 +1,6 @@
 import {
-  getDb, withTenant, botConfigs, botVersions, botTools, aiRuns, aiKeys, prices,
-  kbChunks, tenantChannels, eq, and, desc, isNull, sql, type Tx,
+  getDb, withTenant, botConfigs, botVersions, botTools, aiRuns,
+  kbChunks, tenantChannels, eq, and, isNull, sql, type Tx,
 } from '@aibot/db';
 import { getAdapter, type ChannelKind } from '@aibot/channels';
 import { open as decrypt } from '@aibot/crypto';
@@ -15,6 +15,7 @@ import type {
   PlaygroundResult, PlaygroundToolCall, PlaygroundUse,
 } from '@aibot/shared';
 import { RagKnowledge, embedQuery, hybridSearch } from './retrieval.js';
+import { resolveAiKey, priceAt } from './pricing.js';
 
 /**
  * الساحة — جرّبٌ جافٌّ للبوت، ولوحُ «لماذا» معه.
@@ -310,16 +311,15 @@ export async function runPlayground(job: PlaygroundJob): Promise<PlaygroundResul
       capabilities: caps,
     });
 
-    /* ── المفتاح: مفتاح العميل أوّلاً، ثمّ مفتاح المنصّة ── */
-    const keyRow = (await tx.select().from(aiKeys).where(and(
-      eq(aiKeys.tenantId, job.tenantId), eq(aiKeys.provider, provider), eq(aiKeys.isActive, true),
-    )).limit(1))[0];
-    const platformKey = process.env.PLATFORM_AI_KEY;
-    if (!keyRow && !platformKey) {
+    /* ── المفتاح: مفتاح العميل أوّلاً، ثمّ مفتاح المنصّة ──
+       من `pricing.ts` نفسِه الذي يقرأه الحيّ: كانت الكتلتان منسوختَين، والساحةُ
+       تُعيد رسالةً لطيفةً حيث يرفع الحيُّ خطأً — فبقي الاختلافُ في **الردّ** على
+       الغياب وحده، لا في **قراءة** المفتاح. */
+    const key = await resolveAiKey(tx, job.tenantId, provider);
+    if (!key) {
       return { ok: false, code: 'VALIDATION', message: 'لا مفتاحَ ذكاءٍ مضبوطٌ — راجع إعدادات حسابك.' };
     }
-    const apiKey = keyRow ? decrypt(keyRow.keyEnc, keyRow.keyVersion) : platformKey!;
-    const keyOwner = keyRow ? 'tenant' : 'platform';
+    const { apiKey, owner: keyOwner } = key;
 
     /* ── الشوط ── */
     const emits: OutboundMessage[] = [];
@@ -347,16 +347,11 @@ export async function runPlayground(job: PlaygroundJob): Promise<PlaygroundResul
       }),
     });
 
-    /* ── الكلفة: بسعر لحظة العرض، نفسِ حساب الحيّ ── */
-    const price = (await tx.select().from(prices).where(and(
-      eq(prices.provider, provider), eq(prices.model, model),
-    )).orderBy(desc(prices.effectiveFrom)).limit(1))[0];
-    const cost = price
-      ? computeCost(result.usage, {
-        input: Number(price.input), output: Number(price.output),
-        cachedInput: price.cachedInput === null ? null : Number(price.cachedInput),
-      })
-      : 0;
+    /* ── الكلفة: بالسعر **السارِي** لحظةَ العرض، نفسِ حساب الحيّ حرفيّاً ──
+       ونفسِ الدالّة لا نفسِ الشكل: نسختان لقرارٍ واحدٍ تعنيان أنّ تصحيح كلفةِ
+       الحيّ لا يصل الساحة، فتشهد الساحةُ على كلفةٍ غيرِ التي تُحاسَب. */
+    const price = await priceAt(tx, provider, model);
+    const cost = price ? computeCost(result.usage, price) : 0;
     if (!price) {
       notes.push(
         `لا سعرَ مسجَّلٌ للنموذج ${model} — الكلفة تُحسب صفراً، ولن تستطيع نشرَ نسخةٍ عليه.`,

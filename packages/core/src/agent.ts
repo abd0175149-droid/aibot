@@ -52,6 +52,16 @@ export interface RunAgentResult {
   flags: {
     handoff: boolean; unknown: boolean; leak: boolean; fail: boolean;
     truncated: boolean; repeated: boolean; privacy: boolean; maxLoops: boolean;
+    /**
+     * ★ النموذج لم يُخرج شيئاً فحلّ نصُّ العجز مكانه.
+     *
+     *   وهذا العلَم لازمٌ لأنّ نصّ العجز الافتراضيّ **يَعِد**: «بحوّلك لموظّف».
+     *   وكان لا يحوّل أحداً — لا `needsAttention` ولا سطرٌ في أيّ شاشة. أي
+     *   أنّ الحالةَ الوحيدةَ التي يُعترف فيها بالعجز هي الحالةُ الوحيدةُ التي
+     *   لا يعلمها أحد. ولا يُستنتَج من النصّ: العميل يكتب نصَّ عجزه بنفسه
+     *   في `failMessage` فلا نمطَ يُطابَق.
+     */
+    usedFallback: boolean;
   };
   latencyMs: number;
 }
@@ -69,6 +79,7 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
   const flags = {
     handoff: false, unknown: false, leak: false, fail: false,
     truncated: false, repeated: false, privacy: false, maxLoops: false,
+    usedFallback: false,
   };
 
   let calls = 0;
@@ -141,7 +152,10 @@ export async function runAgent(input: RunAgentInput): Promise<RunAgentResult> {
     if (isLast) flags.maxLoops = true;
   }
 
-  if (!text.trim() && !emits.length) text = input.fallbackText;
+  if (!text.trim() && !emits.length) {
+    text = input.fallbackText;
+    flags.usedFallback = true;
+  }
   flags.unknown = UNKNOWN_HINT.test(text);
 
   return {

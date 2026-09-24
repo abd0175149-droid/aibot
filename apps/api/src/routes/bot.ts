@@ -22,7 +22,18 @@ export async function registerBot(app: FastifyInstance) {
       const published = cfg?.publishedVersionId
         ? (await tx.select().from(botVersions).where(eq(botVersions.id, cfg.publishedVersionId)).limit(1))[0]
         : null;
-      return { config: cfg ?? null, published: published ?? null, draft: cfg?.draft ?? null };
+      return {
+        config: cfg ?? null,
+        published: published
+          ? {
+            ...published,
+            /* يُرفَع من `params` إلى السطح: الشاشة تقارنه بما في القائمة
+               لتعرف أنّ ملفّاً رُفع أو حُذف بعد آخر نشر. */
+            sourceChars: ((published.params ?? {}) as { sourceChars?: number }).sourceChars ?? 0,
+          }
+          : null,
+        draft: cfg?.draft ?? null,
+      };
     });
   });
 
@@ -54,7 +65,19 @@ export async function registerBot(app: FastifyInstance) {
    * يتباعدان مع أوّل تعديلٍ على وضع المعرفة.
    */
   async function publishVersion(tenantId: string, actorUserId: string, note: string | null) {
-    return withTenant(getDb(), tenantId, async (tx) => {
+    /* ★ **مهمّةُ التضمين تُدفع بعد الإيداع لا داخله.**
+       كانت `enqueueEmbed` تُنادى داخل `withTenant`، أي **قبل** أن تُودَع
+       المعاملة. وريديس أسرع من إيداعٍ في بوستجرس: العامل يبدأ ويقرأ
+       `bot_versions` فلا يجد الصفّ بعد، فيخرج من `if (!ver) return` **ناجحاً**
+       — مهمّةٌ «مكتملة» بلا عمل. والنسخة تبقى `embedStatus: 'pending'` إلى
+       الأبد، وبوّابةُ `pending` في عامل الردّ تُسكت بوت العميل بلا رجعة وبلا
+       حادثة. ولا يظهر العطل في التجربة: على مضيفٍ محمَّلٍ يتأخّر العامل
+       فيمرّ، وعلى مضيفٍ سريعٍ يسبق فيُعطب.
+       و`jobId` الثابت (`embed-<versionId>`) يجعل الدفعَ المتأخّر آمناً: لا
+       نسخةَ ثانيةً من المهمّة أيّاً كان عدد النداءات. */
+    let pendingEmbed: { tenantId: string; versionId: string } | null = null;
+
+    const out = await withTenant(getDb(), tenantId, async (tx) => {
       const cfg = (await tx.select().from(botConfigs).where(eq(botConfigs.tenantId, tenantId)).limit(1))[0];
       const draft = (cfg?.draft ?? {}) as Record<string, unknown>;
       if (!cfg || !Object.keys(draft).length) {
@@ -65,8 +88,26 @@ export async function registerBot(app: FastifyInstance) {
         .where(eq(botVersions.tenantId, tenantId)).orderBy(desc(botVersions.version)).limit(1))[0];
 
       const kb = String(draft.knowledgeBase ?? '');
-      const kbTokens = estimateTokens(kb);
+
+      /* ★ **المعرفةُ الفعّالة = نصُّ الحقل + الملفّاتُ الجاهزة.**
+         كان القرار يُبنى على `estimateTokens(kb)` وحده، والتضمينُ يأخذ
+         الملفّات **أو** النصّ لا كليهما. فصاحبُ مطعمٍ يرفع قائمةَ PDF ويكتب
+         سطرَين يحصل على وضع `full` بنصٍّ من سطرَين — والقائمةُ كلُّها لا تصل
+         النموذج أبداً، والشاشةُ خضراء والملفّ «استُخرج نصُّه». أي أنّ ميزة
+         رفع الملفّات كانت ميّتةً عمليّاً لكلّ من نصُّه دون العتبة — وهي
+         الشريحةُ المستهدَفة بعينها. */
+      const ready = await tx.select({ id: knowledgeSources.id, text: knowledgeSources.extractedText })
+        .from(knowledgeSources)
+        .where(and(eq(knowledgeSources.tenantId, tenantId), eq(knowledgeSources.status, 'ready')));
+      const fileText = ready.map((r) => (r.text ?? '').trim()).filter(Boolean).join('\n\n');
+
+      /* وفي وضع `full` تُحقن المعرفةُ كلُّها نصّاً، فالنسخةُ تحمل المركَّب.
+         وفي غيره يُقطَّع الاثنان في `embed.ts` فلا حاجة إلى الدمج هنا. */
+      const kbTokens = estimateTokens(kb) + estimateTokens(fileText);
       const mode = decideKnowledgeMode(kbTokens);
+      const effectiveKb = mode === 'full' && fileText
+        ? [kb.trim(), fileText].filter(Boolean).join('\n\n')
+        : kb;
 
       const provider = String(draft.provider ?? 'google');
       const model = String(draft.model ?? 'gemini-2.5-flash');
@@ -92,7 +133,7 @@ export async function registerBot(app: FastifyInstance) {
         tenantId,
         version: (last?.v ?? 0) + 1,
         persona: String(draft.persona ?? ''),
-        knowledgeBase: kb,
+        knowledgeBase: effectiveKb,
         toolsConfig: (draft.toolsConfig ?? {}) as object,
         provider,
         model,
@@ -104,6 +145,9 @@ export async function registerBot(app: FastifyInstance) {
            وما ضبطه المالك صراحةً في المسوّدة يُضمّ ولا يُستبدل. */
         params: {
           ...((draft.params ?? {}) as Record<string, unknown>),
+          /* ★ مجموع أحرف الملفّات التي دخلت هذه النسخة — وبه تعرف الشاشة
+             أنّ ملفّاً رُفع بعدها فتفتح زرّ النشر. */
+          sourceChars: ready.reduce((n, r) => n + (r.text ?? '').length, 0),
           linkHosts: [...new Set([
             ...(Array.isArray((draft.params as { linkHosts?: unknown })?.linkHosts)
               ? ((draft.params as { linkHosts: string[] }).linkHosts)
@@ -112,7 +156,19 @@ export async function registerBot(app: FastifyInstance) {
           ])],
         } as object,
         knowledgeMode: mode,
-        knowledgeBudget: (draft.knowledgeBudget ?? {}) as object,
+        /* ★ ميزانيّةٌ تسع المعرفة في وضع الحقن الكامل — وكانت تقصّها بصمت.
+           `DEFAULT_BUDGET.core` ‏١٢٠٠ توكن، و`fit` تقصّ عند ١٢٠٠×٢٫٥ حرفاً
+           ثمّ تكتب `trimmed` في `context_meta` ولا يقرؤه أحد. فكلّ معرفةٍ بين
+           ١٢٠٠ و٨٠٠٠ توكن — وهي الشريحة الأشيع — كان البوت يجهل ما بعد أوّل
+           ثلاثة آلاف حرفٍ منها، ويقول «لا أعرف» عن معلومةٍ مكتوبةٍ عنده.
+           والسقفُ يُحسب من الحجم الفعليّ مع هامشٍ يسير، فلا يُقصّ ولا يُفتح
+           بلا حدّ. */
+        knowledgeBudget: {
+          ...((draft.knowledgeBudget ?? {}) as Record<string, number>),
+          ...(mode === 'full'
+            ? { core: Math.max(1_200, Math.ceil(estimateTokens(effectiveKb) * 1.1) + 200) }
+            : {}),
+        } as object,
         embedStatus: mode === 'full' ? 'skipped' : 'pending',
         publishedBy: actorUserId,
         publishedAt: new Date(),
@@ -140,14 +196,22 @@ export async function registerBot(app: FastifyInstance) {
           await tx.update(botConfigs).set({ enabled: true })
             .where(eq(botConfigs.tenantId, tenantId));
         }
-        await enqueueEmbed({ tenantId, versionId: ver!.id });
+        pendingEmbed = { tenantId, versionId: ver!.id };
       }
 
       /* `live` تقول الحقيقة للشاشة: هل يردّ البوت **الآن**؟ وهي شرطان معاً —
          مُشعَلٌ، ونسخةٌ منشورةٌ فعلاً (لا تنتظر تضميناً). */
       const live = (firstPublish || cfg.enabled) && mode === 'full';
-      return { version: ver, knowledgeMode: mode, kbTokens, embedding: mode !== 'full', live };
+      return {
+        version: ver, knowledgeMode: mode, kbTokens, embedding: mode !== 'full', live,
+        /* ما دخل النسخة فعلاً — تعرضه ورقة النشر بدل أن تُخمّن. */
+        sources: { text: estimateTokens(kb), files: estimateTokens(fileText), fileCount: ready.length },
+      };
     });
+
+    /* الآن وقد أُودعت المعاملة، الصفُّ مقروءٌ لأيّ عاملٍ يبدأ في هذه اللحظة. */
+    if (pendingEmbed) await enqueueEmbed(pendingEmbed);
+    return out;
   }
 
   app.post<{ Body: { note?: string } }>('/bot/publish', { preHandler: auth }, async (req) =>
@@ -220,6 +284,23 @@ export async function registerBot(app: FastifyInstance) {
       if (!ver) throw new AppError(ErrorCode.VALIDATION, 'نسخةٌ غير موجودة', 404);
       if (ver.embedStatus === 'pending') {
         throw new AppError(ErrorCode.VALIDATION, 'هذه النسخة ما زالت تُضمَّن', 409);
+      }
+
+      /* ★ ولا تراجعَ إلى نسخةٍ **فشل** تضمينها.
+         كان الفحص يمنع `pending` وحدها. و`failed` تعني أنّ `kb_chunks` لا
+         يحمل عن هذه النسخة مقطعاً واحداً: فتُنشر، ويعمل البوت — ويجيب «لا
+         أعرف» عن **كلّ** سؤالٍ في معرفته. وهذا أسوأ من بوتٍ صامت: المالك
+         يرى بوته يردّ، فيقرأ العطل جهلاً في النموذج لا خللاً في نسخته، ولا
+         شيء في الشاشة يربط الأمرَ بتضمينٍ فشل قبل أسبوع.
+         والشاشة تعرض `embedStatus` في قائمة النسخ، فالرسالةُ تقول ما يُفعل. */
+      if (ver.embedStatus === 'failed') {
+        throw new AppError(
+          ErrorCode.VALIDATION,
+          'فشل تجهيزُ معرفة هذه النسخة، فلا مقاطعَ لها في قاعدة البحث — '
+          + 'لو نُشرت أجاب البوت «لا أعرف» عن كلّ شيء. انشر مسوّدتك من جديد '
+          + 'لتُجهَّز المعرفة، أو تراجَع إلى نسخةٍ مكتملة.',
+          409,
+        );
       }
       await tx.update(botConfigs).set({ publishedVersionId: ver.id })
         .where(eq(botConfigs.tenantId, tenantId));
@@ -401,6 +482,13 @@ export async function registerBot(app: FastifyInstance) {
         id: knowledgeSources.id, kind: knowledgeSources.kind, title: knowledgeSources.title,
         charCount: knowledgeSources.charCount, status: knowledgeSources.status,
         createdAt: knowledgeSources.createdAt,
+        /* ★ والتحذير — وكان محبوساً في نافذة المعاينة خلف ضغطةٍ إضافيّة.
+           `extract.ts` يضع `status = 'ready'` متى وُجد **أيّ** نصّ، ويحفظ
+           تحذير «الملفّ صورٌ على الأرجح ويحتاج OCR» في عمود `error`. وهذا
+           المسار لم يكن يعيد الحقل، فقائمةٌ ممسوحةٌ يُستخرج منها سطران
+           تُوسَم أخضرَ «استُخرج نصُّه» — والمالك ينشر ويظنّ أنّ القائمة صارت
+           معرفة بوته، ثمّ يكتشف من شكوى زبون. */
+        error: knowledgeSources.error,
       }).from(knowledgeSources).where(eq(knowledgeSources.tenantId, tenantId));
 
       const chunks = (await tx.select({ n: sql<number>`count(*)::int` })

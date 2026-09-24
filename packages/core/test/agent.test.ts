@@ -220,3 +220,56 @@ describe('تعريفات الأدوات مشروطةٌ بالقدرات', () => 
     if (m.kind === 'choices') expect(m.options[0]!.title.length).toBeLessThanOrEqual(20);
   });
 });
+
+/**
+ * ★ نصُّ العجز **يَعِد**: «بحوّلك لموظّف». وكان لا يحوّل.
+ *
+ * الحالةُ أشيع مما تبدو: عائلةُ 2.5 تفكّر ضمن `maxOutputTokens`، فسؤالٌ مركّبٌ
+ * يستهلك السقف تفكيراً ويخرج بنصٍّ فارغ يُفوتَر كاملاً. فيحلّ نصُّ العجز مكانه
+ * ويقرأ الزبون وعداً بتحويلٍ لا يحدث — ولا سطرَ في أيّ شاشة يقول إنّه وُعد.
+ * فالحالةُ الوحيدةُ التي يُعترف فيها بالعجز كانت الوحيدةَ التي لا يعلمها أحد.
+ */
+describe('العجز يُعلَن لا يُدفن', () => {
+  it('★ ردٌّ فارغٌ من النموذج: نصُّ العجز يحلّ، و`usedFallback` يُرفع', async () => {
+    const r = await runAgent({
+      ...base,
+      provider: stubProvider([{ text: '' }]),
+      execTool: async () => ({ result: {} }),
+    });
+    expect(r.text).toBe(base.fallbackText);
+    expect(r.flags.usedFallback, 'بلا هذا العلَم لا يعرف العاملُ أنّ الوعدَ قيل').toBe(true);
+  });
+
+  it('وردٌّ حقيقيٌّ لا يرفعه — وإلّا لصارت كلُّ محادثةٍ «تحتاجك الآن»', async () => {
+    const r = await runAgent({
+      ...base,
+      provider: stubProvider([{ text: 'أهلاً، الحجز متاح الخميس.' }]),
+      execTool: async () => ({ result: {} }),
+    });
+    expect(r.flags.usedFallback).toBe(false);
+    expect(r.flags.unknown).toBe(false);
+  });
+
+  it('ورسالةٌ خرجت من أداةٍ بلا نصٍّ ليست عجزاً', async () => {
+    const r = await runAgent({
+      ...base,
+      provider: stubProvider([
+        { toolCalls: [{ id: 'c1', name: 'send_choices', args: { header: 'اختر', options: ['أ', 'ب'] }, raw: { functionCall: {} } }] },
+        { text: '' },
+      ]),
+      execTool: async () => ({ result: { ok: true }, emit: [choicesMessage('اختر', ['أ', 'ب'], whatsappCapabilities)] }),
+    });
+    expect(r.emits.length).toBe(1);
+    expect(r.flags.usedFallback, 'أُرسل للزبون شيءٌ فعلاً — فلا عجز').toBe(false);
+  });
+
+  it('و«لا أعرف» صريحةً تُرفع علَمَ unknown', async () => {
+    const r = await runAgent({
+      ...base,
+      provider: stubProvider([{ text: 'لا أعرف هذي المعلومة بصراحة.' }]),
+      execTool: async () => ({ result: {} }),
+    });
+    expect(r.flags.unknown).toBe(true);
+    expect(r.flags.usedFallback).toBe(false);
+  });
+});

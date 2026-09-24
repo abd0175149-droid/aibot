@@ -51,6 +51,12 @@ export interface GenerateInput {
   model: string;
   temperature?: number;
   maxOutputTokens?: number;
+  /**
+   * سقفُ توكنز التفكير — وهي تُحسب ضمن `maxOutputTokens` وتُفوتَر
+   * بسعر الإخراج. بلا ضبطِها يستهلك النموذج السقف تفكيراً ويخرج
+   * بنصٍّ فارغٍ يُفوتَر كاملاً.
+   */
+  thinkingBudget?: number;
   signal?: AbortSignal;
 }
 

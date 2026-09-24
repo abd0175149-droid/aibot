@@ -277,9 +277,15 @@ export async function enqueueIngest(job: {
 
 export async function enqueueEmbed(job: { tenantId: string; versionId: string }): Promise<void> {
   await q(QUEUE.embed).add('embed', job, {
-    // مرّةٌ واحدة بتقدّمٍ مرئيّ — لا إعادة محاولةٍ صامتة تُنتج تضميناً مزدوجاً
+    /* ★ ثلاثُ محاولاتٍ بتراجع — وكانت **واحدة** بحجّةِ «لا تضمينَ مزدوج».
+       والحجّة لا تصحّ: العامل يحذف كلّ مقاطع النسخة (`delete … versionId`)
+       قبل أن يُدرج، فالمهمّة متحمّلةٌ لإعادة المحاولة بطبيعتها. وكلفةُ
+       المحاولة الواحدة أنّ تعثّراً عابراً عند مزوّد التضمين يُثبّت النسخة
+       على `failed` **بلا رجعة**: بوّابةُ عامل الردّ تُسكت البوت، والمالك
+       لا يملك إلّا أن ينشر من جديد — إن فهم أصلاً أنّ هذا هو الحلّ. */
     jobId: `embed-${job.versionId}`,
-    attempts: 1,
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 4000 },
     removeOnComplete: 100,
     removeOnFail: 500,
   });

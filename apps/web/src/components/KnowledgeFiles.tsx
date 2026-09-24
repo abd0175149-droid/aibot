@@ -48,6 +48,8 @@ export interface KbSource {
   charCount: number;
   status: 'pending' | 'ready' | 'failed';
   createdAt: string;
+  /** تحذيرُ الاستخراج — «صورٌ على الأرجح ويحتاج OCR» مثلاً. */
+  error?: string | null;
 }
 
 interface Preview {
@@ -63,7 +65,22 @@ const STATUS: Record<string, { tone: 'ok' | 'warn' | 'crit'; label: string }> = 
   ready: { tone: 'ok', label: 'استُخرج نصُّه' },
   pending: { tone: 'warn', label: 'قيد المعالجة' },
   failed: { tone: 'crit', label: 'لم يُستخرج نصّ' },
+  /**
+   * ★ حالةٌ رابعة: **استُخرج قليلاً**.
+   *
+   *   `extract.ts` يضع `ready` متى وُجد أيّ نصّ، ويكتب تحذيره في `error`.
+   *   فقائمةُ أسعارٍ ممسوحةٌ ضوئيّاً — وهي الحالة الأشيع عند المطاعم —
+   *   يُستخرج منها سطرٌ أو سطران فتُوسَم **أخضرَ**، والتحذير محبوسٌ خلف
+   *   ضغطة «عايِن». فينشر المالك وهو مطمئنّ، والبوت لا يعرف صنفاً واحداً،
+   *   ويأتي التشخيصُ من شكوى زبونٍ لا من الجدول.
+   */
+  weak: { tone: 'warn', label: 'استُخرج قليلاً — عايِنه' },
 };
+
+/** الحالةُ المعروضة: `ready` مع تحذيرٍ ليست `ready`. */
+function shownStatus(r: { status: string; error?: string | null }): string {
+  return r.status === 'ready' && r.error ? 'weak' : r.status;
+}
 
 /** حالةُ ملفٍّ واحدٍ في دفعة رفع. */
 interface UpItem { name: string; state: 'wait' | 'up' | 'done' | 'fail'; err?: string }
@@ -188,8 +205,8 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
       head: 'هل قُرئ؟',
       cell: (r) => (
         <Pill
-          tone={STATUS[r.status]?.tone ?? 'warn'}
-          label={STATUS[r.status]?.label ?? r.status}
+          tone={STATUS[shownStatus(r)]?.tone ?? 'warn'}
+          label={STATUS[shownStatus(r)]?.label ?? r.status}
         />
       ),
     },

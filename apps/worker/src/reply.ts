@@ -1,10 +1,9 @@
 import {
   getDb, withTenant, withPlatform, conversations, messages, botConfigs, botVersions, botTools,
-  aiRuns, aiKeys, prices, contacts, tenantChannels, conversationWindows,
+  aiRuns, contacts, tenantChannels, conversationWindows,
   eq, and, desc, isNull, sql,
 } from '@aibot/db';
 import { getAdapter, type ChannelKind } from '@aibot/channels';
-import { open as decrypt } from '@aibot/crypto';
 import {
   assembleContext, runAgent, buildToolDeclarations, choicesMessage, BUILTIN_TOOLS,
   FullKnowledge, buildRetrievalQuery, PLATFORM_RULES, type KnowledgeProvider,
@@ -15,6 +14,7 @@ import { sendOutbound, checkQuota, WindowClosedError, QuotaExceededError } from 
 import { RagKnowledge } from './retrieval.js';
 import { execTenantTool } from './tools.js';
 import { raiseIncident, resolveOpenOfKinds } from './incidents.js';
+import { resolveAiKey, priceAt } from './pricing.js';
 
 /**
  * عامل الردّ.
@@ -310,12 +310,14 @@ export async function handleReply(job: { conversationId: string }): Promise<void
       capabilities: caps,
     });
 
-    /* ── المفتاح: مفتاح العميل يُعفيه من سقف التوكنز؛ مفتاح المنصّة لا يُستعمل بعد التجاوز ── */
-    const keyRow = (await tx.select().from(aiKeys).where(and(
-      eq(aiKeys.tenantId, tenantId), eq(aiKeys.provider, ver.provider), eq(aiKeys.isActive, true),
-    )).limit(1))[0];
-    const apiKey = keyRow ? decrypt(keyRow.keyEnc, keyRow.keyVersion) : process.env.PLATFORM_AI_KEY!;
-    const keyOwner = keyRow ? 'tenant' : 'platform';
+    /* ── المفتاح: مفتاح العميل يُعفيه من سقف التوكنز؛ مفتاح المنصّة لا يُستعمل بعد التجاوز ──
+       والحلُّ في `pricing.ts` يشاركه الحيُّ والساحة — وكانت كتلتان منسوختان
+       بسلوكَين مختلفَين عند غياب المفتاح. */
+    const key = await resolveAiKey(tx, tenantId, ver.provider);
+    if (!key) {
+      throw new AiError('NO_KEY', 'لا مفتاحَ ذكاءٍ مضبوطٌ — لا للعميل ولا للمنصّة', false);
+    }
+    const { apiKey, owner: keyOwner } = key;
 
     const emits: OutboundMessage[] = [];
     const deferred: Array<{ key: string; args: Record<string, unknown> }> = [];
@@ -339,22 +341,18 @@ export async function handleReply(job: { conversationId: string }): Promise<void
     });
     modelOk = true;
 
-    /* ── القياس: صفٌّ لكلّ ردّ، وكلفةٌ بسعرٍ لحظة العرض ── */
-    const price = (await tx.select().from(prices).where(and(
-      eq(prices.provider, ver.provider), eq(prices.model, ver.model),
-    )).orderBy(desc(prices.effectiveFrom)).limit(1))[0];
+    /* ── القياس: صفٌّ لكلّ ردّ، وكلفةٌ بالسعر **السارِي** لحظةَ العرض ──
+       و«السارِي» شرطٌ لا زينة: كان الاستعلام يأخذ أحدثَ `effective_from`
+       مطلقاً، فصفُّ سعرٍ أُدخل بتاريخ سريانٍ لاحق يُطبَّق فوراً — كلفةُ اليوم
+       بسعر الغد، وهامشٌ خاطئٌ في التقارير بلا أن يلاحظ أحد. */
+    const price = await priceAt(tx, ver.provider, ver.model);
 
     /* ★ لا صفّ سعرٍ = كلفةٌ صفريّة **صامتة**، أي هامشٌ غير مرئيّ.
        والصفر هنا أخطر من الخطأ: التقارير تُظهر ربحاً كاملاً عن نموذجٍ يُكلّفك
        فعلاً. فالغياب يُسجَّل في الشوط ويُرفَع حادثةً بدل أن يمرّ. */
     if (!price) unpriced = { provider: ver.provider, model: ver.model };
 
-    const cost = price
-      ? computeCost(result.usage, {
-          input: Number(price.input), output: Number(price.output),
-          cachedInput: price.cachedInput === null ? null : Number(price.cachedInput),
-        })
-      : 0;
+    const cost = price ? computeCost(result.usage, price) : 0;
 
     const [run] = await tx.insert(aiRuns).values({
       tenantId, conversationId: conv.id, source: 'live',
@@ -375,6 +373,18 @@ export async function handleReply(job: { conversationId: string }): Promise<void
     if (result.flags.handoff) {
       await tx.update(conversations)
         .set({ needsAttention: true, botPausedUntil: new Date(Date.now() + cfg.pauseMinutes * 60_000) })
+        .where(eq(conversations.id, conv.id));
+    } else if (result.flags.usedFallback || result.flags.unknown) {
+      /* ★ **العجزُ يُرفَع إلى الموظّف — والوعدُ كان فارغاً.**
+         نصُّ العجز الافتراضيّ يقول للزبون «بحوّلك لموظّف»، ولم يكن يحوّل:
+         لا `needsAttention` ولا شيءٌ في أيّ شاشة. فالزبون ينتظر تحويلاً
+         وُعد به ولا يعلم أحدٌ أنّه وُعد. والحالةُ أشيع مما تبدو: ردٌّ فارغٌ
+         من النموذج (تفكيرٌ استهلك السقف) يمرّ من هنا أيضاً.
+         ولا إيقافَ للبوت هنا بخلاف التحويل الصريح: «لا أعرف» عن سؤالٍ واحد
+         لا تُسكِت البوت ربعَ ساعةٍ عن بقيّة الحوار — تُرفع المحادثةُ إلى
+         سلّة «يحتاجك الآن» وتبقى تعمل. */
+      await tx.update(conversations)
+        .set({ needsAttention: true })
         .where(eq(conversations.id, conv.id));
     }
 

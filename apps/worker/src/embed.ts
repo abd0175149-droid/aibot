@@ -35,15 +35,19 @@ export async function handleEmbed(job: { tenantId: string; versionId: string }):
         pieces.push({ sourceId: null, ord: 0, heading: 'الأساسيات', body: core.trim(), pinned: true });
       }
 
+      /* ★ النصُّ **والملفّات** معاً — وكان شرطُ `!pieces.length` يجعلهما
+         بديلَين: وجودُ ملفٍّ واحدٍ يُسقط نصَّ الحقل كلَّه من النسخة. فصاحبُ
+         النشاط الذي يكتب قيوده في الحقل ويرفع قائمته ملفّاً يخسر أحدهما
+         حتماً، ولا شيء يقول له أيّهما. */
       let ord = 1;
+      if (ver.knowledgeBase.trim()) {
+        for (const c of chunkText(ver.knowledgeBase)) {
+          pieces.push({ sourceId: null, ord: ord++, heading: c.heading, body: c.body, pinned: false });
+        }
+      }
       for (const s of sources) {
         for (const c of chunkText(s.extractedText ?? '')) {
           pieces.push({ sourceId: s.id, ord: ord++, heading: c.heading, body: c.body, pinned: false });
-        }
-      }
-      if (!pieces.length && ver.knowledgeBase.trim()) {
-        for (const c of chunkText(ver.knowledgeBase)) {
-          pieces.push({ sourceId: null, ord: ord++, heading: c.heading, body: c.body, pinned: false });
         }
       }
 
@@ -130,6 +134,37 @@ export async function handleEmbed(job: { tenantId: string; versionId: string }):
  * `heading` يُحقن مع المقطع — مقطعٌ بلا عنوانٍ يفقد سياقه
  * («150 ديناراً» لأيّ خدمة؟).
  */
+/**
+ * ★ قصٌّ صلبٌ لفقرةٍ أكبر من الهدف — على الأسطر ثمّ الجُمَل ثمّ الحروف.
+ *   والثلاثة لازمة: جدولُ Excel أسطرٌ بلا فراغ، ونصُّ PDF قد يكون
+ *   فقرةً بلا أسطر، وقد يأتي نصٌّ بلا فواصل جُمَلٍ إطلاقاً.
+ *   وأيُّ مستوًى يُغفَل يُعيد العطلَ نفسه على شكلٍ آخر.
+ */
+function splitHard(text: string, target: number): string[] {
+  const out: string[] = [];
+  let cur = '';
+  const flush = () => { if (cur.trim()) out.push(cur.trim()); cur = ''; };
+  const maxChars = Math.max(200, target * 2);
+  const join = (a: string, b: string) => a + '\n' + b;
+
+  for (const line of text.split(/\r?\n/)) {
+    const bySentence = estimateTokens(line) <= target
+      ? [line]
+      : line.split(/(?<=[.!؟?،؛])\s+/);
+    for (const part of bySentence) {
+      const pieces = estimateTokens(part) <= target
+        ? [part]
+        : (part.match(new RegExp('.{1,' + maxChars + '}', 'gs')) ?? [part]);
+      for (const piece of pieces) {
+        if (cur && estimateTokens(join(cur, piece)) > target) flush();
+        cur = cur ? join(cur, piece) : piece;
+      }
+    }
+  }
+  flush();
+  return out.length ? out : [text];
+}
+
 export function chunkText(
   text: string,
   target = 800,
@@ -157,7 +192,15 @@ export function chunkText(
   // ثمّ على الحجم، بحدود الفقرات
   for (const s of sections) {
     if (estimateTokens(s.body) <= target) { out.push(s); continue; }
-    const paras = s.body.split(/\n{2,}/);
+    /* ★ التقسيم على الأسطر الفارغة **ثمّ قصٌّ صلبٌ لما بقي أكبر من الهدف**.
+       كان على الأسطر الفارغة وحدها: جدولُ أسعارٍ من Excel يُحوَّل إلى سطرٍ
+       لكلّ صفٍّ بلا سطرٍ فارغ، فيصير القسم فقرةً واحدةً بآلاف التوكنز. وتلك
+       الفقرة تُدفع مقطعاً واحداً (‏`cur.length === 0` فلا يُقسَّم)، ثمّ يقصّها
+       التضمينُ عند حدّه فتمثّل أوّل الأصناف وحدها، ثمّ **لا تمرّ من
+       `fitChunks` أبداً** لأنّها أكبر من الميزانية كلّها. فالقائمةُ تختفي من
+       البوت بعد رفعها بنجاح، وشاشةُ النشر تقول «جاهز». */
+    const paras = s.body.split(/\n{2,}/)
+      .flatMap((para) => (estimateTokens(para) <= target ? [para] : splitHard(para, target)));
     let cur: string[] = [];
     for (const p of paras) {
       const next = [...cur, p].join('\n\n');

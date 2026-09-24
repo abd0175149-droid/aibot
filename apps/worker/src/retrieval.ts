@@ -132,14 +132,20 @@ export async function hybridSearch(
        ORDER BY c.embedding <=> ${vecLiteral}::vector
        LIMIT ${limit}
     `),
+    /* ★ الفرع المعجميّ. و`ar_norm` على **الطرفين**: العمود المولَّد مبنيٌّ
+       عليها (‏`0007_kb_chunks_tsv.sql`) والاستعلام يمرّ بها، وبلا ذلك تفشل
+       المطابقة على كلّ كلمةٍ فيها «ة» أو همزة — أي على أغلب العربيّة.
+       وكان العمود `tsv` نفسه غير موجودٍ إطلاقاً: كلّ سؤالٍ في وضع hybrid
+       يُسقط معاملة الردّ بلا حادثة. */
     db.execute<Hit>(sql`
       SELECT c.id, c.heading_path AS "headingPath", c.body, c.token_count AS "tokenCount",
              false AS pinned,
-             ts_rank(c.tsv, plainto_tsquery('arabic', ${norm}))
-               + similarity(c.body, ${norm}) AS score
+             ts_rank(c.tsv, plainto_tsquery('arabic', ar_norm(${norm})))
+               + similarity(ar_norm(c.body), ar_norm(${norm})) AS score
         FROM kb_chunks c
        WHERE c.version_id = ${versionId} AND c.pinned = false
-         AND (c.tsv @@ plainto_tsquery('arabic', ${norm}) OR c.body % ${norm})
+         AND (c.tsv @@ plainto_tsquery('arabic', ar_norm(${norm}))
+              OR ar_norm(c.body) % ar_norm(${norm}))
        ORDER BY score DESC
        LIMIT ${limit}
     `),

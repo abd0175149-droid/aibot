@@ -75,7 +75,9 @@ describe('ما تقوله الشاشة يطابق ما يفعله الخادم',
   it('أوّلُ نشرٍ يُشعل البوت، والتوستة تقرأ الحقيقة من الخادم', () => {
     const api = read('apps/api/src/routes/bot.ts');
     expect(api, 'كان البوت يُنشأ مطفأً ولا يشغّله شيء').toMatch(/const firstPublish = !cfg\.publishedVersionId;/);
-    expect(api).toMatch(/live:\s*boolean|live\s*\}/);
+    expect(api, '`live` تُحسب وتُعاد للشاشة').toMatch(/const live = /);
+    // ويُعاد في جسم الردّ — لا يُحسب ثمّ يُهمَل
+    expect(api.slice(api.indexOf('const live = '))).toMatch(/return \{[\s\S]{0,400}\blive\b/);
     const web = read('apps/web/src/app/app/bot/page.tsx');
     expect(web, 'التوستة كانت تقول «يردّ بها من الآن» في كلّ حال').toMatch(/r\.live/);
   });
