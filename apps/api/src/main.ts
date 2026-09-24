@@ -2,6 +2,7 @@ import Fastify from 'fastify';
 import { REDACT_PATHS } from '@aibot/crypto';
 import { AppError } from '@aibot/shared';
 import { pingDb, closeDb } from '@aibot/db';
+import { parseJsonBody } from './json-body.js';
 import { registerWebhooks } from './webhooks.js';
 import { registerAuth, requireAuth } from './auth.js';
 import { registerInbox } from './routes/inbox.js';
@@ -24,6 +25,29 @@ const app = Fastify({
     level: process.env.LOG_LEVEL ?? 'info',
     // تنقيةٌ إجباريّة: سرٌّ في سجلّ هو سرٌّ مسرَّب
     redact: { paths: REDACT_PATHS, censor: '[محجوب]' },
+    /**
+     * ★ **السجلُّ كان يحفظ أرقامَ هواتف الزبائن وأسماءَهم.**
+     *
+     *   مُسلسِلُ `req` الافتراضيّ في Fastify يكتب `req.url` كاملاً — بالمسار
+     *   **وسلسلة الاستعلام** — في كلّ طلبٍ عند مستوى `info`. وثلاثُ شاشاتٍ
+     *   تضع كلامَ الزبون في `?q=`: بحثُ الإنبوكس وبحثُ جهات الاتّصال وبحثُ
+     *   المحادثات. فموظّفٌ يبحث عن «0791234567» ليفتح محادثةَ من اتّصل به
+     *   يكتب ذلك الرقمَ في سجلٍّ يُحتفظ به ويُشحن إلى أيّ مجمِّع.
+     *   و`REDACT_PATHS` لا تغطّي `req.url` — هي لأسماء الحقول لا للعناوين.
+     *
+     *   والمسارُ يبقى كاملاً (هو ما يُشخَّص به)، والاستعلامُ تُحجب **قيمُه**
+     *   وتبقى **مفاتيحُه**: «ما الذي بُحث عنه» سرٌّ، و«أنّ بحثاً جرى» ليس
+     *   سرّاً وهو ما يُقرأ في التشخيص.
+     */
+    serializers: {
+      req(req: { method: string; url: string; ip?: string; id?: string }) {
+        const [path, query] = req.url.split('?');
+        const safe = query
+          ? `${path}?${query.split('&').map((kv) => `${kv.split('=')[0]}=[محجوب]`).join('&')}`
+          : path;
+        return { method: req.method, url: safe, ip: req.ip, id: req.id };
+      },
+    },
   },
   // ميتا ترسل حمولاتٍ صغيرة؛ الحدّ يمنع إغراقاً بجسمٍ ضخم
   bodyLimit: 1_048_576,
@@ -36,11 +60,14 @@ app.addHook('onRequest', async (req) => {
   (req as unknown as { rawBody?: Buffer }).rawBody = undefined;
 });
 app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, done) => {
-  (req as unknown as { rawBody: Buffer }).rawBody = body as Buffer;
+  const raw = body as Buffer;
+  /* البايتاتُ أوّلاً وقبل أيّ قرار: توقيعُ الويبهوك يُحسب عليها حتّى لو
+     رُفض الجسم — فلا يُفقَد ما يُثبت أنّ الطلب من ميتا. */
+  (req as unknown as { rawBody: Buffer }).rawBody = raw;
   try {
-    done(null, (body as Buffer).length ? JSON.parse((body as Buffer).toString('utf8')) : {});
-  } catch {
-    done(null, {}); // حمولةٌ مشوّهة: 200 ثمّ تسجيل — لا 400 يعطّل الويبهوك
+    done(null, parseJsonBody(req.url, raw));
+  } catch (e) {
+    done(e as Error, undefined);
   }
 });
 
@@ -89,6 +116,15 @@ app.get('/api/health/deep', { preHandler: requireAuth({ console: true }) }, asyn
   uptimeSec: Math.round(process.uptime()),
 }));
 
+/* ★ ويُسجَّل **قبل** المسارات: خطأُ محلّل المحتوى يقع خارج أيّ مسار، فمعالجٌ
+   مسجَّلٌ بعده لا يلتقطه — ويخرج ٥٠٠ إنجليزيّةً بدل ٤٠٠ عربيّةٍ مفهومة. */
+app.setErrorHandler((err, req, reply) => {
+  // أخطاء المجال تُعاد بكودها الثابت القابل للترجمة — لا بنصٍّ إنجليزيّ للمستخدم
+  if (err instanceof AppError) return reply.code(err.status).send(err.toJSON());
+  req.log.error({ err }, 'خطأ غير متوقَّع');
+  reply.code(500).send({ error: { code: 'INTERNAL', message: 'خطأ داخليّ' } });
+});
+
 await app.register(async (api) => {
   await registerWebhooks(api);
   await registerAuth(api);
@@ -101,13 +137,6 @@ await app.register(async (api) => {
   await registerTeam(api);
   await registerPush(api);
 }, { prefix: '/api' });
-
-app.setErrorHandler((err, req, reply) => {
-  // أخطاء المجال تُعاد بكودها الثابت القابل للترجمة — لا بنصٍّ إنجليزيّ للمستخدم
-  if (err instanceof AppError) return reply.code(err.status).send(err.toJSON());
-  req.log.error({ err }, 'خطأ غير متوقَّع');
-  reply.code(500).send({ error: { code: 'INTERNAL', message: 'خطأ داخليّ' } });
-});
 
 /** إغلاقٌ لطيف: مهمّةٌ نصف منفَّذة عند إعادة النشر تضيع بلا هذا. */
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {

@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
   getDb, withTenant, withPlatform, botConfigs, botVersions, botTools, knowledgeSources, aiRuns,
   kbChunks, auditLog, prices, eq, and, desc, sql, type Tx,
@@ -727,14 +727,34 @@ export async function registerBot(app: FastifyInstance) {
   const KB_MAX = 12 * 1024 * 1024;
   const KB_ROOT = process.env.MEDIA_ROOT ?? '/app/media';
 
-  /* محلّل يبتلع البايتات كما وصلت للأنواع المسموحة وحدها. */
+  /* ★ محلّلٌ يبتلع البايتات كما وصلت — و**بلا** `bodyLimit`.
+     `addContentTypeParser` يكتب على نسخة `/api` نفسِها (لا `register` ولا
+     تغليف: `registerAuth` و`registerWebhooks` يشتركان في المحلّلات عينِها)،
+     فـ`bodyLimit: KB_MAX` هنا كان يرفع السقف إلى اثني عشر ميجابايت على
+     **كلّ** مسارٍ في `/api` — ومنها `POST /auth/login` لمجهول. والسقفُ
+     يسكن المسارَ وحده أدناه. */
   for (const mime of KB_MIMES) {
-    app.addContentTypeParser(mime, { parseAs: 'buffer', bodyLimit: KB_MAX }, (_req, body, done) => {
+    app.addContentTypeParser(mime, { parseAs: 'buffer' }, (_req, body, done) => {
       done(null, body);
     });
   }
 
-  app.post('/bot/knowledge/files', { preHandler: auth }, async (req, reply) => {
+  /**
+   * ★ **التوكن يُفحص قبل أن تُقرأ بايتةٌ واحدة.**
+   *
+   *   `preHandler` يعمل **بعد** التحليل في Fastify 5. فمجهولٌ بلا توكن كان
+   *   يُنفق اثني عشر ميجابايت من ذاكرة الخادم قبل أن يُرمى ٤٠١ — وعشرةُ
+   *   طلباتٍ متزامنةٍ مئةً وعشرين، بلا حدِّ معدّلٍ يوقفها.
+   *   و`onRequest` أوّلُ ما يعمل: قبل المحلّل وقبل أن يُقرأ الجسم.
+   */
+  const authBeforeBody = async (req: FastifyRequest, reply: FastifyReply) => {
+    await auth(req, reply);
+  };
+
+  app.post('/bot/knowledge/files', {
+    bodyLimit: KB_MAX,
+    onRequest: authBeforeBody,
+  }, async (req, reply) => {
     const tenantId = tenantOf(req);
     const mime = String(req.headers['content-type'] ?? '').split(';')[0]!.trim();
     if (!KB_MIMES.has(mime)) {
