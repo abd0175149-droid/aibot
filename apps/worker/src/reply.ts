@@ -6,7 +6,7 @@ import {
 import { getAdapter, type ChannelKind } from '@aibot/channels';
 import {
   assembleContext, runAgent, buildToolDeclarations, choicesMessage, BUILTIN_TOOLS,
-  FullKnowledge, buildRetrievalQuery, PLATFORM_RULES, withinBusinessHours,
+  FullKnowledge, buildRetrievalQuery, PLATFORM_RULES, withinBusinessHours, sanitizePromptField,
   type KnowledgeProvider, type BusinessHours,
 } from '@aibot/core';
 import { getProvider, computeCost, DEFAULT_CHAT_MODEL, AiError, type ToolCall } from '@aibot/ai';
@@ -655,10 +655,29 @@ function nowIn(tz: string): string {
   }).format(new Date());
 }
 
+/**
+ * ★ **كلُّ حقلٍ هنا يملكه المهاجم — والبطاقةُ تسكن `system`.**
+ *
+ *   الاسمُ يأتي من ملفّ الزبون على واتساب (‏`profile.name`، يضبطه بنفسه)، أو
+ *   ممّا أملاه على `collect_lead`. والسماتُ من `set_contact_attribute` بما
+ *   قاله. وكانت تُلصق **خاماً** تحت «# الآن» في الموجّه — أعلى نصٍّ ثقةً —
+ *   فسطرٌ جديدٌ يتبعه «# قاعدة: …» يُقرأ قاعدةً من المنصّة.
+ *   وهو يبقى في الصفّ: يعبر كلَّ ردٍّ في كلّ محادثةٍ لاحقة، لا تلك الرسالة.
+ *
+ * ★ وعدَدُ السمات محدودٌ أيضاً: `save_note` تُلحق بلا سقف، وكلُّ سمةٍ تدخل
+ *   موجّهَ **كلّ ردّ** — كلفةٌ متكرّرةٌ تنمو بلا أن يلاحظها أحد.
+ */
+const MAX_ATTRS = 12;
+
 function renderContactCard(c: { displayName: string | null; tags: string[]; attributes: unknown } | undefined): string {
   if (!c) return '';
   const attrs = Object.entries((c.attributes ?? {}) as Record<string, unknown>)
-    .map(([k, v]) => `${k}: ${v}`).join(' · ');
-  return [c.displayName && `الاسم: ${c.displayName}`, c.tags.length && `وسوم: ${c.tags.join('، ')}`, attrs]
+    .slice(0, MAX_ATTRS)
+    .map(([k, v]) => `${sanitizePromptField(k, 40)}: ${sanitizePromptField(v, 160)}`)
+    .filter((x) => !x.startsWith(': '))
+    .join(' · ');
+  const name = sanitizePromptField(c.displayName, 60);
+  const tags = c.tags.slice(0, 20).map((t) => sanitizePromptField(t, 40)).filter(Boolean);
+  return [name && `الاسم: ${name}`, tags.length && `وسوم: ${tags.join('، ')}`, attrs]
     .filter(Boolean).join('\n');
 }

@@ -108,7 +108,7 @@ export async function execTenantTool(ctx: ExecCtx): Promise<{
       if (conv) {
         await tx.update(contacts).set({
           attributes: sql`jsonb_set(${contacts.attributes}, '{notes}',
-            coalesce(${contacts.attributes}->'notes','[]'::jsonb) || ${JSON.stringify([args.note])}::jsonb)`,
+            coalesce(${contacts.attributes}->'notes','[]'::jsonb) || ${JSON.stringify([short(args.note, 300)])}::jsonb)`,
         }).where(eq(contacts.id, conv.contactId));
       }
       return { result: { ok: true } };
@@ -116,9 +116,16 @@ export async function execTenantTool(ctx: ExecCtx): Promise<{
 
     case 'set_contact_attribute': {
       const conv = (await tx.select().from(conversations).where(eq(conversations.id, ctx.conversationId)).limit(1))[0];
-      if (conv && args.key) {
+      /* ★ المفتاحُ يُصفّى قبل أن يلمس القاعدة، لسببَين لا واحد:
+         ① يُطبع لاحقاً في بطاقة الزبون داخل الموجّه — فمفتاحٌ فيه سطرٌ جديد
+           يصير سطرَ أمرٍ يقرأه النموذج قاعدةً من المنصّة.
+         ② والمسارُ يُبنى نصّاً: `{مفتاح}`. فمفتاحٌ فيه «}» يُنتج مساراً غير
+           صالح فترفضه القاعدة و**تُلغى المعاملة كلُّها** — أي يسقط الردّ
+           الذي كان يُكتب معها. */
+      const attrKey = short(args.key, 40).replace(/[{}",]/g, '');
+      if (conv && attrKey) {
         await tx.update(contacts).set({
-          attributes: sql`jsonb_set(${contacts.attributes}, ${`{${String(args.key)}}`}, ${JSON.stringify(String(args.value ?? ''))}::jsonb, true)`,
+          attributes: sql`jsonb_set(${contacts.attributes}, ${`{${attrKey}}`}, ${JSON.stringify(short(args.value, 300))}::jsonb, true)`,
         }).where(eq(contacts.id, conv.contactId));
       }
       return { result: { ok: true } };
