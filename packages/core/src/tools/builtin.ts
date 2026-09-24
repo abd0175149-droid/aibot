@@ -1,4 +1,5 @@
 import type { ToolDeclaration } from '@aibot/ai';
+import { isGeminiParamsSchema } from '@aibot/shared';
 import type { ChannelCapabilities, OutboundMessage } from '@aibot/shared';
 
 /**
@@ -131,8 +132,28 @@ export function buildToolDeclarations(
     out.push({ name: t.key, description: t.description, parameters: t.parameters });
   }
 
+  /**
+   * ★ **شبكةُ أمانٍ عند القراءة: أداةٌ مشوَّهةٌ تُحذف ولا تُسكت البوت.**
+   *
+   *   الإعلاناتُ تذهب إلى المزوّد في **مصفوفةٍ واحدة**، فعنصرٌ واحدٌ خارجَ
+   *   مجموعةِ OpenAPI التي يقبلها يُبطل الطلبَ كلَّه بـ400 — أي **لا ردَّ
+   *   إطلاقاً** على كلّ رسالةٍ تصل هذا المستأجر، لا «أداةٌ لا تعمل».
+   *
+   *   والتحقّقُ عند الكتابة يمنع الجديد، وهذا يحمي من **القديم**: صفوفٌ
+   *   كُتبت قبل العقد، وصفوفٌ أُدخلت بسكربتٍ يتجاوز الـAPI
+   *   (`ops/testing/security-probe-setup.ts` يُدرج مباشرةً). وإسقاطُ أداةٍ
+   *   واحدةٍ خسارةُ قدرةٍ واحدة؛ وتمريرُها خسارةُ البوت كلِّه.
+   *
+   * ★ والاسمُ المنتحِل يُسقَط أيضاً: مبدِّلُ المنفِّذ يطابق الحالةَ المدمجة
+   *   أوّلاً، فأداةٌ مخصَّصةٌ تسمّي نفسها `collect_lead` تُعلَن للنموذج ثمّ
+   *   يُنفَّذ غيرُها — وعدٌ صامتٌ بغير ما يقع.
+   */
+  const builtinKeys = new Set(BUILTIN_TOOLS.map((t) => t.key));
+
   for (const c of custom) {
     if (!enabledKeys.has(c.key)) continue;
+    if (builtinKeys.has(c.key)) continue;
+    if (!isGeminiParamsSchema(c.paramsSchema)) continue;
     const ok = c.requires.every((r) =>
       r === 'choices' ? caps.buttons > 0 || caps.quickReplies > 0 : Boolean(caps[r as keyof ChannelCapabilities]));
     if (!ok) continue;

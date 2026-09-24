@@ -3,7 +3,9 @@ import {
   getDb, withTenant, withPlatform, botConfigs, botVersions, botTools, knowledgeSources, aiRuns,
   kbChunks, auditLog, prices, eq, and, desc, sql, type Tx,
 } from '@aibot/db';
-import { AppError, ErrorCode, BotBehaviorPatch } from '@aibot/shared';
+import {
+  AppError, ErrorCode, BotBehaviorPatch, BotToolUpsert, BotToolPatch,
+} from '@aibot/shared';
 import { seal } from '@aibot/crypto';
 import { DEFAULT_CHAT_MODEL } from '@aibot/ai';
 import { decideKnowledgeMode, estimateTokens, linkHostsFrom, execHttpTool, assertPublicUrl, type HttpToolSpec } from '@aibot/core';
@@ -497,7 +499,18 @@ export async function registerBot(app: FastifyInstance) {
 
   app.post<{ Body: Record<string, any> }>('/bot/tools', { preHandler: auth }, async (req) => {
     const tenantId = tenantOf(req);
-    const b = req.body ?? {};
+
+    /* ★ **مخطّطٌ واحدٌ خاطئ كان يُسكت كلَّ ردود هذا المستأجر.**
+       الإعلاناتُ تذهب إلى المزوّد في مصفوفةٍ واحدة، فعنصرٌ مشوَّهٌ يُبطل
+       الطلبَ كلَّه بـ400 — لا «أداةٌ لا تعمل» بل **لا ردَّ إطلاقاً** على كلّ
+       رسالةٍ تصل. وكان المسارُ يقبل أيّ JSON: `String(b.key)` تحويلٌ لا
+       تحقّق — `undefined` تصير النصّ «undefined»، وكائنٌ يصير
+       «[object Object]»، والعربيّةُ تمرّ. */
+    const parsed = BotToolUpsert.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(ErrorCode.VALIDATION, 'أداةٌ غير صالحة', 400, parsed.error.issues);
+    }
+    const b = parsed.data as Record<string, any>;
     if (b.http?.url) await assertPublicUrl(String(b.http.url)).catch((e) => {
       throw new AppError(ErrorCode.TOOL_BLOCKED, (e as Error).message, 400);
     });
@@ -591,7 +604,16 @@ export async function registerBot(app: FastifyInstance) {
     { preHandler: auth },
     async (req) => {
       const tenantId = tenantOf(req);
-      const b = req.body ?? {};
+
+      /* ★ والتعديلُ يُحقَّق كالإنشاء: هو الطريقُ الذي يعود منه المخطّطُ
+         المعطوب إلى الصفّ. و`key` مقبولٌ هنا وإن لم يُكتب — الباني يرسل
+         الحمولة كاملةً، ورفضُه يمنع المالكَ من **تصحيح** الأداة المعطوبة،
+         أي من الخروج من العطل نفسه. */
+      const parsed = BotToolPatch.safeParse(req.body ?? {});
+      if (!parsed.success) {
+        throw new AppError(ErrorCode.VALIDATION, 'تعديلٌ غير صالح', 400, parsed.error.issues);
+      }
+      const b = parsed.data as Record<string, any>;
       if (b.http?.url) {
         await assertPublicUrl(String(b.http.url)).catch((e) => {
           throw new AppError(ErrorCode.TOOL_BLOCKED, (e as Error).message, 400);
