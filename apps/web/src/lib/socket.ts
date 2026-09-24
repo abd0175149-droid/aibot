@@ -1,31 +1,76 @@
 'use client';
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { io, type Socket } from 'socket.io-client';
-import { getToken } from './api';
+import { getToken, bootstrap } from './api';
 import { useSession } from './session';
 
 let socket: Socket | null = null;
+
+/* ── حالةُ الاتّصال، مُشتركةٌ لأنّ السوكِت واحدٌ للتطبيق كلّه ── */
+export type LinkState = 'up' | 'down';
+let link: LinkState = 'down';
+const watchers = new Set<() => void>();
+function setLink(next: LinkState): void {
+  if (link === next) return;
+  link = next;
+  for (const w of watchers) w();
+}
+
+/** لا تجديدَين متزامنَين للتوكن عند وابل `connect_error`. */
+let renewing: Promise<boolean> | null = null;
 
 /**
  * الاتّصال اللحظيّ.
  *
  * اتّصالٌ واحد للتطبيق كلّه — لا اتّصالٌ لكلّ شاشة. والأحداث تُحدِّث الكاش
  * مباشرةً بدل إعادة الجلب: إنبوكسٌ بعشر محادثاتٍ نشطة يُرهق الشبكة وإلّا.
+ *
+ * ★ **العطل الذي أُعيدت كتابةُ هذا الملفّ من أجله: الإنبوكس الحيّ كان يموت
+ *   صامتاً بعد كلّ نشر.**
+ *
+ *   كان التوكن يُمرَّر **كائناً ثابتاً** (`auth: { token }`) يُلتقط مرّةً عند
+ *   الإنشاء. وعمرُ توكن الوصول ربعُ ساعة، والاتّصالُ يعيش ساعات. فعند أوّل
+ *   انقطاع — نشرةٌ تُعيد تشغيل الـAPI، أو نومُ الجهاز، أو تذبذبُ شبكة —
+ *   يُعيد العميل الاتّصال **بنفس التوكن المنتهي**، فيرفضه `io.use` في
+ *   المصافحة. ورفضُ الوسيط ليس كخطأ النقل: `socket.io-client` يضع
+ *   `active = false` ويتوقّف عن المحاولة **إلى الأبد**.
+ *
+ *   والنتيجةُ أنّ الشاشة تبقى كما هي، ساكنةً، بلا أيّ علامة: رسائل الزبائن
+ *   تصل القاعدة ولا تظهر للموظّف حتّى يُحدّث الصفحة بالصدفة. وهو بعينه
+ *   العطلُ الذي كُتب جسرُ البثّ لإزالته.
+ *
+ *   ثلاثةٌ تُصلحه معاً — وأيُّ واحدٍ وحده لا يكفي:
+ *     ① التوكن **دالّةٌ** تُقرأ عند كلّ مصافحة، لا كائنٌ يُلتقط مرّة.
+ *     ② رفضُ المصافحة يُجدّد التوكن ثمّ يُعيد الوصل بيده — فالعميل توقّف.
+ *     ③ الحالةُ تُنشر للشاشة، فالانقطاعُ يُرى ويُعاد الجلبُ عند العودة.
  */
 function ensure(): Socket | null {
-  const token = getToken();
-  if (!token) return null;
-  if (socket?.connected) return socket;
+  if (socket) return socket;
+  if (!getToken()) return null;
 
-  socket?.close();
   socket = io({
     path: '/api/socket.io',
-    auth: { token },
+    /* ★ دالّةٌ لا كائن: socket.io ينادي هذه عند **كلّ** مصافحة، فيذهب
+       التوكن الحيُّ لا الذي كان حيّاً ساعةَ فُتحت الصفحة. */
+    auth: (cb: (d: Record<string, unknown>) => void) => cb({ token: getToken() ?? '' }),
     transports: ['websocket', 'polling'],
     reconnectionDelay: 800,
     reconnectionDelayMax: 8000,
   });
+
+  socket.on('connect', () => setLink('up'));
+  socket.on('disconnect', () => setLink('down'));
+
+  socket.on('connect_error', (err: Error) => {
+    setLink('down');
+    /* الرفضُ من الوسيط (توكن منتهٍ) يُوقف المحاولاتِ نهائيّاً، فالتعافي
+       يدويٌّ: جدّد التوكن ثمّ صِل. وما عداه خطأُ نقلٍ يتكفّل به العميل. */
+    if (!/unauthorized/i.test(err.message)) return;
+    renewing ??= bootstrap().finally(() => { renewing = null; });
+    void renewing.then((ok) => { if (ok) socket?.connect(); });
+  });
+
   return socket;
 }
 
@@ -50,7 +95,45 @@ export function useSocket(handlers: Record<string, (payload: any) => void>): voi
   }, [me]);
 }
 
+const subscribeLink = (cb: () => void) => {
+  watchers.add(cb);
+  return () => { watchers.delete(cb); };
+};
+
+/**
+ * حالةُ الوصلة للشاشة — و`onBack` يُنادى عند **عودة** الوصل لا عند أوّل وصل.
+ * فالشاشةُ التي فاتها بثٌّ تُعيد الجلب، والتي لم يفتها شيءٌ لا تُرهق الشبكة.
+ */
+export function useLink(onBack?: () => void): LinkState {
+  const state = useSyncExternalStore(subscribeLink, () => link, () => 'down' as LinkState);
+  const wasDown = useRef(false);
+  const cb = useRef(onBack);
+  cb.current = onBack;
+
+  useEffect(() => {
+    if (state === 'down') { wasDown.current = true; return; }
+    if (wasDown.current) { wasDown.current = false; cb.current?.(); }
+  }, [state]);
+
+  return state;
+}
+
+/**
+ * استطلاعٌ احتياطيٌّ **ما دامت الوصلة منقطعة** — وهو الشبكةُ الأخيرة.
+ * فحتّى لو عجز التجديدُ عن إعادة الوصل، لا يجلس الموظّف أمام شاشةٍ ميّتة.
+ */
+export function useFallbackPoll(down: boolean, everyMs: number, fn: () => void): void {
+  const cb = useRef(fn);
+  cb.current = fn;
+  useEffect(() => {
+    if (!down) return;
+    const t = setInterval(() => cb.current(), everyMs);
+    return () => clearInterval(t);
+  }, [down, everyMs]);
+}
+
 export function closeSocket(): void {
   socket?.close();
   socket = null;
+  setLink('down');
 }

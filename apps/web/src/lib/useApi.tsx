@@ -22,30 +22,61 @@ export function useApi<T>(path: string | null, deps: unknown[] = []) {
   const [data, setData] = useState<T | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(Boolean(path));
-  const alive = useRef(true);
+
+  /**
+   * ★ **رقمُ الطلب — بديلُ حارس `alive` الذي كان يشهد زوراً.**
+   *
+   *   كان الحارسُ مرجعاً واحداً مشتركاً: التنظيفُ يُطفئه، ثمّ يُشعله الـeffect
+   *   التالي **فوراً** في نفس الدورة. فاستجابةُ المحادثة السابقة إن تأخّرت
+   *   تمرّ من الحارس وتكتب `setData` فوق رسائل المحادثة الحاليّة — بعد أن
+   *   وصلت الصحيحةُ وظهرت. أي أنّ الحوارَ ينقلب إلى حوارٍ آخر أمام عينَي
+   *   الموظّف، وكلُّ ما يراه اسمُ الزبون الصحيح فوق كلام زبونٍ غيره.
+   *
+   *   والرقمُ المتزايد يحسم هذا: كلُّ نداءٍ يأخذ رقمَه، ولا يكتب إلّا إن بقي
+   *   **هو الأحدث**. والتنظيف يزيده فيُبطل ما هو طائر.
+   */
+  const seq = useRef(0);
+
+  /** المسارُ الذي تخصّه `data` الآن — ومنه يُعرف متى تُمسح. */
+  const shownFor = useRef<string | null>(null);
 
   const depKey = useMemo(() => JSON.stringify(deps), [deps]);
   const userId = me?.user.id ?? null;
 
   const load = useCallback(async () => {
     if (!path || !userId) return;
+    const mine = ++seq.current;
     setLoading(true);
     setError(null);
     try {
       const r = await get<T>(path);
-      if (alive.current) setData(r);
+      if (seq.current !== mine) return;
+      shownFor.current = path;
+      setData(r);
     } catch (e) {
-      if (alive.current) setError(e instanceof ApiError ? e.message : 'تعذّر جلب البيانات.');
+      if (seq.current !== mine) return;
+      setError(e instanceof ApiError ? e.message : 'تعذّر جلب البيانات.');
     } finally {
-      if (alive.current) setLoading(false);
+      if (seq.current === mine) setLoading(false);
     }
   }, [path, userId, depKey]);
 
   useEffect(() => {
-    alive.current = true;
+    /* ★ **بياناتُ مسارٍ لا تُعرض تحت عنوان مسارٍ آخر.**
+       كانت `data` تبقى كما هي حتّى يصل الجديد — وإن فشل الجلب فإلى الأبد.
+       فيقرأ الموظّفُ سؤالَ زبونٍ تحت اسم زبونٍ آخر ويردّ عليه، فيصل الردُّ
+       إلى من لم يسأل.
+       والشرطُ على **المسار** لا على `load`: تغيُّرُ `deps` وحدها إعادةُ جلبٍ
+       للمورد نفسه، ومسحُ البيانات فيها وميضٌ بلا سبب. */
+    if (path !== shownFor.current) {
+      shownFor.current = null;
+      setData(null);
+      setError(null);
+    }
     void load();
-    return () => { alive.current = false; };
-  }, [load]);
+    /* والتنظيفُ يُبطل الطائرَ بدل أن يُسكته: `seq` يتقدّم فلا يكتب أحد. */
+    return () => { seq.current++; };
+  }, [load, path]);
 
   return { data, error, loading, reload: load, setData };
 }

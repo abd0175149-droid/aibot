@@ -64,9 +64,10 @@ const writes = ROUTES.filter((r) => r.method !== 'get');
 const route = (path: string) => ROUTES.find((r) => r.path === path)!;
 
 describe('ماسحُ المسارات يعمل — وإلّا فالحرسُ يمرّ على الفراغ', () => {
-  it('يجد المسارات الخمسة كلَّها بأسمائها', () => {
+  it('يجد المسارات الستّة كلَّها بأسمائها', () => {
     expect(ROUTES.map((r) => `${r.method} ${r.path}`).sort()).toEqual([
       'get /team',
+      'get /team/roster',
       'patch /team/:id/role',
       'post /team/:id/active',
       'post /team/:id/reset-password',
@@ -87,16 +88,46 @@ describe('ماسحُ المسارات يعمل — وإلّا فالحرسُ ي�
   });
 });
 
+/**
+ * ★ **استثناءٌ واحدٌ معلَن — ولا يُوسَّع إلّا بنيّة.**
+ *
+ *   `/team/roster` سجلٌّ للتحويل: معرّفٌ واسمٌ ودورٌ لأعضاء الفريق النشطين،
+ *   يقرؤه **كلُّ** موظّف. ولولاه لبقيت ورقة «حوّلها لزميل» وسماً نصّيّاً لا
+ *   يقول لأيّ زميل، لأنّ `/team` خلف صلاحيّة الإعدادات.
+ *
+ *   والاستثناءُ محروسٌ من جهتَين لا جهةٍ واحدة: أنّه **وحده** المعفى من
+ *   بوّابة الإعدادات، وأنّ ما يُعيده أسماءٌ فقط. فلو أُضيف إليه بريدٌ أو
+ *   حالةُ كلمةِ مرورٍ أو جلساتٌ حيّة، سقط الحارسُ الثاني — وهو بالضبط ما
+ *   يحدث حين يُوسَّع مسارٌ صغيرٌ بعد ستّة أشهر لأنّ البيانات «موجودةٌ أصلاً».
+ */
+const ROSTER = '/team/roster';
+
 describe('① بوّابةُ الصلاحيّة — الخادم يفرضها لا التنقّل', () => {
-  it('كلّ مسارٍ يمرّ بالبوّابة نفسِها', () => {
-    const naked = ROUTES.filter((r) => !r.body.includes('preHandler: owner'));
+  it('كلّ مسارٍ يمرّ بالبوّابة نفسِها — إلّا سجلَّ الأسماء', () => {
+    const naked = ROUTES
+      .filter((r) => r.path !== ROSTER)
+      .filter((r) => !r.body.includes('preHandler: owner'));
     expect(naked.map((r) => r.path), 'مسارٌ بلا بوّابة صلاحيّة — الموظّف يبلغه بكتابة عنوانه.').toEqual([]);
   });
 
   it('والبوّابةُ هي `settings` — وهي التي ترفض الموظّف', () => {
     expect(SRC).toContain('requireAuth({ settings: true })');
-    // ولا بوّابةٌ عارية: `requireAuth()` تقبل أيَّ داخلٍ مهما كان دوره
-    expect(/requireAuth\(\s*\)/.test(CODE)).toBe(false);
+    /* و`requireAuth()` العارية مسموحةٌ **مرّةً واحدة**: في سجلّ الأسماء.
+       والعدُّ هو الحارس — فنسخةٌ ثانيةٌ منها في مسارٍ آخر تُسقطه. */
+    const bare = [...CODE.matchAll(/requireAuth\(\s*\)/g)].length;
+    expect(bare, 'بوّابةٌ عاريةٌ في أكثر من موضع — `requireAuth()` تقبل أيَّ داخلٍ مهما كان دوره').toBe(1);
+    expect(route(ROSTER).body, 'وهي في سجلّ الأسماء لا في غيره').toMatch(/requireAuth\(\s*\)/);
+  });
+
+  it('★ وسجلُّ الأسماء أسماءٌ فقط — لا بريدٌ ولا كلمةُ مرورٍ ولا جلسات', () => {
+    const body = maskComments(route(ROSTER).body);
+    expect(body, 'المعرّفُ والاسمُ والدور — وهذا كلُّ ما يحتاجه من يحوّل محادثة')
+      .toMatch(/select\(\{\s*id:\s*users\.id,\s*name:\s*users\.name,\s*role:\s*users\.role\s*\}\)/);
+    for (const leak of ['users.email', 'passwordHash', 'mustChangePassword', 'lastLoginAt', 'sessions']) {
+      expect(body, `${leak} في سجلٍّ يقرؤه كلُّ موظّف`).not.toContain(leak);
+    }
+    expect(body, 'والنشطون وحدهم — حسابٌ معطَّلٌ ليس زميلاً يُحوَّل إليه')
+      .toContain('eq(users.isActive, true)');
   });
 
   it('والمستأجرُ يُشتقّ من التوكن في كلّ مسار — لا من جسمٍ ولا من مسار', () => {

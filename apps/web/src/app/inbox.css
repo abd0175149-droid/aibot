@@ -225,6 +225,18 @@
 }
 .ibx-hn { font-size: var(--t-label); font-weight: 400; color: var(--muted); line-height: 1.55; }
 
+/* ★ رابطٌ داخل الملاحظة تحت الرقم: «منهم خارج المعروض — اعرِضهم».
+   وهو زرٌّ لا وصلة — يُبدّل المرشّح ولا يغادر الصفحة — فيأخذ هيئةَ النصّ
+   المسطور ويبقى هدفاً بحجمٍ يُضغط بالإبهام. */
+.ibx-hlink {
+  font: inherit; color: var(--ink); background: none; border: 0;
+  padding: 2px 0; margin: 0; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.ibx-hlink:hover { text-decoration-thickness: 2px; }
+/* والتركيزُ يرثه من القاعدة العامّة في globals.css — لا نسخةَ ثانية تتباعد. */
+
 /* المرشّحات صفٌّ واحدٌ يُمرَّر — والالتفاف يغيّر ارتفاع الرصيف فتقفز القائمة.
    ★ وكان هنا `.ibx-chips`: نسخةٌ ثالثةٌ من نفس الصفّ (وثانيةٌ من نفس العطل —
      يُمرَّر بلا شريطٍ وبلا تلاشٍ عند الحافّة، فما خلفها لا يُعرف أنّه هناك).

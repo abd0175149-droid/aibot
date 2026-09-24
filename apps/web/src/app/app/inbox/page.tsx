@@ -7,8 +7,8 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi, useToast, fmt, AR_LOCALE } from '@/lib/useApi';
 import { api, post, idempotencyKey, ApiError } from '@/lib/api';
-import { useCan } from '@/lib/session';
-import { useSocket } from '@/lib/socket';
+import { useCan, useSession } from '@/lib/session';
+import { useSocket, useLink, useFallbackPoll } from '@/lib/socket';
 import {
   Button, Dock, Empty, ErrorBox, Meter, Note, Sheet, Skeleton, Tag,
 } from '@/components/ui';
@@ -82,6 +82,9 @@ interface Conv {
   contactName: string | null;
   handle: string;
   displayHandle: string | null;
+  /** من يتولّاها الآن — فارغٌ يعني لا أحد. */
+  assignedUserId: string | null;
+  assignedName: string | null;
 }
 
 interface Msg {
@@ -101,11 +104,18 @@ interface Msg {
 }
 
 interface Thread {
+  /** معرّفُ المحادثة التي تخصّها هذه الحمولة — حارسُ «كلامٌ تحت اسمٍ آخر». */
+  conversationId: string;
   items: Msg[];
   window: { expiresAt: string | null; open: boolean; billedAt: string | null };
 }
 
-interface ConvList { items: Conv[]; nextCursor: string | null }
+interface ConvList {
+  items: Conv[];
+  /** عدُّ «يحتاجك الآن» من القاعدة — لا من الصفحة المحمَّلة. */
+  attention: { count: number; oldestAt: string | null };
+  nextCursor: string | null;
+}
 
 interface ChannelCaps {
   kind: string;
@@ -209,6 +219,8 @@ function dayLabel(iso: string): string {
 
 function InboxScreen() {
   const can = useCan();
+  const { me } = useSession();
+  const myId = me?.user.id ?? null;
   const router = useRouter();
   const params = useSearchParams();
   const { toast, node: toastNode } = useToast();
@@ -257,6 +269,8 @@ function InboxScreen() {
   const list = useApi<ConvList>(`/conversations${qs}`, [qs]);
   const thread = useApi<Thread>(active ? `/conversations/${active}/messages` : null, [active]);
   const chans = useApi<{ items: ChannelCaps[] }>('/channel');
+  /** سجلُّ الفريق — أسماءٌ ومعرّفات، يقرؤه كلُّ موظّف ليحوّل باسمٍ لا بوسم. */
+  const roster = useApi<{ items: Array<{ id: string; name: string; role: string }> }>('/team/roster');
 
   useEffect(() => { setExtra([]); }, [qs]);
   useEffect(() => {
@@ -265,7 +279,17 @@ function InboxScreen() {
 
   const items = useMemo(() => [...(list.data?.items ?? []), ...extra], [list.data, extra]);
   const conv = items.find((c) => c.id === active) ?? null;
-  const msgs = useMemo(() => [...older, ...(thread.data?.items ?? [])], [older, thread.data]);
+  /* ★ **لا حرفَ من حوارٍ إلّا تحت اسم صاحبه.**
+     الحمولةُ تحمل معرّفَ محادثتها، فلا تُرسم إلّا إن طابقت المفتوحة. وهو
+     حارسٌ ثانٍ بعد مسحِ `useApi` للبيانات عند تبدّل المسار: حتّى لو عاد
+     طلبٌ متأخّرٌ لمحادثةٍ سابقة، لا يصل الشاشة. والثمنُ ثوانٍ من هيكلٍ
+     عظميّ؛ والبديلُ أن يقرأ الموظّفُ «بدّي ألغي الحجز» تحت اسم من لم
+     يطلب شيئاً — فيردّ عليه. */
+  const fresh = thread.data && thread.data.conversationId === active ? thread.data : null;
+  const msgs = useMemo(() => [...older, ...(fresh?.items ?? [])], [older, fresh]);
+
+  /** الحوارُ المفتوح وصل فعلاً — وعليه يُفتح المُنشئ. */
+  const threadReady = Boolean(fresh);
 
   const capsOf = useCallback(
     (kind: string) => chans.data?.items.find((c) => c.kind === kind),
@@ -274,10 +298,13 @@ function InboxScreen() {
   const caps = conv ? capsOf(conv.channelKind) : undefined;
   const maxLen = caps?.capabilities.maxTextLen ?? 4096;
   const winHours = caps?.capabilities.windowHours ?? 24;
-  const win = thread.data?.window;
+  const win = fresh?.window;
   const remaining = win?.expiresAt ? fmt.remaining(win.expiresAt) : null;
   const paused = Boolean(conv?.botPausedUntil && new Date(conv.botPausedUntil).getTime() > now);
   const tagged = Boolean(conv?.tags?.includes(HANDOFF_TAG));
+
+  /** المحادثةُ لي: لا أحدَ يتولّاها، أو أنا. */
+  const mine = !conv?.assignedUserId || conv.assignedUserId === myId;
 
   /**
    * ★ التعديلُ يُطبَّق على **المصفوفتين**: صفحةُ الجلب الأولى (`list.data`)
@@ -319,7 +346,18 @@ function InboxScreen() {
    *   ولا رقمَ بلا سياقٍ ملاصق: نسبتُه من القائمة، وأطولُ انتظارٍ فيه.
    */
   const attnRows = grouped.attn;
-  const oldestWait = attnRows.length ? minsSince(attnRows[0]!.lastMessageAt, now) : 0;
+
+  /* ★ **الرقمُ من القاعدة، والصفوفُ من الصفحة.**
+     كان الاثنان من الصفحة المحمَّلة (٤٠ صفّاً بأحدث الطوابع)، فالمحادثةُ
+     المنتظرةُ منذ أمس — وهي أوّلُ من يستحقّ الردّ — أوّلُ من يسقط خارجها
+     لأنّها الأقدم زمنيّاً. فيقرأ الموظّف «٥ بانتظار ردّك»، يردّ على الخمسة
+     ويغلق هاتفه، والسادس ينتظر يوماً كاملاً. والرقمُ الذي بُنيت الشاشة
+     حوله يكذب تحديداً في الحالة التي وُجد لأجلها.
+     وحين يختلف الرقمُ عن المعروض، يُقال ذلك صراحةً ويُفتح مرشّحُهم. */
+  const attnTotal = list.data?.attention.count ?? attnRows.length;
+  const attnOldestAt = list.data?.attention.oldestAt ?? attnRows[0]?.lastMessageAt ?? null;
+  const oldestWait = attnTotal ? minsSince(attnOldestAt, now) : 0;
+  const attnHidden = Math.max(0, attnTotal - attnRows.length);
 
   const open = useCallback((id: string | null) => {
     // العنوان يحمل المحادثة: زرّ الرجوع وحركة الحافّة يُغلقان الحوار
@@ -432,6 +470,31 @@ function InboxScreen() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void send(); }
   }
 
+  /** تعيينُ المحادثة لزميلٍ — أو رفعُ التعيين. */
+  async function assignTo(userId: string | null, name: string | null) {
+    if (!active) return;
+    setXferOpen(false);
+    try {
+      await post(`/conversations/${active}/assign`, { userId });
+      patchConv(active, { assignedUserId: userId, assignedName: name });
+      toast(userId ? `صارت باسم ${name}` : 'رُفع التعيين — بلا صاحبٍ معلَن');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'تعذّر التعيين');
+    }
+  }
+
+  /** أخذُ المحادثة باسمي — بلا لمس البوت ولا الوسوم. */
+  async function claim() {
+    if (!active || !myId) return;
+    try {
+      await post(`/conversations/${active}/assign`, { userId: myId });
+      patchConv(active, { assignedUserId: myId, assignedName: me?.user.name ?? null });
+      toast('صارت باسمك — ويراها زميلُك قد انتقلت');
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'تعذّر أخذُ المحادثة');
+    }
+  }
+
   /** تولّي المحادثة: مدّةٌ محدّدة، أو إطفاءٌ لا يعود إلّا بيد الموظّف. */
   async function takeOver(pauseMinutes: number | null, said: string) {
     if (!active) return;
@@ -441,12 +504,18 @@ function InboxScreen() {
         `/conversations/${active}/bot`,
         pauseMinutes != null ? { pauseMinutes } : { enabled: false },
       );
-      patchConv(active, pauseMinutes != null
-        ? {
-          botPausedUntil: new Date(Date.now() + pauseMinutes * 60_000).toISOString(),
-          needsAttention: false,
-        }
-        : { botEnabled: false });
+      patchConv(active, {
+        ...(pauseMinutes != null
+          ? {
+            botPausedUntil: new Date(Date.now() + pauseMinutes * 60_000).toISOString(),
+            needsAttention: false,
+          }
+          : { botEnabled: false }),
+        /* والتولّي يُسجَّل باسمي محلّيّاً كما سجّله الخادم — فلا وميضَ
+           يقول «تولّاها زميل» بين الردّ وإعادة الجلب. */
+        assignedUserId: myId,
+        assignedName: me?.user.name ?? null,
+      });
       await list.reload();
       toast(`تولّيتَ المحادثة — ${said}`);
     } catch (err) {
@@ -464,7 +533,7 @@ function InboxScreen() {
      */
     try {
       await post(`/conversations/${active}/bot`, { enabled: true, pauseMinutes: -1 });
-      patchConv(active, { botEnabled: true, botPausedUntil: null });
+      patchConv(active, { botEnabled: true, botPausedUntil: null, assignedUserId: null, assignedName: null });
       await list.reload();
       toast('عاد بوتك يردّ على هذه المحادثة');
     } catch (err) {
@@ -500,6 +569,25 @@ function InboxScreen() {
   const nextWaiting = waitingNext[0] ?? null;
   const channelDown = Boolean(caps && caps.status === 'error');
 
+  /**
+   * ★ **الوصلةُ تُرى، والانقطاعُ لا يمرّ صامتاً.**
+   *
+   *   كان الإنبوكس يموت بلا علامة بعد كلّ نشرٍ أو نومِ جهاز: الشاشةُ ساكنةٌ
+   *   ويظنّ الموظّف أنّ لا أحد يراسل، ورسائلُ الزبائن تنتظر في القاعدة.
+   *   فصارت ثلاثاً: شريطٌ يقول إنّ الوصلة منقطعة · إعادةُ جلبٍ عند عودتها
+   *   (فما فات أثناء الانقطاع يظهر فوراً) · واستطلاعٌ كلّ دقيقة **ما دامت
+   *   منقطعة** فلا تجلس الوردية أمام شاشةٍ ميّتة مهما طال العطل.
+   */
+  const linkUp = useLink(useCallback(() => {
+    void list.reload();
+    if (active) void thread.reload();
+  }, [list.reload, thread.reload, active])) === 'up';
+
+  useFallbackPoll(!linkUp, 60_000, useCallback(() => {
+    void list.reload();
+    if (active) void thread.reload();
+  }, [list.reload, thread.reload, active]));
+
   const winLeftMs = win?.expiresAt ? new Date(win.expiresAt).getTime() - now : 0;
   const winPct = Math.min(1, Math.max(0, winLeftMs / (winHours * 3600_000)));
 
@@ -517,6 +605,15 @@ function InboxScreen() {
             onChange={(e) => setSearch(e.target.value)}
           />
         </header>
+
+        {!linkUp && (
+          <div className="ibx-pad">
+            <Note tone="warn">
+              <b>الاتّصال اللحظيّ منقطع.</b>{' '}
+              القائمةُ تُحدَّث كلّ دقيقة حتّى يعود — وما فات يظهر لحظةَ عودته.
+            </Note>
+          </div>
+        )}
 
         <div className="ibx-body">
           {list.loading && <div className="ibx-pad"><Skeleton rows={5} height={52} /></div>}
@@ -596,7 +693,16 @@ function InboxScreen() {
                               </span>
                             </span>
                           )}
-                          {rowPaused && <span className="ibx-tg">تولّيتَها</span>}
+                          {/* ★ «تولّيتَها» بصيغة المخاطَب كانت تُقرأ عند **كلّ**
+                              موظّف: الثاني يظنّ أنّه هو، أو يردّ بالتوازي مع
+                              زميله. والاسمُ يحسم ذلك بكلمةٍ واحدة. */}
+                          {rowPaused && (
+                            <span className="ibx-tg">
+                              {!c.assignedUserId || c.assignedUserId === myId
+                                ? 'تولّيتَها'
+                                : `تولّاها ${c.assignedName ?? 'زميل'}`}
+                            </span>
+                          )}
                           {!c.botEnabled && !rowPaused && <span className="ibx-tg">البوت مطفأ</span>}
                           {tagList.map((t) => (
                             <span className="ibx-tg" key={t}>{t}</span>
@@ -619,14 +725,26 @@ function InboxScreen() {
 
         {/* ══════ رصيف القائمة: الرقمُ البطوليّ ثمّ المرشّحات — في مدى الإبهام ══════ */}
         <Dock hint="المجموعات ثابتةُ الترتيب بالإلحاح لا بالوقت، و«يحتاجك الآن» أقدمُها أوّلاً.">
-          <div className="ibx-hero" data-state={attnRows.length ? 'attn' : 'calm'}>
-            <span className="ibx-hm" aria-hidden="true">{attnRows.length ? '■' : '●'}</span>
-            <span className="ibx-hv"><span className="num">{attnRows.length}</span></span>
+          <div className="ibx-hero" data-state={attnTotal ? 'attn' : 'calm'}>
+            <span className="ibx-hm" aria-hidden="true">{attnTotal ? '■' : '●'}</span>
+            <span className="ibx-hv"><span className="num">{attnTotal}</span></span>
             <span className="ibx-hk">
               بانتظار ردِّك الآن
               <span className="ibx-hn">
-                {attnRows.length
-                  ? <>من أصلِ <span className="num">{items.length}</span> في القائمة · أطولُ انتظارٍ <span className="num">{oldestWait}</span> د</>
+                {attnTotal
+                  ? (
+                    <>
+                      أطولُ انتظارٍ <span className="num">{oldestWait}</span> د
+                      {attnHidden > 0 && (
+                        <>
+                          {' · '}
+                          <button type="button" className="ibx-hlink" onClick={() => setFilter('attn')}>
+                            <span className="num">{attnHidden}</span> منها خارج المعروض — اعرِضهم
+                          </button>
+                        </>
+                      )}
+                    </>
+                  )
                   : items.length
                     ? <>وكلُّ ما في القائمة بوتُك يتولّاه — وأوّلُ ما يتعقّد يصعد إلى أعلى القائمة</>
                     : <>لا محادثةَ في القائمة بعد — وأوّلُ رسالةٍ تصل تفتح صفَّها هنا</>}
@@ -669,7 +787,11 @@ function InboxScreen() {
               <div className="ibx-tr2">
                 <Tag line mark={false} label={chLabel(conv.channelKind)} />
                 {paused ? (
-                  <Tag tone="serious" label={`تولّيتَها · يعود البوت بعد ${fmt.remaining(conv.botPausedUntil) ?? 'لحظات'}`} />
+                  <Tag
+                    tone="serious"
+                    label={`${mine ? 'تولّيتَها' : `تولّاها ${conv.assignedName ?? 'زميل'}`}`
+                      + ` · يعود البوت بعد ${fmt.remaining(conv.botPausedUntil) ?? 'لحظات'}`}
+                  />
                 ) : conv.botEnabled ? (
                   <Tag tone="ok" label="البوت يردّ — ويتوقّف لحظةَ ما تردّ" />
                 ) : (
@@ -688,6 +810,24 @@ function InboxScreen() {
                 )}
               </div>
             </header>
+
+            {/* ★ **تحذيرُ التصادم — وهو أهمّ ما في شاشة الفريق.**
+                بلا هذا يفتح موظّفان المحادثةَ نفسها ويردّان في الدقيقة
+                نفسها بردَّين متناقضَين، ولا شيء في الشاشة يقول إنّ أحداً
+                يعمل عليها الآن. والزرُّ لا يُخفي التعارض بل يحسمه: من
+                يتابع يصير صاحبَها، ويراها الأوّل قد انتقلت. */}
+            {!mine && conv.assignedName && (
+              <div className="ibx-pad">
+                <Note tone="warn">
+                  <b>يتولّاها {conv.assignedName} الآن.</b>{' '}
+                  ردُّك يصل الزبونَ بجانب ردّه. إن كنتَ ستتابعها فخُذها باسمك
+                  ليعرف زميلُك.{' '}
+                  <Button size="sm" disabled={can.readOnly}
+                    reason={can.readOnly ? 'حسابك للقراءة فقط' : undefined}
+                    onClick={() => void claim()}>أتابعها أنا</Button>
+                </Note>
+              </div>
+            )}
 
             {channelDown && (
               <div className="ibx-pad">
@@ -822,8 +962,10 @@ function InboxScreen() {
                 <form className="ibx-comp" onSubmit={send}>
                   <textarea
                     id="ibx-draft" className="ibx-ta" value={draft} dir="auto" rows={2}
-                    placeholder="اكتب ردّك… (Enter يُرسل · Shift+Enter سطرٌ جديد)"
-                    aria-label="نصّ الردّ" disabled={sending || can.readOnly}
+                    placeholder={threadReady
+                      ? 'اكتب ردّك… (Enter يُرسل · Shift+Enter سطرٌ جديد)'
+                      : 'يُفتح حين يصل الحوار…'}
+                    aria-label="نصّ الردّ" disabled={sending || can.readOnly || !threadReady}
                     onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey}
                   />
                   <div className="ibx-send">
@@ -833,11 +975,15 @@ function InboxScreen() {
                       </span>
                     )}
                     <Button type="submit" variant="primary" size="sm" busy={sending}
-                      disabled={!draft.trim() || can.readOnly}
+                      disabled={!draft.trim() || can.readOnly || !threadReady}
                       /* ★ السببُ مشروطٌ لا ثابت: كان يُكتب دائماً، فزرُّ الإرسال
                          المعطَّل **لأنّك لم تكتب بعد** يُعلن «حسابك للقراءة فقط» —
-                         خبرٌ كاذبٌ يقرأه كلُّ موظّفٍ في كلّ محادثةٍ يفتحها. */
-                      reason={can.readOnly ? 'حسابك للقراءة فقط' : undefined}>
+                         خبرٌ كاذبٌ يقرأه كلُّ موظّفٍ في كلّ محادثةٍ يفتحها.
+                         ★ ولا إرسالَ قبل أن يصل الحوار: الردُّ على حوارٍ لم
+                         يُقرأ ردٌّ على الغيب — وإن فشل الجلبُ فعلى الغيب مرّتين. */
+                      reason={can.readOnly ? 'حسابك للقراءة فقط'
+                        : !threadReady ? 'لم يصل الحوار بعد — لا تردّ على ما لم تقرأ'
+                          : undefined}>
                       إرسال
                     </Button>
                   </div>
@@ -875,9 +1021,38 @@ function InboxScreen() {
 
             <Sheet
               open={xferOpen} title="حوِّلها لزميل" onClose={() => setXferOpen(false)}
-              hint="التعيينُ باسم موظّفٍ بعينه غيرُ مفعَّلٍ بعد، ولا إخطارَ يُرسَل — فالوسمُ هو ما يراه زميلُك حين يفتح الإنبوكس."
+              hint="الاسمُ يظهر في صفّها وفي رأس الحوار عند زميلك، ويمنع أن يردّ اثنان معاً. ولا إخطارَ يُرسَل بعد — يراه حين يفتح الإنبوكس."
             >
               <div className="opts">
+                {/* ★ **التحويلُ باسمٍ — وكان وسماً نصّيّاً لا يقول لأيّ زميل.**
+                    والوسمُ لا يصل أحداً: لا يظهر في قائمة زميلك، ولا يمنع
+                    اثنَين من الردّ معاً. فكان اعترافاً مكتوباً بأنّ شيئاً لم
+                    يحدث. والتعيينُ يُحدثه: صفٌّ يقول من صاحبُها الآن. */}
+                {(roster.data?.items ?? [])
+                  .filter((u) => u.id !== conv.assignedUserId)
+                  .map((u) => (
+                    <button key={u.id} type="button" className="opt"
+                      onClick={() => void assignTo(u.id, u.name)}>
+                      <span className="opt-t">
+                        {u.id === myId ? `${u.name} (أنت)` : u.name}
+                        <span className="opt-n">
+                          {u.id === myId
+                            ? 'تصير باسمك — ويراها زملاؤك كذلك'
+                            : 'يصير صاحبَها ويراها باسمه في إنبوكسه'}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+
+                {conv.assignedUserId && (
+                  <button type="button" className="opt" onClick={() => void assignTo(null, null)}>
+                    <span className="opt-t">
+                      ارفع التعيين
+                      <span className="opt-n">تعود بلا صاحبٍ معلَن — ويردّ عليها من يصلها أوّلاً</span>
+                    </span>
+                  </button>
+                )}
+
                 {!tagged && (
                   <button type="button" className="opt" onClick={() => void handoff(true)}>
                     <span className="opt-t">

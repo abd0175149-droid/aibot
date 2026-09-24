@@ -225,6 +225,26 @@ export async function registerTeam(app: FastifyInstance) {
    *   (الأقربُ إلى «ترك العمل ولم يُعطَّل حسابه»). فأوّلُ صفٍّ يقرأه صاحبُ
    *   النشاط هو الصفُّ الذي يحتاج قراراً.
    */
+  /**
+   * ★ **سجلُّ الفريق للتحويل — أسماءٌ فقط، ولكلّ موظّف.**
+   *
+   *   `/team` خلف صلاحيّة الإعدادات لأنّه يحمل البريدَ والدور وحالةَ كلمة
+   *   المرور والجلسات الحيّة. والموظّفُ الذي يحوّل محادثةً لا يحتاج شيئاً من
+   *   ذلك — يحتاج اسماً ومعرّفاً. وحجبُ القائمة كلّها عنه كان يعني أنّ
+   *   «حوّلها لزميل» لا تستطيع أن تعرض زميلاً واحداً، فبقيت وسماً نصّيّاً
+   *   لا يصل أحداً.
+   */
+  app.get('/team/roster', { preHandler: requireAuth() }, async (req) => {
+    const tenantId = tenantOf(req);
+    return withTenant(getDb(), tenantId, async (tx) => {
+      const items = await tx.select({ id: users.id, name: users.name, role: users.role })
+        .from(users)
+        .where(and(eq(users.tenantId, tenantId), eq(users.isActive, true)))
+        .orderBy(users.name);
+      return { items };
+    });
+  });
+
   app.get('/team', { preHandler: owner }, async (req) => {
     const tenantId = tenantOf(req);
     return withTenant(getDb(), tenantId, async (tx) => {

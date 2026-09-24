@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import {
   getDb, withTenant, conversations, messages, contacts, channelIdentities,
-  conversationWindows, tenantChannels, eq, and, isNull, desc, lt, sql,
+  conversationWindows, tenantChannels, users, eq, and, isNull, desc, lt, sql,
 } from '@aibot/db';
 import { AppError, ErrorCode, SendMessageBody } from '@aibot/shared';
 import { requireAuth, tenantOf, PERMISSIONS } from '../auth.js';
@@ -17,6 +17,26 @@ import { enqueueOutbound } from '../queues.js';
  *    فالصفحة الثانية بترقيمٍ رقميّ تُعيد ما قرأه أو تُسقط ما لم يقرأه.
  *  • `tenantId` من التوكن لا من الطلب. لا يُرسل معرّف مستأجرٍ في جسمٍ ولا مسار.
  */
+/**
+ * مؤشّرُ الإنبوكس: `"<طابع ISO>|<uuid>"`.
+ *
+ * ويُقرأ متسامحاً لا صارماً: مؤشّرٌ مشوّهٌ من رابطٍ نُسخ أو تبويبٍ قديم
+ * يُهمَل فتُعاد الصفحةُ الأولى — لا 500 ولا `Invalid Date` يتسلّل إلى
+ * الاستعلام فيُفرغ القائمة بلا سبب. والشكلُ القديم (طابعٌ وحده) يبقى مقروءاً
+ * فلا تنكسر تبويبةٌ مفتوحةٌ ساعةَ النشر.
+ */
+export function parseCursor(raw: string | undefined): { at: string; id: string } | null {
+  if (!raw) return null;
+  const [at, id] = raw.split('|');
+  if (!at || Number.isNaN(Date.parse(at))) return null;
+  const iso = new Date(at).toISOString();
+  /* بلا معرّفٍ صالح: **أصغرُ** uuid — فيصير الشرطُ المركَّب مطابقاً تماماً
+     للشرط القديم «أقلّ من هذا الطابع»، ولا صفَّ يُعاد مرّتين على تبويبةٍ
+     تحمل مؤشّراً بالشكل السابق. (وأكبرُ uuid كان سيُعيد صفوفَ الثانية
+     نفسها كلَّها — تكراراً مرئيّاً في القائمة.) */
+  return { at: iso, id: id && isUuid(id) ? id : '00000000-0000-0000-0000-000000000000' };
+}
+
 export async function registerInbox(app: FastifyInstance) {
   app.get<{ Querystring: { status?: string; needsAttention?: string; channel?: string; q?: string; cursor?: string } }>(
     '/conversations',
@@ -30,7 +50,19 @@ export async function registerInbox(app: FastifyInstance) {
         if (status) where.push(eq(conversations.status, status as 'open' | 'closed'));
         if (needsAttention === 'true') where.push(eq(conversations.needsAttention, true));
         if (channel) where.push(eq(tenantChannels.kind, channel as 'whatsapp_cloud' | 'instagram'));
-        if (cursor) where.push(lt(conversations.lastMessageAt, new Date(cursor)));
+
+        /* ★ **المؤشّرُ مركَّبٌ: الطابعُ ثمّ المعرّف.**
+           كان `lt(lastMessageAt, cursor)` وحده، وطوابعُ واتساب **بدقّة
+           الثانية**: عشرُ رسائل في ثانيةٍ واحدة أمرٌ عاديٌّ في ساعة الذروة.
+           فالصفحةُ تنتهي في منتصف ثانيةٍ، والمؤشّرُ يقول «أقلّ من هذه
+           الثانية» فيقفز فوق بقيّة صفوفها — محادثاتٌ **تختفي** من «المزيد»
+           ولا شيء يقول إنّها كانت هناك. والفرزُ يُكمَّل بالمعرّف ليكون
+           الترتيبُ كلّيّاً لا جزئيّاً. */
+        const cur = parseCursor(cursor);
+        if (cur) {
+          where.push(sql`(${conversations.lastMessageAt}, ${conversations.id})
+                         < (${cur.at}::timestamptz, ${cur.id}::uuid)`);
+        }
         if (q) {
           where.push(sql`(${contacts.displayName} ilike ${'%' + q + '%'}
                        or ${channelIdentities.externalId} ilike ${'%' + q + '%'}
@@ -52,18 +84,44 @@ export async function registerInbox(app: FastifyInstance) {
             contactName: contacts.displayName,
             handle: channelIdentities.externalId,
             displayHandle: channelIdentities.displayHandle,
+            /* ★ من يتولّاها — وكان العمود موجوداً في المخطّط ولا يقرؤه أحد.
+               فالشاشة تكتب «تولّيتَها» بصيغة المخاطَب لكلّ من يفتح الإنبوكس،
+               ويظنّ الثاني أنّه هو، أو يردّ بالتوازي مع زميله. */
+            assignedUserId: conversations.assignedUserId,
+            assignedName: users.name,
           })
           .from(conversations)
           .innerJoin(tenantChannels, eq(tenantChannels.id, conversations.channelId))
           .innerJoin(contacts, eq(contacts.id, conversations.contactId))
           .innerJoin(channelIdentities, eq(channelIdentities.id, conversations.identityId))
+          .leftJoin(users, eq(users.id, conversations.assignedUserId))
           .where(and(...where))
-          .orderBy(desc(conversations.lastMessageAt))
+          .orderBy(desc(conversations.lastMessageAt), desc(conversations.id))
           .limit(40);
 
+        /* ★ **عدُّ «يحتاجك الآن» من القاعدة لا من الصفحة.**
+           كانت الشاشة تجمّع الصفوف الأربعين المحمَّلة، فالمحادثة المنتظرة
+           منذ أمس — وهي **أوّل** من يستحقّ الردّ — أوّلُ من يسقط خارج
+           الأربعين لأنّها الأقدم زمنيّاً. فالرقمُ الذي بُنيت الشاشة حوله
+           يكذب تحديداً في الحالة التي وُجد لأجلها: يقرأ الموظّف «٥ بانتظار
+           ردّك» فيردّ على الخمسة ويغلق هاتفه، والسادس ينتظر يوماً. */
+        const attnWhere = [eq(conversations.tenantId, tenantId), eq(conversations.needsAttention, true)];
+        if (status) attnWhere.push(eq(conversations.status, status as 'open' | 'closed'));
+        const attn = (await tx
+          .select({
+            count: sql<number>`count(*)::int`,
+            oldestAt: sql<string | null>`min(${conversations.lastMessageAt})`,
+          })
+          .from(conversations)
+          .where(and(...attnWhere)))[0];
+
+        const last = rows[rows.length - 1];
         return {
           items: rows,
-          nextCursor: rows.length === 40 ? rows[rows.length - 1]!.lastMessageAt?.toISOString() ?? null : null,
+          attention: { count: attn?.count ?? 0, oldestAt: attn?.oldestAt ?? null },
+          nextCursor: rows.length === 40 && last?.lastMessageAt
+            ? `${last.lastMessageAt.toISOString()}|${last.id}`
+            : null,
         };
       });
     },
@@ -87,6 +145,11 @@ export async function registerInbox(app: FastifyInstance) {
         )).limit(1);
 
         return {
+          /* ★ الحوارُ يحمل معرّفَ محادثته.
+             الواجهةُ تُبدّل المحادثات بالخطّاف نفسه، فاستجابةٌ متأخّرةٌ لا
+             يُعرف لمن هي إلّا بهذا الحقل. وبدونه يقع أسوأ ما في هذه الشاشة:
+             كلامُ زبونٍ تحت اسم زبونٍ آخر — والموظّف يردّ على ما يقرأ. */
+          conversationId: req.params.id,
           items: rows.reverse(),
           // النافذة تُعرض للموظّف **قبل** أن يكتب لا بعد أن يُرفض
           window: win[0]
@@ -158,6 +221,15 @@ export async function registerInbox(app: FastifyInstance) {
           status: 'queued',
           userId: req.auth!.sub,
         }).returning({ id: messages.id, createdAt: messages.createdAt });
+
+        /* ★ أوّلُ ردٍّ يُعيّن صاحبَه — إن لم يكن معيَّناً.
+           فمن يردّ بلا أن يضغط «تولَّ المحادثة» يصير صاحبَها في نظر زملائه،
+           وهو ما يفعله الموظّف فعلاً: يقرأ ويردّ. و`is null` شرطٌ لا زينة:
+           بلاه يسرق كلُّ ردٍّ المحادثةَ من متولّيها عند أوّل تعليق. */
+        await tx.update(conversations)
+          .set({ assignedUserId: req.auth!.sub })
+          .where(and(eq(conversations.id, req.params.id), isNull(conversations.assignedUserId)));
+
         return m!;
       });
 
@@ -271,7 +343,56 @@ export async function registerInbox(app: FastifyInstance) {
           set.botPausedUntil = new Date(Date.now() + req.body.pauseMinutes * 60_000);
           set.needsAttention = false;
         }
+
+        /* ★ **التولّي يُسجَّل باسمٍ، لا يبقى إسكاتاً مجهولاً.**
+           كان «تولّي» المحادثة مجرّدَ `botPausedUntil`، وعمودُ
+           `assigned_user_id` موجودٌ في المخطّط منذ نموذج البيانات ولا يقرؤه
+           ولا يكتبه أحد. فالشاشةُ تكتب «تولّيتَها» بصيغة المخاطَب لكلّ من
+           يفتح الإنبوكس: يقرؤها الموظّف الثاني فيظنّ أنّه هو، أو يفتح
+           المحادثة ويردّ بالتوازي مع زميله — ردّان متناقضان على زبونٍ واحدٍ
+           في الدقيقة نفسها، وبلا سجلٍّ يقول من ردّ.
+           وإعادةُ البوت تُفرغ التعيين: انتهى عملُ الموظّف على المحادثة. */
+        const takingOver = req.body?.pauseMinutes != null || req.body?.enabled === false;
+        const resuming = req.body?.enabled === true || req.body?.pauseMinutes === 0;
+        if (takingOver && !resuming) set.assignedUserId = req.auth!.sub;
+        else if (resuming) set.assignedUserId = null;
+
         const row = orMissing((await tx.update(conversations).set(set)
+          .where(eq(conversations.id, req.params.id)).returning())[0]);
+        emitToTenant(tenantId, 'conversation:update', row);
+        return row;
+      });
+    },
+  );
+
+  /**
+   * ★ **التعيينُ الصريح — «حوّلها لزميل» كان وسماً نصّيّاً لا يقول لأيّ زميل.**
+   *
+   *   والوسمُ لا يصل أحداً: لا يظهر في قائمة زميلك، ولا يُنبَّه به، ولا
+   *   يمنع اثنَين من الردّ معاً. فالتحويلُ كان اعترافاً مكتوباً بأنّ شيئاً
+   *   لم يحدث. وهذا المسار يُحدثه: صفٌّ واحدٌ يقول من صاحب المحادثة الآن.
+   */
+  app.post<{ Params: { id: string }; Body: { userId?: string | null } }>(
+    '/conversations/:id/assign',
+    { preHandler: requireAuth() },
+    async (req) => {
+      const tenantId = tenantOf(req);
+      const raw = req.body?.userId ?? null;
+      if (raw !== null && !isUuid(raw)) {
+        throw new AppError(ErrorCode.VALIDATION, 'معرّف مستخدمٍ غير صالح', 400);
+      }
+      return withTenant(getDb(), tenantId, async (tx) => {
+        /* ★ العضويّةُ تُفحص داخل `withTenant`: RLS يحجب مستخدمي المستأجرين
+           الآخرين، فاستعلامُ الوجود **هو** فحصُ العضويّة. وبلا هذا الفحص
+           يُقبل أيُّ uuid فيصير التعيينُ إلى شبح — والقيدُ الخارجيُّ وحده
+           يعطي 500 بدل رسالةٍ مفهومة. */
+        if (raw) {
+          const u = (await tx.select({ id: users.id }).from(users)
+            .where(and(eq(users.id, raw), eq(users.isActive, true))).limit(1))[0];
+          if (!u) throw new AppError(ErrorCode.VALIDATION, 'لا عضوَ بهذا المعرّف في فريقك', 404);
+        }
+        const row = orMissing((await tx.update(conversations)
+          .set({ assignedUserId: raw })
           .where(eq(conversations.id, req.params.id)).returning())[0]);
         emitToTenant(tenantId, 'conversation:update', row);
         return row;
