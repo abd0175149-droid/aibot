@@ -7,6 +7,7 @@ import type { Tx } from '@aibot/db';
 import { AppError, ErrorCode } from '@aibot/shared';
 import { publicId } from '@aibot/crypto';
 import { requireAuth, tenantOf, hashPassword } from '../auth.js';
+import { disconnectUser } from '../realtime.js';
 
 /**
  * الفريق والدعوات.
@@ -409,7 +410,7 @@ export async function registerTeam(app: FastifyInstance) {
         throw new AppError(ErrorCode.FORBIDDEN, 'لا يُرقّي إلى مالكٍ إلّا مالكُ الحساب نفسُه.', 403);
       }
 
-      return withTenant(getDb(), tenantId, async (tx) => {
+      const out = await withTenant(getDb(), tenantId, async (tx) => {
         // الترتيب: المالكون ثمّ المستهدَف — نفسُه في مسار الحالة، فلا تعانق
         const owners = await lockActiveOwners(tx, tenantId);
         const target = await lockMember(tx, tenantId, id);
@@ -438,8 +439,23 @@ export async function registerTeam(app: FastifyInstance) {
           diff: { email: target.email, from: target.role, to: role, sessionsRevoked },
         });
 
-        return { member: (await memberById(tx, tenantId, target.id))!, sessionsRevoked };
+        /* `evict` يخرج من المعاملة لأنّ `target` و`demoting` محلّيّان فيها،
+           والإخراجُ يقع بعد الإيداع. ويُنزَع من جسم الردّ أدناه. */
+        return {
+          member: (await memberById(tx, tenantId, target.id))!,
+          sessionsRevoked,
+          evict: demoting ? target.id : null,
+        };
       });
+
+      /* ★ بعد الإيداع: إخراجُ مقابض العضو من البثّ اللحظيّ.
+         التنزيلُ يُبطل الجلسات، والمقبضُ القائم يحمل دورَه القديم
+         مجمَّداً منذ المصافحة — فيبقى في غرفةٍ لم يعد يملكها.
+         وبعد الإيداع لا داخله: معاملةٌ تُلغى بعد إخراج صاحبها تطرد عضواً ما
+         زال نشطاً في الجدول، وقاعدةُ المستودع تمنع نداءً خارجيّاً في معاملة. */
+      const { evict, ...body } = out;
+      if (evict) disconnectUser(evict);
+      return body;
     },
   );
 
@@ -459,7 +475,7 @@ export async function registerTeam(app: FastifyInstance) {
       const id = memberIdOf(req.params.id);
       const isActive = Boolean(req.body?.isActive);
 
-      return withTenant(getDb(), tenantId, async (tx) => {
+      const out = await withTenant(getDb(), tenantId, async (tx) => {
         // نفسُ ترتيب مسار الدور: المالكون ثمّ المستهدَف
         const owners = await lockActiveOwners(tx, tenantId);
         const target = await lockMember(tx, tenantId, id);
@@ -494,8 +510,23 @@ export async function registerTeam(app: FastifyInstance) {
           diff: { email: target.email, role: target.role, sessionsRevoked },
         });
 
-        return { member: (await memberById(tx, tenantId, target.id))!, sessionsRevoked };
+        return {
+          member: (await memberById(tx, tenantId, target.id))!,
+          sessionsRevoked,
+          /* التفعيلُ لا يُخرج أحداً — المقبضُ لا يُفتح إلّا بمصافحةٍ جديدة. */
+          evict: isActive ? null : target.id,
+        };
       });
+
+      /* ★ بعد الإيداع: إخراجُ مقابض العضو من البثّ اللحظيّ.
+         إبطالُ الجلسات يمنع **التجديد** ولا يُغلق قناةً مفتوحة: مقبضُ
+         السوكِت يعيش ساعاتٍ بعد التعطيل، وصاحبُه يرى نصَّ كلّ رسالةٍ يكتبها
+         زبون — وطلباتُه على HTTP تسقط بـ401 بينما السوكِتُ لا يسأل أحداً.
+         وبعد الإيداع لا داخله: معاملةٌ تُلغى بعد إخراج صاحبها تطرد عضواً ما
+         زال نشطاً في الجدول، وقاعدةُ المستودع تمنع نداءً خارجيّاً في معاملة. */
+      const { evict, ...body } = out;
+      if (evict) disconnectUser(evict);
+      return body;
     },
   );
 

@@ -66,6 +66,11 @@ export function attachRealtime(app: FastifyInstance): void {
     const claims = socket.data.claims as ReturnType<typeof verifyAccess>;
     if (!claims) return socket.disconnect(true);
 
+    /* ★ المقبضُ يُنسب إلى صاحبه ليُخرَج باسمه عند التعطيل — انظر
+       `disconnectUser` أدناه. و`socket.data` موضعُه الطبيعيّ: يعيش مع
+       الاتّصال ويموت معه. */
+    socket.data.userId = claims.sub;
+
     // الانضمام التلقائيّ لغرفة المستأجر — لا ينضمّ العميل بنفسه لأيّ غرفة
     if (claims.tid) socket.join(`t:${claims.tid}`);
     if (claims.role === 'platform_owner') socket.join('platform');
@@ -81,6 +86,34 @@ export function attachRealtime(app: FastifyInstance): void {
       ack?.(true);
     });
   });
+}
+
+/**
+ * ★ **إخراجُ مقابض عضوٍ فوراً — والمقبضُ كان يعيش أطولَ من التوكن الذي فتحه.**
+ *
+ *   `io.use` يتحقّق عند **المصافحة وحدها**، والمصافحةُ تقع مرّةً ثمّ يعيش
+ *   الاتّصال ساعات. فموظّفٌ عُطِّل حسابُه يبقى في غرفة مستأجره يرى نصَّ كلّ
+ *   رسالةٍ يكتبها زبونٌ — وحمولةُ `message:new` تحمل النصّ كاملاً. طلباتُه
+ *   على HTTP تسقط بـ401، والسوكِتُ لا يسأل أحداً.
+ *   وإبطالُ الجلسات في شاشة الفريق يمنع **التجديد** ولا يُغلق قناةً مفتوحة.
+ *
+ * ⚠️ ويُنادى **بعد** إيداع المعاملة لا داخلها، لسببَين: قاعدةُ المستودع
+ *    تمنع نداءً خارجيّاً داخل `withTenant` (المسبح عشرُ وصلات)، ومعاملةٌ
+ *    تُلغى بعد إخراج صاحبها تطرد عضواً ما زال نشطاً في الجدول.
+ *
+ * ⚠️ ولا مَسحٌ دوريٌّ على انتهاء التوكن — وهو ما بدا الحلَّ الأوضح وهو فخّ:
+ *    `socket.disconnect(true)` من الخادم **لا يُنتج `connect_error`** عند
+ *    العميل ولا يُعيد الوصلَ تلقائيّاً. فمسحٌ كلَّ ربع ساعةٍ على انتهاء
+ *    التوكن كان سيقتل إنبوكسَ كلّ موظّفٍ شرعيٍّ بصمت — وهو بعينه العطلُ
+ *    الذي أُصلح في دفعةٍ سابقة. والعميلُ يُعيد الوصلَ الآن عند قطعٍ من
+ *    الخادم (‏`lib/socket.ts`)، فالإخراجُ المقصود يتعافى منه الشرعيُّ
+ *    ويبقى المعطَّلُ خارجاً — يرفضه `io.use` عند المصافحة التالية.
+ */
+export function disconnectUser(userId: string): void {
+  if (!io) return;
+  for (const s of io.of('/').sockets.values()) {
+    if (s.data.userId === userId) s.disconnect(true);
+  }
 }
 
 /**

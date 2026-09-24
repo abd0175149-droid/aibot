@@ -61,7 +61,24 @@ function ensure(): Socket | null {
   });
 
   socket.on('connect', () => setLink('up'));
-  socket.on('disconnect', () => setLink('down'));
+
+  /**
+   * ★ **قطعٌ من الخادم لا يُعيد الوصلَ من نفسه.**
+   *
+   *   `socket.disconnect(true)` في الخادم يصل العميلَ بسبب
+   *   `io server disconnect`، و`socket.io-client` **لا يُعيد المحاولة** عليه
+   *   قصداً: فُرض أنّ الخادم قصد الطرد. وهو يقصده فعلاً حين يُعطَّل حساب —
+   *   لكنّه يقصده أيضاً حين تُعاد تهيئةُ الخادم.
+   *   فيُعاد الوصلُ بتوكنٍ حيّ: من عُطِّل حسابُه يرفضه `io.use` عند المصافحة
+   *   فيبقى خارجاً، ومن كان شرعيّاً يعود خلال ثانية. وبلا هذا كان كلُّ إخراجٍ
+   *   مقصودٍ يُسكت إنبوكسَ صاحبه **حتّى لو أُعيد تفعيلُه**.
+   */
+  socket.on('disconnect', (reason: string) => {
+    setLink('down');
+    if (reason !== 'io server disconnect') return;
+    renewing ??= bootstrap().finally(() => { renewing = null; });
+    void renewing.then((ok) => { if (ok) socket?.connect(); });
+  });
 
   socket.on('connect_error', (err: Error) => {
     setLink('down');

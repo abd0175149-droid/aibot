@@ -117,3 +117,48 @@ describe('بوّابةُ الكلمة المؤقّتة', () => {
     expect(code('apps/web/src/components/Shell.tsx')).toContain('!me.impersonating');
   });
 });
+
+describe('المقبضُ لا يعيش أطولَ من صلاحيّة صاحبه', () => {
+  const rt = code('apps/api/src/realtime.ts');
+  const team = code('apps/api/src/routes/team.ts');
+
+  it('★ المقبضُ منسوبٌ إلى صاحبه فيُخرَج باسمه', () => {
+    /* `io.use` يتحقّق عند **المصافحة وحدها**، ثمّ يعيش الاتّصال ساعات.
+       فموظّفٌ عُطِّل حسابُه يبقى في غرفة مستأجره يرى نصَّ كلّ رسالةٍ يكتبها
+       زبون — وحمولةُ `message:new` تحمل النصّ كاملاً. */
+    expect(rt).toContain('socket.data.userId = claims.sub');
+    expect(rt).toMatch(/export function disconnectUser\(userId: string\)/);
+  });
+
+  it('★★ والتعطيلُ والتنزيلُ يُخرجان — بعد الإيداع لا داخله', () => {
+    expect(team).toContain("import { disconnectUser } from '../realtime.js'");
+    /* معاملةٌ تُلغى بعد إخراج صاحبها تطرد عضواً ما زال نشطاً في الجدول،
+       وقاعدةُ المستودع تمنع نداءً خارجيّاً داخل `withTenant`. */
+    expect((team.match(/if \(evict\) disconnectUser\(evict\)/g) ?? []).length).toBe(2);
+    for (const m of team.matchAll(/if \(evict\) disconnectUser\(evict\)/g)) {
+      const before = team.slice(0, m.index);
+      const lastTx = before.lastIndexOf('withTenant(getDb()');
+      const lastClose = before.lastIndexOf('      });');
+      expect(lastClose, 'الإخراجُ داخل المعاملة').toBeGreaterThan(lastTx);
+    }
+  });
+
+  it('والتفعيلُ لا يُخرج أحداً — المقبضُ لا يُفتح إلّا بمصافحةٍ جديدة', () => {
+    expect(team).toMatch(/evict: isActive \? null : target\.id/);
+  });
+
+  it('★★★ ولا مسحٌ دوريٌّ على انتهاء التوكن — وهو الفخّ', () => {
+    /* `socket.disconnect(true)` من الخادم لا يُنتج `connect_error` عند العميل
+       ولا يُعيد الوصلَ تلقائيّاً. فمسحٌ كلَّ ربع ساعةٍ على انتهاء التوكن كان
+       سيقتل إنبوكسَ كلّ موظّفٍ شرعيٍّ بصمت — وهو بعينه العطلُ الذي أُصلح في
+       دفعةٍ سابقة. */
+    expect(rt, 'مسحٌ دوريٌّ يقتل الشرعيّين').not.toMatch(/setInterval/);
+  });
+
+  it('★ والعميلُ يتعافى من قطعٍ مقصود — فيبقى المعطَّلُ خارجاً ويعود الشرعيّ', () => {
+    const web = code('apps/web/src/lib/socket.ts');
+    expect(web).toContain("reason !== 'io server disconnect'");
+    expect(web, 'يُعاد الوصلُ بتوكنٍ حيّ — فيرفضه io.use إن كان الحسابُ معطَّلاً')
+      .toMatch(/bootstrap\(\)[\s\S]{0,200}socket\?\.connect\(\)/);
+  });
+});
