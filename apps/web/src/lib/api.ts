@@ -61,8 +61,19 @@ export async function api<T = unknown>(
 
   const res = await fetch(`/api${path}`, { ...init, headers, credentials: 'include' });
 
-  // 401 مرّةً واحدة: جدّد ثمّ أعِد. وإن فشل التجديد فالجلسة انتهت فعلاً.
-  if (res.status === 401 && init.retry !== false) {
+  /**
+   * ★ **«انتهت جلستك» كانت تُقال لمن أخطأ كلمةَ سرّه.**
+   *
+   *   هذا الفرعُ كان يلتقط **كلّ** ٤٠١ — بما فيها ردُّ `/auth/login` على كلمةٍ
+   *   خاطئة — ويرمي رسالةً ثابتةً بلا أن يقرأ الجسم أصلاً. فمن أخطأ حرفاً في
+   *   كلمته يُقال له إنّ جلستَه انتهت، فيُعيد الدخول بنفس الكلمة الخاطئة
+   *   ويدور. ومن أُوقف حسابُه يُقال له الشيءُ نفسُه.
+   *
+   *   فالتجديدُ يُحاوَل حين يكون لدينا توكنٌ أصلاً — أي حين نظنّ أنّنا داخلون.
+   *   و٤٠١ من نداءِ دخولٍ ليست انتهاءَ جلسة: هي جوابُ الخادم، ويُقرأ.
+   */
+  const hadToken = Boolean(accessToken);
+  if (res.status === 401 && init.retry !== false && hadToken) {
     if (await refresh()) return api<T>(path, { ...init, retry: false });
     accessToken = null;
     if (typeof window !== 'undefined' && !location.pathname.startsWith('/login')) {
@@ -77,7 +88,13 @@ export async function api<T = unknown>(
     try {
       const j = (await res.json()) as { error?: { code?: string; message?: string } };
       code = j.error?.code ?? code;
-      message = HUMAN[code] ?? j.error?.message ?? message;
+      /* ★ **رسالةُ الخادم تسبق الخريطةَ العامّة.**
+         كان `HUMAN[code] ?? j.error?.message` — فالخريطةُ تغلب دائماً، وكلُّ
+         ٤٠٠ يصير «تحقّق من الحقول» مهما قال الخادم بالضبط ما هو غير الصالح.
+         والخادمُ يكتب رسائلَ عربيّةً دقيقةً (نطاقُ دوامٍ معطوب · مفتاحُ أداةٍ
+         محجوز · سعرُ نموذجٍ غائب) — كلُّها كانت تُرمى.
+         والخريطةُ تبقى احتياطاً لما لا رسالةَ له. */
+      message = j.error?.message ?? HUMAN[code] ?? message;
     } catch { /* استجابةٌ ليست JSON — نبقي الرسالة العامّة */ }
     throw new ApiError(code, message, res.status);
   }
