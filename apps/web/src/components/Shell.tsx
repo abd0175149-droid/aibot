@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSession } from '@/lib/session';
+import { useVisualViewport } from '@/lib/viewport';
 import { bootstrap, post, setToken } from '@/lib/api';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { PushToggle } from '@/components/PushToggle';
@@ -39,6 +40,10 @@ export function Shell({
   const path = usePathname();
   const router = useRouter();
   const { me, loading, reload } = useSession();
+
+  /* ★ الإطارُ ينكمش فوق لوحة مفاتيح الهاتف بدل أن يختفي تحتها.
+     و`100dvh` لا تعرف اللوحة — تعرف شريطَ العنوان وحده. */
+  useVisualViewport();
 
   /* ★ ورقةُ «المزيد» — الحالةُ الوحيدة في القشرة. ولا تفرّعَ على العرض معها:
      نفسُ الزرّ ونفسُ الورقة في النقاط الثلاث، وCSS وحده يقرّر أين تظهر. */

@@ -481,3 +481,31 @@
   margin-inline-start: auto; font-size: var(--t-label);
   text-decoration: underline; text-underline-offset: 3px; white-space: nowrap;
 }
+
+/* ★ إشارةُ إعادة الجلب — خيطٌ يتحرّك، لا هيكلٌ عظميٌّ يُزيح القائمة.
+   العطلُ الذي وُلدت منه: كلُّ حدثٍ لحظيٍّ كان يرسم هيكلاً فوق الصفوف ثمّ
+   يزيله، فيهبط الصفُّ الذي تحت إبهام الموظّف ويعود — فيضغط غيرَ ما قصد. */
+.ibx-refresh {
+  height: 2px; flex: 0 0 auto; overflow: hidden;
+  background: color-mix(in oklab, var(--fill) 16%, transparent);
+}
+.ibx-refresh::after {
+  content: ''; display: block; height: 100%; width: 32%;
+  background: var(--fill); border-radius: 2px;
+  animation: ibx-slide 1.1s ease-in-out infinite;
+}
+@keyframes ibx-slide {
+  0%   { transform: translateX(0);   }
+  50%  { transform: translateX(210%); }
+  100% { transform: translateX(0);   }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* بلا حركةٍ: الخيطُ يبقى ثابتاً ويقول الشيءَ نفسَه بلا دوار. */
+  .ibx-refresh::after { animation: none; width: 100%; opacity: 0.5; }
+}
+
+/* بدايةُ المحادثة — يحلّ محلّ زرٍّ كان يبقى ظاهراً ويعيد صفحةً فارغة. */
+.ibx-start {
+  text-align: center; color: var(--muted);
+  font-size: var(--t-label); padding-block: 6px;
+}

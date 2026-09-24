@@ -5,6 +5,7 @@ import {
 } from '@aibot/db';
 import { AppError, ErrorCode } from '@aibot/shared';
 import { requireAuth, tenantOf, PERMISSIONS } from '../auth.js';
+import { NAME_KEY, TAIL, likePattern, nameMatch, phoneTail } from '../search.js';
 
 /**
  * جهات الاتّصال — **الشخص الواحد عبر قنواته**.
@@ -232,50 +233,15 @@ export function decodeCursor(raw: string | undefined): { ts: string; id: string 
 }
 
 /**
- * ★ تسويةُ الاسم العربيّ قبل المقارنة — وهي نصفُ عمل الترشيح.
+ * ★ تسويةُ الاسم والرقم ومحارفُ البدل — **من `search.ts` لا هنا.**
  *
- * «أحمد» و«احمد» و«اَحمد» ثلاثةُ نصوصٍ مختلفةٍ بايتاً وشخصٌ واحد: الهمزةُ
- * تُكتب ولا تُكتب، والتاءُ المربوطة تُكتب هاءً، والحركاتُ والتطويلُ يدخلان
- * من لوحات المفاتيح. فبلا تسويةٍ يُقارَن `similarity` بين صيغتَي كتابةٍ
- * لنفس الاسم فيُرجع رقماً منخفضاً، ويسقط أظهرُ تكرارٍ في القاعدة.
- *
- * ومكتوبةٌ هنا بالـSQL نفسِه (`translate` · `regexp_replace`) لأنّ المقارنة
- * تجري في القاعدة: نسخةٌ في TS ونسخةٌ في SQL تتباعدان — وهذه الدالّة هي
- * **النسخةُ المفحوصة**، وSQL أدناه يطابقها حرفاً بحرف.
+ *   كانت مكتوبةً في هذا الملفّ وحده، فوُصلت إلى اقتراح المكرّرين ولم تصل
+ *   بحثَ القائمة في هذه الشاشة ولا بحثَ الإنبوكس إطلاقاً: شيفرةٌ صحيحةٌ
+ *   موصولةٌ إلى المكان الخطأ. وموضعُها الآن واحدٌ تقرؤه الشاشتان.
  */
-const AR_FROM = 'أإآٱىةًٌٍَُِّْـ';
-const AR_TO = 'اااايه';
-
-export function nameKey(raw: string | null | undefined): string {
-  if (!raw) return '';
-  let out = '';
-  for (const ch of raw) {
-    const at = AR_FROM.indexOf(ch);
-    if (at < 0) out += ch;
-    else if (at < AR_TO.length) out += AR_TO[at];
-  }
-  return out.replace(/\s+/g, ' ').trim().toLowerCase();
-}
-
-/** ذيلُ الرقم: تسعُ خاناتٍ تُسقط رمزَ الدولة والصفرَ الوطنيّ فيتطابق 07 مع 9627. */
-export function phoneTail(raw: string | null | undefined): string {
-  const digits = (raw ?? '').replace(/[^0-9]/g, '');
-  return digits.length >= 7 ? digits.slice(-9) : '';
-}
-
-/* ═══════════════════ ما يحتاج قاعدةً ═══════════════════ */
+export { nameKey, phoneTail } from '../search.js';
 
 type Frag = ReturnType<typeof sql>;
-
-/** نفسُ تسوية `nameKey` بلغة القاعدة — والتطابقُ مقصودٌ ومفحوص. */
-const NAME_KEY = (col: Frag): Frag =>
-  /* ★ `[[:space:]]` لا `\s`: قالبُ JS يأكل الشرطةَ المائلة فيصل إلى القاعدة
-     `'s+'` — تعبيرٌ يستبدل **حرف s** بمسافة ولا يطوي مسافةً واحدة. عطلٌ
-     صامتٌ تماماً: الاستعلام ينجح، والترشيحُ يخطئ على كلّ اسمٍ لاتينيّ. */
-  sql`lower(btrim(regexp_replace(translate(coalesce(${col}, ''), ${AR_FROM}, ${AR_TO}), '[[:space:]]+', ' ', 'g')))`;
-
-const TAIL = (col: Frag): Frag =>
-  sql`nullif(right(regexp_replace(coalesce(${col}, ''), '[^0-9]', '', 'g'), 9), '')`;
 
 export interface ContactSummary {
   id: string;
@@ -321,15 +287,18 @@ async function summaries(tx: Tx, tenantId: string, o: {
     /* ★ `%` و`_` محرفا بدلٍ في `ilike`: بحثٌ عن «50%» بلا تهريبٍ يطابق كلَّ
        شيء، و«a_b» يطابق ما ليس منه. والتهريبُ بالشرطة المائلة الخلفيّة —
        وهي محرفُ الهروب الافتراضيّ في بوستجرس بلا `ESCAPE`. */
-    const like = `%${o.q.trim().replace(/[\\%_]/g, (m) => `\\${m}`)}%`;
+    const like = likePattern(o.q);
     const tail = phoneTail(o.q);
     const byTail = tail
       ? sql` or ${TAIL(sql`c.phone`)} = ${tail}
              or exists (select 1 from channel_identities i2
                          where i2.contact_id = c.id and ${TAIL(sql`i2.external_id`)} = ${tail})`
       : sql.empty();
+    /* ★ الاسمُ مسوّىً من الطرفين: كانت المقارنة على العمود خاماً، فبحثُ
+       «أحمد» لا يجد «احمد» — وهما اسمٌ واحدٌ كتبه الزبون بإملاءٍ آخر.
+       (والتعليقُ خارجَ القالب: باكتيك داخل تعليقٍ داخل قالبٍ نصّيّ يُغلقه.) */
     where.push(sql`(
-      c.display_name ilike ${like}
+      ${nameMatch(sql`c.display_name`, o.q)}
       or c.phone ilike ${like}
       or exists (select 1 from channel_identities i1
                   where i1.contact_id = c.id

@@ -8,6 +8,7 @@ import { getAdapter, type ChannelKind } from '@aibot/channels';
 import { open as decrypt } from '@aibot/crypto';
 import { requireAuth, tenantOf, PERMISSIONS } from '../auth.js';
 import { applyMerge, isUuid } from './contacts.js';
+import { TAIL, likePattern, nameMatch, phoneTail } from '../search.js';
 import { emitToTenant } from '../realtime.js';
 import { enqueueOutbound } from '../queues.js';
 
@@ -65,10 +66,28 @@ export async function registerInbox(app: FastifyInstance) {
           where.push(sql`(${conversations.lastMessageAt}, ${conversations.id})
                          < (${cur.at}::timestamptz, ${cur.id}::uuid)`);
         }
+        /* ★ **بحثُ الإنبوكس كان يفشل في نصف الحالات — وثلاثةُ أسبابٍ معاً.**
+           ① الاسمُ يُقارَن خاماً: «أحمد» لا يجد «احمد»، وهما اسمٌ واحدٌ كتبه
+             الزبون في واتساب بإملاءٍ آخر والموظّفُ يبحث بالذي في رأسه.
+           ② الرقمُ يُقارَن خاماً: `0791234567` لا يجد `962791234567` — وهذا
+             أشيعُ ما يُكتب، فالموظّف يتلقّى مكالمةً ويكتب الرقم كما رآه.
+             وشاشةُ جهات الاتّصال تَعِد بهذا صراحةً وتفي، فيتعلّم الموظّف أنّ
+             «البحث أحياناً يشتغل».
+           ③ و`%` و`_` بلا تهريب: بحثٌ عن «50%» **يطابق كلّ شيء**.
+           والقطعةُ الآن واحدةٌ في `search.ts` تقرؤها الشاشتان. */
         if (q) {
-          where.push(sql`(${contacts.displayName} ilike ${'%' + q + '%'}
-                       or ${channelIdentities.externalId} ilike ${'%' + q + '%'}
-                       or ${conversations.lastMessagePreview} ilike ${'%' + q + '%'})`);
+          const like = likePattern(q);
+          const tail = phoneTail(q);
+          const byTail = tail
+            ? sql` or ${TAIL(channelIdentities.externalId)} = ${tail}`
+            : sql.empty();
+          where.push(sql`(
+            ${nameMatch(contacts.displayName, q)}
+            or ${channelIdentities.externalId} ilike ${like}
+            or ${channelIdentities.displayHandle} ilike ${like}
+            or ${nameMatch(conversations.lastMessagePreview, q)}
+            ${byTail}
+          )`);
         }
 
         const rows = await tx

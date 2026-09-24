@@ -1,7 +1,7 @@
 'use client';
 
 import {
-  Fragment, Suspense, useCallback, useEffect, useMemo, useRef, useState,
+  Fragment, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState,
   type FormEvent, type KeyboardEvent,
 } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -238,6 +238,25 @@ function InboxScreen() {
   const [sending, setSending] = useState(false);
   const [extra, setExtra] = useState<Conv[]>([]);
   const [older, setOlder] = useState<Msg[]>([]);
+  /** «رسائل أقدم»: انشغالٌ ونهاية — والزرُّ بلا حالتَيه يُضغط مرّتين ولا ينتهي. */
+  const [olderBusy, setOlderBusy] = useState(false);
+  const [olderDone, setOlderDone] = useState(false);
+
+  /**
+   * ★ **مسوّدةٌ لكلّ محادثة — وكانت واحدةً للشاشة تُمسح مع كلّ تنقّل.**
+   *
+   *   الموظّف يكتب ردّاً طويلاً، ثمّ يحتاج إلى مراجعة محادثةٍ أخرى، أو يلمس
+   *   صفّاً بالخطأ، أو يضغط زرّ الرجوع بالعادة — فتختفي كلماتُه كلُّها بلا
+   *   تحذيرٍ ولا استرجاع. و«التالي المنتظر» — وهو زرٌّ وُضع ليُسرّع العمل —
+   *   يمحوها هو أيضاً.
+   *   والأثرُ لا يُشتكى منه لأنّه لا يُرى: الموظّف يتعلّم **ألّا يكتب
+   *   طويلاً**، فتقصر الردودُ عمّا ينبغي ولا يعرف أحدٌ لماذا.
+   *
+   *   والخريطةُ في `useRef` لا في الحالة: كتابةُ حرفٍ لا تُعيد رسمَ الشاشة
+   *   مرّتين. و`sessionStorage` نسخةُ راحةٍ لا مصدرَ حقيقة — تُقرأ في
+   *   `try/catch` وتعمل الشاشةُ بلا وجودها.
+   */
+  const drafts = useRef<Record<string, string>>({});
   const [atBottom, setAtBottom] = useState(true);
   const [takeOpen, setTakeOpen] = useState(false);
   const [xferOpen, setXferOpen] = useState(false);
@@ -278,9 +297,47 @@ function InboxScreen() {
   const roster = useApi<{ items: Array<{ id: string; name: string; role: string }> }>('/team/roster');
 
   useEffect(() => { setExtra([]); }, [qs]);
+  /** المحادثةُ السابقة — لتُحفظ مسوّدتُها قبل أن يُبدَّل `active`. */
+  const prevActive = useRef<string | null>(null);
+
   useEffect(() => {
-    setOlder([]); setDraft(''); setAtBottom(true); setTakeOpen(false); setXferOpen(false);
+    const before = prevActive.current;
+    if (before && before !== active) drafts.current[before] = draftRef.current;
+    prevActive.current = active;
+
+    setOlder([]); setOlderDone(false); setOlderBusy(false);
+    setDraft(active ? (drafts.current[active] ?? '') : '');
+    setAtBottom(true); setTakeOpen(false); setXferOpen(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [active]);
+
+  /* مرجعٌ للنصّ الحاليّ: الـeffect أعلاه يعمل عند تبدّل `active` وحده، فلو
+     قرأ `draft` من الإغلاق لقرأ نصّاً بائتاً. */
+  const draftRef = useRef('');
+  draftRef.current = draft;
+
+  /* ★ استرجاعٌ بعد إعادة تحميل الصفحة. و`sessionStorage` لا `localStorage`:
+     المسوّدةُ تخصّ الوردية لا الجهاز، وبقاؤها أسابيع بعد إرسالها يُربك. */
+  useEffect(() => {
+    try {
+      const raw = sessionStorage.getItem('aibot:drafts');
+      if (raw) drafts.current = JSON.parse(raw) as Record<string, string>;
+    } catch { /* وضعُ التصفّح الخاصّ يرمي — والشاشةُ تعمل بلا مسوّدةٍ محفوظة */ }
+  }, []);
+
+  useEffect(() => {
+    if (!active) return;
+    const t = setTimeout(() => {
+      drafts.current[active] = draft;
+      try {
+        /* الفارغةُ تُحذف لا تُحفظ: خريطةٌ تنمو بمفاتيحَ فارغةٍ إلى الأبد. */
+        const keep = Object.fromEntries(Object.entries(drafts.current).filter(([, v]) => v.trim()));
+        drafts.current = keep;
+        sessionStorage.setItem('aibot:drafts', JSON.stringify(keep));
+      } catch { /* كما أعلاه */ }
+    }, 400);
+    return () => clearTimeout(t);
+  }, [draft, active]);
 
   const items = useMemo(() => [...(list.data?.items ?? []), ...extra], [list.data, extra]);
   const conv = items.find((c) => c.id === active) ?? null;
@@ -393,10 +450,29 @@ function InboxScreen() {
     'conversation:update': () => void list.reload(),
   });
 
-  /* التمرير للأحدث — ولا يُقفز إن كان الموظّف يقرأ أعلى الحوار. */
-  useEffect(() => {
+  /**
+   * ★ **مرساةُ التمرير عند الإلحاق في الأعلى.**
+   *
+   *   إلحاقُ خمسين رسالةً فوق ما يقرأ الموظّف يزيح كلَّ ما تحتها، فيقفز
+   *   التمريرُ إلى أعلى الدفعة الجديدة ويفقد موضعَه في منتصف بحثه عن حجزٍ
+   *   قديم. و`overflow-anchor` يُصلحها في كروم وحده — وسفاري هو المتصفّح
+   *   الذي يعمل عليه نصفُ الموظّفين.
+   *   والحلُّ حسابيّ: يُحفظ **البعدُ عن قاع** الحوار قبل الإلحاق ويُستعاد
+   *   بعده. و`useLayoutEffect` لا `useEffect`: التصحيحُ قبل الرسم فلا يُرى
+   *   وميضُ القفزة.
+   */
+  const pendingAnchor = useRef<number | null>(null);
+
+  useLayoutEffect(() => {
     const el = bodyRef.current;
-    if (el && atBottom) el.scrollTop = el.scrollHeight;
+    if (!el) return;
+    if (pendingAnchor.current !== null) {
+      el.scrollTop = el.scrollHeight - pendingAnchor.current;
+      pendingAnchor.current = null;
+      return;
+    }
+    /* التمرير للأحدث — ولا يُقفز إن كان الموظّف يقرأ أعلى الحوار. */
+    if (atBottom) el.scrollTop = el.scrollHeight;
   }, [msgs.length, atBottom]);
 
   function onBodyScroll() {
@@ -417,15 +493,39 @@ function InboxScreen() {
     } catch { toast('تعذّر جلب المزيد'); }
   }
 
+  /**
+   * ★ **«رسائل أقدم» — ثلاثةُ أعطالٍ في زرٍّ واحد.**
+   *
+   *   ① بلا حالة انشغال: على شبكةٍ بطيئة يضغطه الموظّف ثانيةً، فيصل الطلبان
+   *     بنفس `before` وتُلحَق الصفحةُ نفسُها **مرّتين** — خمسون رسالةً مكرّرةً
+   *     بمفاتيحَ مكرّرة.
+   *   ② وبلا نهاية: حين تنفد الرسائل يبقى الزرّ ويعيد صفحةً فارغةً بلا خبر.
+   *   ③ والتمريرُ يقفز: الإلحاقُ في الأعلى يزيح ما تحته، فيفقد الموظّف موضعَه
+   *     في منتصف بحثه عن حجزٍ قديم. (و`overflow-anchor` غيرُ مدعومٍ في سفاري
+   *     فلا يُعوَّل عليه.)
+   */
   async function loadOlderMsgs() {
     const first = msgs[0];
-    if (!first || !active) return;
+    if (!first || !active || olderBusy || olderDone) return;
+    const el = bodyRef.current;
+    const before = el ? el.scrollHeight - el.scrollTop : 0;
+    setOlderBusy(true);
     try {
       const more = await api<Thread>(
         `/conversations/${active}/messages?before=${encodeURIComponent(first.createdAt)}`,
       );
-      setOlder((o) => [...more.items, ...o]);
+      /* صفحةٌ أقصرُ من السقف تعني أنّنا بلغنا أوّلَ الحوار. */
+      if (more.items.length < 50) setOlderDone(true);
+      setOlder((o) => {
+        /* دمجٌ بالمعرّف: يُسقط ما وصل مرّتين — من ضغطتين، أو من بثٍّ سبق
+           الجلب، أو من تداخل صفحتين عند نفس الطابع. */
+        const by = new Map<string, Msg>();
+        for (const m of [...more.items, ...o]) by.set(m.id, m);
+        return [...by.values()].sort((a, b) => stamp(a.createdAt) - stamp(b.createdAt));
+      });
+      pendingAnchor.current = before;
     } catch { toast('تعذّر جلب الأقدم'); }
+    finally { setOlderBusy(false); }
   }
 
   /** إعادةُ إرسال رسالةٍ فشلت — على صفّها لا بنسخةٍ جديدة. */
@@ -455,14 +555,21 @@ function InboxScreen() {
     setSending(true);
     try {
       await post(`/conversations/${active}/messages`, { text }, { 'idempotency-key': idempotencyKey() });
+      /* المسوّدةُ تُمسح عند **النجاح** وحده — وفشلُ الإرسال يُبقي الكلمات. */
       setDraft('');
+      delete drafts.current[active];
+      try {
+        sessionStorage.setItem('aibot:drafts', JSON.stringify(drafts.current));
+      } catch { /* وضعُ التصفّح الخاصّ */ }
       setAtBottom(true);
       /* ★ «وصل» كانت تُقال على 202 — أي على **قبولٍ في الطابور** لا على
          وصول. والرسالة الآن تظهر في الحوار بحالتها الحقيقيّة، فالتوستة
          تقول ما جرى فعلاً وتُحيل إلى الفقاعة. */
       toast('أُرسل ردّك — تتبّع حالته في الحوار. وتوقّف البوت عن هذه المحادثة وحدها.');
-      await thread.reload();
-      await list.reload();
+      /* ★ ولا إعادةَ جلبٍ هنا: الـAPI يحجز الصفّ **ويبثّه** قبل أن يردّ،
+         فالفقاعةُ تصل من `message:new` خلال أجزاءٍ من الثانية. وإعادةُ الجلب
+         كانت تُلبس الحوارَ هيكلاً عظميّاً بعد كلّ إرسال ويختفي «رسائل أقدم»
+         من تحت إبهام الموظّف. */
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'تعذّر الإرسال');
     } finally {
@@ -620,6 +727,10 @@ function InboxScreen() {
           </div>
         )}
 
+        {/* ★ إشارةُ إعادة الجلب لا تُزيح شيئاً: خيطٌ فوق القائمة بدل ثلاث
+            مئة بكسلٍ من الهيكل تقفز تحت الإبهام كلّ بضع ثوانٍ. */}
+        {list.refreshing && <div className="ibx-refresh" aria-hidden="true" />}
+
         <div className="ibx-body">
           {list.loading && <div className="ibx-pad"><Skeleton rows={5} height={52} /></div>}
           {list.error && <div className="ibx-pad"><ErrorBox message={list.error} onRetry={list.reload} /></div>}
@@ -709,6 +820,11 @@ function InboxScreen() {
                             </span>
                           )}
                           {!c.botEnabled && !rowPaused && <span className="ibx-tg">البوت مطفأ</span>}
+                          {/* ★ وسمُ المسوّدة: بلا هذا لا يعرف الموظّف أنّه
+                              ترك كلاماً غيرَ مُرسَلٍ في محادثةٍ أخرى. */}
+                          {(drafts.current[c.id] ?? '').trim() && (
+                            <span className="ibx-tg">مسوّدة</span>
+                          )}
                           {tagList.map((t) => (
                             <span className="ibx-tg" key={t}>{t}</span>
                           ))}
@@ -849,9 +965,19 @@ function InboxScreen() {
                 <div className="ibx-pad"><ErrorBox message={thread.error} onRetry={thread.reload} /></div>
               )}
 
-              {!thread.loading && !thread.error && msgs.length >= 50 && (
+              {/* ★ الظهورُ مشروطٌ بأنّ **الصفحة الأولى** كانت ممتلئة لا بطول
+                  `msgs`: خمسون رسالةً جاءت نصفُها من البثّ لا تعني أنّ هناك
+                  أقدمَ منها، والزرُّ حينها يعد بما لا يوجد. */}
+              {threadReady && !thread.error && (fresh?.items.length ?? 0) >= 50 && !olderDone && (
                 <div className="ibx-pad">
-                  <Button size="sm" onClick={() => void loadOlderMsgs()}>رسائل أقدم</Button>
+                  <Button size="sm" busy={olderBusy} onClick={() => void loadOlderMsgs()}>
+                    رسائل أقدم
+                  </Button>
+                </div>
+              )}
+              {olderDone && (
+                <div className="ibx-pad">
+                  <div className="ibx-start">بدايةُ المحادثة</div>
                 </div>
               )}
 
