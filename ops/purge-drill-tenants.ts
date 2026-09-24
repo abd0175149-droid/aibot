@@ -26,7 +26,12 @@ import { getDb, closeDb, withPlatform, sql } from '../packages/db/src/index';
 const PROTECTED = ['nuskjo', 'baitalsham'] as const;
 
 /* الهدف: يُعدّ صراحةً. لا نمطٌ ولا `LIKE`. */
-const TARGETS = ['drill', 'drill-price', 'drill-debounce', 'drill-window-cap'] as const;
+const TARGETS = [
+  'drill', 'drill-price', 'drill-debounce', 'drill-window-cap',
+  /* أُضيفت بعد الجولة الثانية من التمارين — وكلُّها تولّد حوادثَ صوريّةً
+     تُغرق سيلَ الحوادث وتُخفي الحقيقيّةَ عند العميلَين. */
+  'drill-redis', 'drill-network', 'drill-disk', 'drill-provider',
+] as const;
 
 /** الجداول المستأجَرة التي يُبحث فيها عن أيتام بعد الحذف. */
 const TENANT_TABLES = [
