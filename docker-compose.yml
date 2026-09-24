@@ -154,6 +154,9 @@ services:
     restart: always
     environment:
       NODE_ENV: production
+      # ★ ومتغيّرُ تشغيلٍ أيضاً لا وسيطُ بناءٍ وحده: هذا يكشف حالةً لا
+      #   يكشفها الأوّل — صورةٌ قديمة أُعيد تشغيلها تحت وسمٍ جديد.
+      GIT_REV: ${GIT_REV:-unknown}
       PORT: ${WEB_PORT:-3070}
       HOSTNAME: 0.0.0.0
       API_INTERNAL_URL: http://api:${API_PORT:-4100}
