@@ -67,6 +67,30 @@ const securityHeaders = [
 export default {
   output: 'standalone',
   reactStrictMode: true,
+
+  /**
+   * ★ **`@aibot/shared` حزمةٌ مصدرُها TypeScript — لا `dist` لها.**
+   *
+   *   و`main` يشير إلى `src/index.ts`، وملفّاتُه تستورد بعضَها بلاحقة `.js`
+   *   (كما يوجب ESM). فحين تستورد الواجهةُ منها **قيمةً** — لا نوعاً — يحاول
+   *   webpack حلَّ `./errors.js` فلا يجده، ويسقط البناء كلُّه.
+   *
+   *   ولم يظهر هذا قبلاً لأنّ كلّ استيرادٍ سابقٍ كان `import type`: الأنواع
+   *   تُمحى عند الترجمة فلا يُحلّ الملفّ أصلاً. فأوّلُ ثابتٍ مشتركٍ حقيقيّ
+   *   (`MESSAGE_TYPE_AR`) كسر البناء — وهو بالضبط ما يجعل العطلَ خبيثاً:
+   *   الحزمةُ «تعمل» في الواجهة منذ أشهر، والكسرُ ينتظر أوّلَ استعمالٍ جادّ.
+   */
+  transpilePackages: ['@aibot/shared'],
+  webpack(config) {
+    /* لاحقةُ `.js` في مصدرٍ TypeScript تعني `.ts` — وهذا هو الحلُّ المعياريّ
+       لها. ولا يُغني عنه `transpilePackages`: ذاك يقرّر **من يُترجَم**،
+       وهذا يقرّر **كيف يُحلّ المسار**. */
+    config.resolve.extensionAlias = {
+      ...config.resolve.extensionAlias,
+      '.js': ['.ts', '.tsx', '.js'],
+    };
+    return config;
+  },
   // نسخةُ الإطار ليست معلومةً يحتاجها زائر — وهي أوّل ما يقرأه ماسحٌ آليّ
   poweredByHeader: false,
   // الواجهة تنادي الـAPI عبر نفس النطاق (/api) — فلا CORS ولا عنوانٌ مختلف

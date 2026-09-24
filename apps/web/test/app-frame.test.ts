@@ -152,3 +152,35 @@ describe('الحوارُ يُدير التركيز — مرّةً واحدةً �
     expect(ui).toMatch(/className="sheet-scrim" tabIndex=\{-1\}/);
   });
 });
+
+
+describe('الحزمةُ المشتركة تُحلّ في بناء الواجهة', () => {
+  const cfg = readFileSync(join(APP, '..', '..', 'next.config.mjs'), 'utf8');
+
+  /**
+   * ★ **بناءُ الواجهة فشل ثلاثَ نشراتٍ متتالية ولم يُلاحَظ.**
+   *
+   *   `@aibot/shared` حزمةٌ مصدرُها TypeScript بلا `dist`، وملفّاتُها تستورد
+   *   بعضَها بلاحقة `.js` كما يوجب ESM. فأوّلُ استيرادِ **قيمةٍ** منها —
+   *   لا نوعٍ — جعل webpack يحاول حلَّ `./errors.js` فلا يجده، فيسقط البناء.
+   *   ولم يظهر قبلاً لأنّ كلّ استيرادٍ سابقٍ كان `import type`: الأنواع تُمحى
+   *   عند الترجمة فلا يُحلّ الملفّ أصلاً.
+   */
+  it('★ الحزمةُ في `transpilePackages` — وإلّا لم تُترجَم أصلاً', () => {
+    expect(cfg).toMatch(/transpilePackages: \['@aibot\/shared'\]/);
+  });
+
+  it('★ و`.js` في مصدرٍ TypeScript تُحلّ إلى `.ts`', () => {
+    expect(cfg, 'بلا هذا يسقط البناء على أوّل استيرادِ قيمة').toMatch(/extensionAlias/);
+    expect(cfg).toMatch(/'\.js': \['\.ts', '\.tsx', '\.js'\]/);
+  });
+
+  it('★ وبوّابةُ النشر تطابق **نسخةَ الواجهة** لا «تردّ 200» وحدها', () => {
+    const dep = readFileSync(join(APP, '..', '..', '..', '..', 'deploy.sh'), 'utf8');
+    expect(dep, 'بلا هذا يمرّ نشرٌ نصفُه جديدٌ ونصفُه قديم').toContain('/rev');
+    expect(dep).toMatch(/الواجهة ليست على/);
+    /* والمسارُ خارج `/api`: كلُّ ما تحته مُعادُ توجيهه إلى الـAPI. */
+    expect(existsSync(join(APP, 'rev', 'route.ts'))).toBe(true);
+    expect(readFileSync(join(APP, 'rev', 'route.ts'), 'utf8')).toContain('process.env.GIT_REV');
+  });
+});
