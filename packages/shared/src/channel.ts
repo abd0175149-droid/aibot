@@ -29,11 +29,31 @@ export const NormalizedInbound = z.object({
   from: z.string(),
   fromHandle: z.string().nullable(),
   at: z.date(),
-  type: z.enum(['text', 'button', 'interactive', 'image', 'audio', 'document', 'video', 'location', 'story_reply', 'unsupported']),
+  /* ★ `reaction` و`sticker` صنفان قائمان بذاتهما — وكانا يقعان في
+     `unsupported`، فيُعامَلان **رسالةً تستحقّ ردّاً**. وتفاعلُ 👍 على ردّ
+     البوت أشيعُ ما يفعله الزبون العربيّ حين يرضى: تُجدوَل مهمّةُ ردّ،
+     والسياقُ مطابقٌ للشوط السابق حرفيّاً، فيُنادى النموذج **بكلفةٍ جديدة**
+     ليُعيد الجوابَ نفسَه على من قال «شكراً» بإيموجي. */
+  type: z.enum([
+    'text', 'button', 'interactive', 'image', 'audio', 'document', 'video',
+    'location', 'story_reply', 'reaction', 'sticker', 'unsupported',
+  ]),
   text: z.string().nullable(),
   /** نصّ الزرّ الذي ضُغط، إن كان الوارد ضغطة زرّ. */
   buttonPayload: z.string().nullable(),
   mediaId: z.string().nullable(),
+  /**
+   * ★ الموقعُ محفوظاً بإحداثيّاته لا مذكوراً في نصّ.
+   *
+   *   موقعُ الزبون هو **محتوى الطلب** في مطعمٍ يوصّل. وكان المحوّل يُسقط خطّ
+   *   الطول والعرض والعنوان عند التطبيع (يبقيان في الحمولة الخام وحدها)،
+   *   فلا يراهما الموظّف ولا البوت، وتصير المعاينةُ في القائمة «[location]».
+   *   فيُسأل الزبونُ عن عنوانه من جديد بعد أن أرسله.
+   */
+  location: z.object({
+    lat: z.number(), lng: z.number(),
+    name: z.string().nullable(), address: z.string().nullable(),
+  }).nullable().optional(),
   raw: z.unknown(),
 });
 export type NormalizedInbound = z.infer<typeof NormalizedInbound>;
@@ -56,3 +76,48 @@ export type OutboundMessage =
   | { kind: 'choices'; body: string; options: Array<{ id: string; title: string }> }
   | { kind: 'location'; lat: number; lng: number; name?: string; address?: string }
   | { kind: 'image'; url: string; caption?: string };
+
+/**
+ * ★ **اسمُ نوع الرسالة بالعربيّة — نصٌّ واحدٌ لثلاثة قرّاء.**
+ *
+ *   كان كلٌّ يكتب نسختَه: العاملُ يضع `[image]` في معاينة القائمة، والشاشةُ
+ *   تحمل خريطةً عربيّةً خاصّةً بها، وسياقُ النموذج لا يحمل شيئاً إطلاقاً.
+ *   فيقرأ الموظّفُ في القائمة اسمَ نوعٍ تقنيٍّ بالإنجليزيّة داخل قائمةٍ
+ *   عربيّة — لا يُقرأ بصوتٍ ولا يُبحَث — ويقرأ في الحوار اسماً آخر، ولا يرى
+ *   النموذجُ شيئاً فيردّ على السؤال السابق.
+ *
+ *   والاسمُ هنا **ما يقوله الزبون لا ما يسمّيه البروتوكول**: «تسجيل صوتيّ»
+ *   لا `audio`.
+ */
+export const MESSAGE_TYPE_AR: Record<string, string> = {
+  text: 'رسالة',
+  button: 'ضغطةُ زرّ',
+  interactive: 'اختيارٌ من قائمة',
+  image: 'صورة',
+  audio: 'تسجيل صوتيّ',
+  video: 'مقطع مرئيّ',
+  document: 'ملفّ',
+  location: 'موقع',
+  story_reply: 'ردٌّ على ستوري',
+  reaction: 'تفاعل',
+  sticker: 'ملصق',
+  unsupported: 'نوعٌ لا تدعمه القناة',
+};
+
+/** اسمُ النوع، وللمجهول اسمٌ مفهومٌ لا مفتاحٌ خام. */
+export function typeLabel(type: string): string {
+  return MESSAGE_TYPE_AR[type] ?? 'مرفَق';
+}
+
+/**
+ * ما يُوضع مكانَ النصّ حين تصل وسيطةٌ بلا تعليق — **في سياق النموذج**.
+ *
+ * ★ وبلا هذا كانت الرسالةُ الصوتيّة تختفي من السياق تماماً (`turns` تُرشّح
+ *   بـ`body`)، فيردّ البوت على السؤال **السابق**. وإن كانت أوّلَ رسالةٍ في
+ *   المحادثة خرجت `contents` فارغةً فيرفضها Gemini بـ400، وتُرفَع حادثةُ
+ *   `ai_error` **حرجة** تُنبّه المالكَ والمنصّة — والزبون يستلم صمتاً تامّاً.
+ *   أي أنّ أشيع ما يرسله زبونٌ عربيّ على واتساب كان يُسقط الردَّ ويُنذر.
+ */
+export function mediaPlaceholder(type: string): string {
+  return `[أرسل الزبون ${typeLabel(type)} بلا نصّ]`;
+}

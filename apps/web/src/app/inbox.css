@@ -430,3 +430,54 @@
   color: var(--crit); text-decoration: underline; cursor: pointer;
 }
 .ibx-retry:hover { text-decoration-thickness: 2px; }
+
+/* ★ **فقاعةٌ تحمل مرفَقاً ليست فقاعةَ نصّ.**
+   `.bub` تحمل `white-space: pre-wrap` لتُحفظ أسطرُ الزبون كما كتبها. وهي
+   صحيحةٌ للنصّ وخطأٌ للمرفَق: كلُّ فراغٍ بين عنصرَين — وهو ما تُنتجه أيّ
+   صياغةٍ مُنسَّقة — يصير **سطراً فارغاً مرئيّاً**، فتتضاعف الفقاعةُ ارتفاعاً
+   حول صورةٍ صغيرة. (مقيسٌ في التصيير: فقاعةُ موقعٍ ارتفاعُها ثلاثةُ أضعاف
+   بطاقتها.) فالنصُّ يبقى `pre-wrap` والمرفَقُ يعود إلى الافتراضيّ. */
+.bub.has-media { white-space: normal; }
+
+/* ══════════════ المرفَقات — ما أرسله الزبون يُفتح لا يُوصَف ══════════════
+   ★ كان الموظّف يقرأ «📎 صورة» ويسأل الزبون «شو بعتت؟» — والصورةُ عند ميتا،
+     والتوكن عندنا، ودالّةُ الجلب مكتوبةٌ في المحوّل منذ أن كُتب ولا مسارَ
+     ينادِيها. والعرضُ هنا **داخل الفقاعة**: المرفَقُ محتوى الرسالة لا ملحقٌ
+     بها، وإخراجُه منها يكسر الجهة والوقت والحالة. */
+
+.ibx-shot { display: block; margin-block-start: 6px; border-radius: 10px; overflow: hidden; }
+.ibx-shot img {
+  display: block; max-width: min(260px, 100%); max-height: 320px;
+  width: auto; height: auto; object-fit: contain;
+}
+/* الملصقُ صغيرٌ بطبعه وبلا خلفيّة — تكبيرُه يجعله ضبابيّاً */
+.ibx-shot.sticker img { max-width: 132px; max-height: 132px; }
+
+/* ★ بلا `height` مفروض: مشغّلُ المتصفّح الأصليّ يقرّر ارتفاعه (‏54px في
+   كروم)، وفرضُ 36px يقصّ أزرارَه في بعض المتصفّحات. والعرضُ وحده هو ما
+   يحتاج ضبطاً — وإلّا أخذ عرضَ الفقاعة كلَّه. */
+.ibx-aud { display: block; margin-block-start: 6px; width: min(260px, 100%); }
+.ibx-vid { display: block; margin-block-start: 6px; max-width: min(260px, 100%); border-radius: 10px; }
+
+/* تعليقُ الصورة تحتها لا بجانبها: السطرُ الواحد يزاحم عرضَ الصورة */
+.ibx-cap { display: block; margin-block-start: 6px; }
+
+.ibx-file {
+  display: inline-flex; align-items: center; gap: 6px; margin-block-start: 6px;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+
+/* الموقعُ: اسمٌ وإحداثيّةٌ وفعلٌ — والإحداثيّةُ `num` فتُعزَل عن RTL */
+.ibx-loc {
+  display: flex; align-items: center; gap: 8px; margin-block-start: 6px;
+  padding: 8px 10px; border-radius: 10px;
+  border: 1px solid color-mix(in oklab, currentColor 22%, transparent);
+  text-decoration: none; color: inherit;
+}
+.ibx-loc:hover { border-color: color-mix(in oklab, currentColor 45%, transparent); }
+.ibx-loc-t { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.ibx-loc-c { font-size: var(--t-micro, 11px); opacity: 0.72; }
+.ibx-loc-go {
+  margin-inline-start: auto; font-size: var(--t-label);
+  text-decoration: underline; text-underline-offset: 3px; white-space: nowrap;
+}

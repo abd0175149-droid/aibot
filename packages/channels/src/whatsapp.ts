@@ -185,22 +185,60 @@ export class WhatsAppAdapter implements ChannelAdapter {
 
 /* ───────────────────────── مساعدات ───────────────────────── */
 
-function mapInboundType(m: any): Pick<import('./types.js').NormalizedInbound, 'type' | 'text' | 'buttonPayload' | 'mediaId'> {
+type MappedInbound = Pick<
+  import('./types.js').NormalizedInbound,
+  'type' | 'text' | 'buttonPayload' | 'mediaId' | 'location'
+>;
+
+function mapInboundType(m: any): MappedInbound {
+  const bare = { buttonPayload: null, mediaId: null, location: null };
   switch (m.type) {
     case 'text':
-      return { type: 'text', text: m.text?.body ?? '', buttonPayload: null, mediaId: null };
+      return { ...bare, type: 'text', text: m.text?.body ?? '' };
     case 'button':
-      return { type: 'button', text: m.button?.text ?? null, buttonPayload: m.button?.payload ?? m.button?.text ?? null, mediaId: null };
+      return {
+        ...bare, type: 'button', text: m.button?.text ?? null,
+        buttonPayload: m.button?.payload ?? m.button?.text ?? null,
+      };
     case 'interactive': {
       const r = m.interactive?.button_reply ?? m.interactive?.list_reply;
-      return { type: 'interactive', text: r?.title ?? null, buttonPayload: r?.id ?? null, mediaId: null };
+      return { ...bare, type: 'interactive', text: r?.title ?? null, buttonPayload: r?.id ?? null };
     }
     case 'image': case 'audio': case 'video': case 'document':
-      return { type: m.type, text: m[m.type]?.caption ?? null, buttonPayload: null, mediaId: m[m.type]?.id ?? null };
-    case 'location':
-      return { type: 'location', text: null, buttonPayload: null, mediaId: null };
+      return { ...bare, type: m.type, text: m[m.type]?.caption ?? null, mediaId: m[m.type]?.id ?? null };
+
+    /* ★ **الموقعُ يبقى موقعاً — وكان يُسقَط عند التطبيع.**
+       خطُّ الطول والعرض والعنوان كانا يبقيان في الحمولة الخام وحدها، فلا
+       يراهما الموظّف ولا البوت، وتصير المعاينة «[location]». وموقعُ الزبون
+       هو محتوى الطلب في مطعمٍ يوصّل: يرسله ثمّ يُسأل عن عنوانه من جديد.
+       والنصُّ يُبنى هنا لا في الشاشة، فيدخل **سياقَ النموذج** كما يدخل
+       القائمة — ولذلك يحمل الإحداثيّات: لا اسمَ لكلّ موقع. */
+    case 'location': {
+      const l = m.location ?? {};
+      const lat = Number(l.latitude);
+      const lng = Number(l.longitude);
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+        return { ...bare, type: 'location', text: '📍 موقعٌ بلا إحداثيّات' };
+      }
+      const label = [l.name, l.address].filter(Boolean).join(' · ');
+      return {
+        ...bare,
+        type: 'location',
+        text: `📍 ${label || 'موقعٌ مُرسَل'} (${lat.toFixed(6)},${lng.toFixed(6)})`,
+        location: { lat, lng, name: l.name ?? null, address: l.address ?? null },
+      };
+    }
+
+    /* ★ التفاعلُ حدثٌ لا رسالة — ونصُّه الإيموجي نفسُه.
+       و`inbound.ts` يقرأ النوع فلا يجدول له ردّاً ولا يمدّد نافذةً. */
+    case 'reaction':
+      return { ...bare, type: 'reaction', text: m.reaction?.emoji ?? '👍' };
+
+    case 'sticker':
+      return { ...bare, type: 'sticker', text: null, mediaId: m.sticker?.id ?? null };
+
     default:
-      return { type: 'unsupported', text: null, buttonPayload: null, mediaId: null };
+      return { ...bare, type: 'unsupported', text: null };
   }
 }
 

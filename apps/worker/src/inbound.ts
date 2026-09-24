@@ -4,6 +4,7 @@ import {
 } from '@aibot/db';
 import { emitToTenant } from './events.js';
 import { capabilitiesFor, type ChannelKind, type ParsedWebhook } from '@aibot/channels';
+import { typeLabel } from '@aibot/shared';
 
 export interface InboundJob {
   tenantId: string;
@@ -65,7 +66,7 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
           source: 'customer',
           type: m.type,
           body: m.text,
-          payload: { buttonPayload: m.buttonPayload, mediaId: m.mediaId },
+          payload: { buttonPayload: m.buttonPayload, mediaId: m.mediaId, location: m.location ?? null },
           channelPayload: m.raw as object,
           createdAt: m.at,
         })
@@ -73,6 +74,36 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
         .returning({ id: messages.id });
 
       if (inserted.length === 0) continue; // مكرَّرة — لا نافذة تُمدَّد ولا ردّ يُجدوَل
+
+      /**
+       * ★ **التفاعلُ حدثٌ لا رسالة.**
+       *
+       *   👍 على ردّ البوت أشيعُ ما يفعله الزبون العربيّ حين يرضى ويكتفي.
+       *   وكان يصل `unsupported` فيُعامَل رسالةً تستحقّ ردّاً: تُمدَّد
+       *   النافذة (فوترةٌ على «شكراً» بإيموجي)، ويرتفع عدّادُ غير المقروء
+       *   (فتصعد المحادثةُ إلى أعلى قائمة الموظّف بلا سبب)، وتُجدوَل مهمّةُ
+       *   ردٍّ سياقُها **مطابقٌ للشوط السابق حرفيّاً** — فيُنادى النموذج
+       *   بكلفةٍ جديدة ليُعيد الجوابَ نفسَه على من قال إنّه فهم.
+       *
+       *   والصفُّ يُحفظ ويُبثّ: الموظّف يرى أنّ الزبون تفاعل. وهذا كلُّ ما
+       *   في الأمر — خبرٌ لا طلب.
+       */
+      if (m.type === 'reaction') {
+        emitToTenant(job.tenantId, 'message:new', {
+          conversationId: conv.id,
+          message: {
+            id: inserted[0]!.id,
+            direction: 'in',
+            source: 'customer',
+            type: m.type,
+            body: m.text,
+            payload: { buttonPayload: null, mediaId: null, location: null },
+            status: null,
+            createdAt: m.at.toISOString(),
+          },
+        });
+        continue;
+      }
 
       /* ④ النافذة: تُفتح أو تُمدَّد. ولا تُختم هنا —
          الختم عند أوّل صادرٍ داخلها، فرسالةٌ بلا ردٍّ لا تُفوتَر. */
@@ -83,7 +114,10 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
         .set({
           lastInboundAt: m.at,
           lastMessageAt: m.at,
-          lastMessagePreview: (m.text ?? `[${m.type}]`).slice(0, 160),
+          /* ★ معاينةٌ يقرؤها إنسان: كان «[image]» و«[location]» — أسماءُ
+             أنواعٍ تقنيّةٍ بالإنجليزيّة في قائمةٍ عربيّة، لا تقول للموظّف
+             ما وصل ولا تُبحَث ولا تُقرأ بصوت. */
+          lastMessagePreview: (m.text ?? typeLabel(m.type)).slice(0, 160),
           unreadCount: sql`${conversations.unreadCount} + 1`,
         })
         .where(eq(conversations.id, conv.id));
@@ -100,7 +134,7 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
           source: 'customer',
           type: m.type,
           body: m.text,
-          payload: { buttonPayload: m.buttonPayload, mediaId: m.mediaId },
+          payload: { buttonPayload: m.buttonPayload, mediaId: m.mediaId, location: m.location ?? null },
           status: null,
           createdAt: m.at.toISOString(),
         },

@@ -7,6 +7,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi, useToast, fmt, AR_LOCALE } from '@/lib/useApi';
 import { api, post, idempotencyKey, ApiError } from '@/lib/api';
+import { MESSAGE_TYPE_AR } from '@aibot/shared';
 import { useCan, useSession } from '@/lib/session';
 import { useSocket, useLink, useFallbackPoll } from '@/lib/socket';
 import {
@@ -97,6 +98,8 @@ interface Msg {
     options?: Array<{ id: string; title: string }>;
     buttonPayload?: string | null;
     mediaId?: string | null;
+    /** إحداثيّاتُ الموقع — محفوظةٌ بها لا مذكورةٌ في نصّ. */
+    location?: { lat: number; lng: number; name: string | null; address: string | null } | null;
   } | null;
   status: string | null;
   errorMessage?: string | null;
@@ -185,11 +188,13 @@ const HANDOFF_TAG = 'للزميل';
  *   قائمةٍ أو تسجيلاً صوتيّاً يُنتج فراغاً — والموظّف يظنّ النظام معطوباً.
  *   لا نستطيع عرض الوسيط بعد (لا نقطة تنزيل)، و**قولُ ما وصل أصدق من فراغ**.
  */
-const MEDIA: Record<string, string> = {
-  image: 'صورة', audio: 'تسجيل صوتيّ', video: 'مقطع مرئيّ',
-  document: 'ملفّ', location: 'موقع', story_reply: 'ردٌّ على ستوري',
-  unsupported: 'نوعٌ لا تدعمه القناة',
-};
+/* ★ الأسماءُ من `@aibot/shared` — نصٌّ واحدٌ يقرؤه العاملُ (معاينةُ القائمة)
+   والشاشةُ (الفقاعة) وسياقُ النموذج. وكانت ثلاثَ نسخٍ تتباعد: «[image]» في
+   القائمة و«صورة» في الحوار ولا شيءَ عند النموذج. */
+const MEDIA = MESSAGE_TYPE_AR;
+
+/** الأنواعُ التي يُفتح مرفَقُها في المتصفّح — ولكلٍّ هيئةُ عرضه. */
+const OPENABLE = new Set(['image', 'audio', 'video', 'document', 'sticker']);
 
 const stamp = (iso: string | null) => (iso ? new Date(iso).getTime() : 0);
 const minsSince = (iso: string | null, now: number) =>
@@ -855,6 +860,12 @@ function InboxScreen() {
                 const newDay = !prev || dayLabel(prev.createdAt) !== dayLabel(m.createdAt);
                 const press = m.direction === 'in' ? m.payload?.buttonPayload : null;
                 const media = !m.body && MEDIA[m.type] ? MEDIA[m.type] : null;
+                const loc = m.payload?.location ?? null;
+                /* ★ المرفَقُ يُفتح — والوسيلةُ كانت موجودةً بلا طريقٍ إليها.
+                   كان الموظّف يقرأ «📎 صورة» ويسأل الزبون «شو بعتت؟». */
+                const mediaHref = m.payload?.mediaId && OPENABLE.has(m.type) && active
+                  ? `/api/conversations/${active}/messages/${m.id}/media`
+                  : null;
                 const src = m.direction === 'in' ? null : SOURCE[m.source] ?? SOURCE.bot!;
                 const voice = m.source === 'system' ? 'sys'
                   : m.direction === 'in' ? 'in'
@@ -882,8 +893,60 @@ function InboxScreen() {
                             <span className="press-a mono">{pressLabel(press).action}</span>
                           </div>
                         ) : (
-                          <div className={`bub ${voice}`} dir="auto">
-                            {media ? <span className="ibx-media">📎 {media}</span> : m.body}
+                          <div className={`bub ${voice}${mediaHref || loc ? ' has-media' : ''}`} dir="auto">
+                            {media && !mediaHref && <span className="ibx-media">📎 {media}</span>}
+                            {!media && m.body}
+
+                            {/* ★ **الموقعُ يُفتح في الخريطة.**
+                                موقعُ الزبون هو محتوى الطلب في مطعمٍ يوصّل،
+                                وكان يصل «📎 موقع» بلا إحداثيّةٍ ولا عنوان —
+                                فيُسأل الزبون عن عنوانه بعد أن أرسله. */}
+                            {loc && (
+                              <a
+                                className="ibx-loc"
+                                href={`https://maps.google.com/?q=${loc.lat},${loc.lng}`}
+                                target="_blank" rel="noopener noreferrer"
+                              >
+                                <span aria-hidden="true">📍</span>
+                                <span className="ibx-loc-t">
+                                  {loc.name || loc.address || 'موقعٌ مُرسَل'}
+                                  <span className="ibx-loc-c num">
+                                    {loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}
+                                  </span>
+                                </span>
+                                <span className="ibx-loc-go">افتح في الخريطة</span>
+                              </a>
+                            )}
+
+                            {mediaHref && m.type === 'image' && (
+                              <a className="ibx-shot" href={mediaHref} target="_blank" rel="noopener noreferrer">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={mediaHref} alt={m.body || 'صورةٌ أرسلها الزبون'} loading="lazy" />
+                              </a>
+                            )}
+                            {mediaHref && m.type === 'sticker' && (
+                              <a className="ibx-shot sticker" href={mediaHref} target="_blank" rel="noopener noreferrer">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img src={mediaHref} alt="ملصق" loading="lazy" />
+                              </a>
+                            )}
+                            {mediaHref && m.type === 'audio' && (
+                              <audio className="ibx-aud" controls preload="none" src={mediaHref}>
+                                متصفّحك لا يشغّل الصوت — <a href={mediaHref}>نزّل التسجيل</a>
+                              </audio>
+                            )}
+                            {mediaHref && m.type === 'video' && (
+                              <video className="ibx-vid" controls preload="none" src={mediaHref} />
+                            )}
+                            {mediaHref && m.type === 'document' && (
+                              <a className="ibx-file" href={mediaHref} target="_blank" rel="noopener noreferrer">
+                                <span aria-hidden="true">📄</span> {m.body || 'افتح الملفّ'}
+                              </a>
+                            )}
+                            {mediaHref && m.body && m.type !== 'document' && (
+                              <span className="ibx-cap">{m.body}</span>
+                            )}
+
                             {!!m.payload?.options?.length && (
                               <span className="chips">
                                 {m.payload.options.map((o) => <span className="c" key={o.id}>{o.title}</span>)}

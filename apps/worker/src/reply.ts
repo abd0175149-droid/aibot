@@ -9,7 +9,7 @@ import {
   FullKnowledge, buildRetrievalQuery, PLATFORM_RULES, type KnowledgeProvider,
 } from '@aibot/core';
 import { getProvider, computeCost, DEFAULT_CHAT_MODEL, AiError, type ToolCall } from '@aibot/ai';
-import type { OutboundMessage } from '@aibot/shared';
+import { mediaPlaceholder, type OutboundMessage } from '@aibot/shared';
 import { sendOutbound, checkQuota, WindowClosedError, QuotaExceededError } from './outbound.js';
 import { RagKnowledge } from './retrieval.js';
 import { execTenantTool } from './tools.js';
@@ -261,16 +261,38 @@ export async function handleReply(job: { conversationId: string }): Promise<void
 
     /* ── السياق ── */
     const history = await tx
-      .select({ direction: messages.direction, source: messages.source, body: messages.body })
+      .select({
+        direction: messages.direction, source: messages.source,
+        body: messages.body, type: messages.type,
+      })
       .from(messages)
       .where(and(eq(messages.conversationId, conv.id), isNull(messages.deletedAt)))
       .orderBy(desc(messages.createdAt))
       .limit(cfg.contextMessages);
     history.reverse();
 
+    /**
+     * ★ **الوسيطةُ بلا تعليقٍ تدخل السياق موصوفةً — وكانت تختفي.**
+     *
+     *   كان الترشيحُ `filter((m) => m.body)`، ورسالةٌ صوتيّةٌ أو صورةٌ بلا
+     *   تعليقٍ تُحفظ بـ`body` فارغ. فتُسقَط من السياق تماماً، ويصير
+     *   `lastUser` **سؤالاً أقدم** — فيردّ البوت على ما مضى، والزبون يقرأ
+     *   جواباً عن غير سؤاله.
+     *   وإن كانت أوّلَ رسالةٍ في المحادثة خرجت `contents` **فارغة**، فيرفضها
+     *   Gemini بـ400، وتُرفَع حادثةُ `ai_error` حرجة تُنبّه المالكَ والمنصّة —
+     *   والزبون يستلم صمتاً تامّاً. أي أنّ أشيع ما يرسله زبونٌ عربيٌّ على
+     *   واتساب كان يُسقط الردَّ ويُطلق إنذاراً في آنٍ واحد.
+     *
+     *   والوصفُ صريحٌ بأنّه وصف: النموذج يُخبَر أنّ وسيطةً وصلت ولا يُعطى
+     *   محتواها، فلا يخمّن. و`PLATFORM_RULES` تقول له ما يفعل حينها.
+     */
     const turns = history
-      .filter((m) => m.body)
-      .map((m) => ({ role: m.direction === 'in' ? ('user' as const) : ('model' as const), text: m.body! }));
+      .filter((m) => m.type !== 'reaction')
+      .map((m) => ({
+        role: m.direction === 'in' ? ('user' as const) : ('model' as const),
+        text: m.body?.trim() ? m.body : (m.direction === 'in' ? mediaPlaceholder(m.type) : ''),
+      }))
+      .filter((t) => t.text);
     const lastUser = [...turns].reverse().find((t) => t.role === 'user')?.text ?? '';
     const lastOut = [...history].reverse().find((m) => m.direction === 'out')?.body ?? null;
 

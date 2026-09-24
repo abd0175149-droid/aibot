@@ -4,6 +4,8 @@ import {
   conversationWindows, tenantChannels, users, eq, and, isNull, desc, lt, sql,
 } from '@aibot/db';
 import { AppError, ErrorCode, SendMessageBody } from '@aibot/shared';
+import { getAdapter, type ChannelKind } from '@aibot/channels';
+import { open as decrypt } from '@aibot/crypto';
 import { requireAuth, tenantOf, PERMISSIONS } from '../auth.js';
 import { applyMerge, isUuid } from './contacts.js';
 import { emitToTenant } from '../realtime.js';
@@ -157,6 +159,81 @@ export async function registerInbox(app: FastifyInstance) {
             : { expiresAt: null, open: false, billedAt: null },
         };
       });
+    },
+  );
+
+  /**
+   * ★ **فتحُ ما أرسله الزبون — الوسيلةُ كانت موجودةً بلا طريقٍ إليها.**
+   *
+   *   `adapter.fetchMedia` مكتوبةٌ في المحوّل منذ أن كُتب، ولا نقطةَ واحدةٌ
+   *   في الـAPI تناديها. فالموظّف يقرأ «📎 صورة» ويضطرّ إلى سؤال الزبون «شو
+   *   بعتت؟» — والصورةُ عند ميتا، والتوكن عندنا، والدالّةُ جاهزة.
+   *
+   *   وثلاثة قيودٍ تجعل هذا المسار آمناً:
+   *    ① الرسالةُ تُقرأ **داخل** `withTenant`، فـRLS يمنع قراءةَ وسيطِ
+   *      مستأجرٍ آخر ولو خُمّن معرّفُها — لا فحصَ ملكيّةٍ يدويّ يُنسى.
+   *    ② `no-store` صريحة: الوسيطُ محتوى زبونٍ خاصّ، وكاشٌ مشتركٌ عند وسيطٍ
+   *      أو CDN يسرّبه إلى طلبٍ آخر.
+   *    ③ التوكن يُفكّ في الذاكرة وقت الاستعمال ولا يُعاد ولا يُسجَّل.
+   */
+  app.get<{ Params: { id: string; mid: string } }>(
+    '/conversations/:id/messages/:mid/media',
+    { preHandler: requireAuth() },
+    async (req, reply) => {
+      const tenantId = tenantOf(req);
+      if (!isUuid(req.params.id) || !isUuid(req.params.mid)) {
+        throw new AppError(ErrorCode.VALIDATION, 'معرّفٌ غير صالح', 400);
+      }
+
+      const found = await withTenant(getDb(), tenantId, async (tx) => {
+        const m = (await tx.select({ payload: messages.payload, channelId: messages.channelId })
+          .from(messages)
+          .where(and(
+            eq(messages.id, req.params.mid),
+            eq(messages.conversationId, req.params.id),
+            isNull(messages.deletedAt),
+          )).limit(1))[0];
+        if (!m) return null;
+
+        const mediaId = (m.payload as { mediaId?: string | null } | null)?.mediaId ?? null;
+        if (!mediaId) return null;
+
+        const ch = (await tx.select().from(tenantChannels)
+          .where(eq(tenantChannels.id, m.channelId)).limit(1))[0];
+        if (!ch?.tokenEnc) return null;
+        return { mediaId, ch };
+      });
+
+      if (!found) throw new AppError(ErrorCode.VALIDATION, 'لا وسيطَ لهذه الرسالة', 404);
+
+      const adapter = getAdapter(found.ch.kind as ChannelKind);
+      const file = await adapter.fetchMedia(
+        {
+          channelId: found.ch.id,
+          tenantId,
+          kind: found.ch.kind as ChannelKind,
+          token: decrypt(found.ch.tokenEnc!, found.ch.keyVersion),
+          externalAccountId: found.ch.externalAccountId ?? '',
+          config: (found.ch.config ?? {}) as Record<string, unknown>,
+        },
+        found.mediaId,
+      );
+
+      /* ★ 404 لا 500: ميتا تحذف الوسائط بعد مدّة، وانتهاءُ صلاحيّتها حالةٌ
+         عاديّةٌ تُقال للموظّف لا عطلٌ في النظام. */
+      if (!file) {
+        throw new AppError(
+          ErrorCode.VALIDATION,
+          'تعذّر جلبُ المرفَق من القناة — قد تكون مهلةُ حفظه عند المزوّد قد انتهت.',
+          404,
+        );
+      }
+
+      return reply
+        .header('content-type', file.mime)
+        .header('cache-control', 'no-store, private')
+        .header('content-disposition', 'inline')
+        .send(file.data);
     },
   );
 
