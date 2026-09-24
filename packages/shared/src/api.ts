@@ -1,6 +1,28 @@
 import { z } from 'zod';
 
 export const Role = z.enum(['platform_owner', 'tenant_owner', 'tenant_agent']);
+
+export const TenantStatus = z.enum(['trial', 'active', 'suspended', 'archived']);
+export type TenantStatus = z.infer<typeof TenantStatus>;
+
+/**
+ * ★ **حالةُ المستأجر كانت مفروضةً على الويبهوك وحده.**
+ *
+ *   حسابٌ أوقفه مالكُ المنصّة يتوقّف عن **استقبال** رسائل الزبائن — وهذا كلُّ
+ *   ما كان يقع. وصاحبُه يبقى يدخل، ويُنفق توكنز الساحة (وهي نداءاتٌ مدفوعةٌ
+ *   على حساب المنصّة)، **ويرسل إلى واتساب وإنستجرام**. أي أنّ «الإيقاف»
+ *   يقطع ما يدفعه الزبون ولا يقطع ما تدفعه المنصّة.
+ *
+ *   والرقمُ الوحيد الذي كان يُفرض عليه هو الطرفُ الخطأ من المعادلة.
+ */
+export function tenantBlocked(status: string | null | undefined): boolean {
+  return status === 'suspended' || status === 'archived';
+}
+
+/** ★ «موقوف» ليست «ممنوع»: الأولى حالةُ حسابٍ تُرفع بمكالمة، والثانية نقصُ
+ *   صلاحيّة. وخلطُهما يُظهر «لا صلاحيّة لديك» لصاحب الحساب نفسِه. */
+export const TENANT_BLOCKED_AR =
+  'حسابك موقوفٌ الآن. تواصل معنا لرفع الإيقاف — وبياناتك ومحادثاتك محفوظةٌ كما هي.';
 export type Role = z.infer<typeof Role>;
 
 export const LoginBody = z.object({

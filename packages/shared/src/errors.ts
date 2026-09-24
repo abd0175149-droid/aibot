@@ -8,6 +8,9 @@ export const ErrorCode = {
   TOOL_BLOCKED: 'TOOL_BLOCKED',
   SIGNATURE_INVALID: 'SIGNATURE_INVALID',
   TENANT_NOT_FOUND: 'TENANT_NOT_FOUND',
+  /** ★ موقوفٌ ≠ ممنوع: الأولى حالةُ حسابٍ تُرفع بمكالمة، والثانية نقصُ
+      صلاحيّة. وخلطُهما يُظهر «لا صلاحيّة لديك» لصاحب الحساب نفسِه. */
+  TENANT_SUSPENDED: 'TENANT_SUSPENDED',
   UNAUTHORIZED: 'UNAUTHORIZED',
   FORBIDDEN: 'FORBIDDEN',
   RATE_LIMITED: 'RATE_LIMITED',

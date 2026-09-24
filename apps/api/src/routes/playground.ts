@@ -1,9 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import {
   getDb, withTenant, botConfigs, botVersions, botTools, knowledgeSources, kbChunks,
-  aiRuns, messages, tenantChannels, auditLog, eq, and, desc, isNull, sql,
+  aiRuns, messages, tenantChannels, tenants, auditLog, eq, and, desc, isNull, sql,
 } from '@aibot/db';
-import { AppError, ErrorCode } from '@aibot/shared';
+import {
+  AppError, ErrorCode, tenantBlocked, TENANT_BLOCKED_AR,
+} from '@aibot/shared';
 import { getAdapter, type ChannelKind } from '@aibot/channels';
 import { decideKnowledgeMode, estimateTokens } from '@aibot/core';
 import { DEFAULT_CHAT_MODEL } from '@aibot/ai';
@@ -237,6 +239,17 @@ export async function registerPlayground(app: FastifyInstance) {
           eq(aiRuns.source, 'playground'),
           sql`${aiRuns.createdAt} > now() - interval '1 minute'`,
         )))[0]?.n ?? 0);
+      /* ★ **حسابٌ موقوفٌ كان يُنفق توكنز الساحة بلا حدّ.**
+         الإيقافُ كان مفروضاً على الويبهوك وحده — أي على ما يدفعه الزبون —
+         وتُرك ما تدفعه المنصّة مفتوحاً: كلُّ تجربةٍ نداءٌ حقيقيٌّ بمفتاح
+         المنصّة حين لا يملك العميلُ مفتاحاً. */
+      const t = await withTenant(getDb(), tenantId, async (tx) =>
+        (await tx.select({ status: tenants.status }).from(tenants)
+          .where(eq(tenants.id, tenantId)).limit(1))[0]);
+      if (tenantBlocked(t?.status)) {
+        throw new AppError(ErrorCode.TENANT_SUSPENDED, TENANT_BLOCKED_AR, 403);
+      }
+
       if (recent >= PER_MIN) {
         throw new AppError(
           ErrorCode.RATE_LIMITED,

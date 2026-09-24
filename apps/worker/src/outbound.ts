@@ -1,9 +1,9 @@
 import {
   getDb, withTenant, conversations, conversationWindows, messages, tenantChannels,
-  channelIdentities, subscriptions, plans, eq, and, isNull, sql, desc,
+  channelIdentities, subscriptions, plans, tenants, eq, and, isNull, sql, desc,
 } from '@aibot/db';
 import { getAdapter, degradeChoices, canRender, type ChannelKind } from '@aibot/channels';
-import type { OutboundMessage } from '@aibot/shared';
+import { tenantBlocked, type OutboundMessage } from '@aibot/shared';
 import { open as decrypt } from '@aibot/crypto';
 import { emitToTenant } from './events.js';
 import { announceQuotaCrossing } from './quota.js';
@@ -64,6 +64,25 @@ export class QuotaExceededError extends Error {
 }
 
 /**
+ * ★ **حسابٌ موقوفٌ كان يُرسل إلى واتساب كأنّ شيئاً لم يكن.**
+ *
+ *   حالةُ المستأجر كانت مفروضةً على الويبهوك وحده: يتوقّف **استقبالُ** رسائل
+ *   الزبائن، ويبقى الإرسالُ مفتوحاً. فبوتٌ نُشر قبل الإيقاف يظلّ يردّ على
+ *   نوافذَ مفتوحة، وموظّفٌ يظلّ يرسل من الإنبوكس — على حساب المنصّة عند
+ *   ميتا، وباسم عميلٍ أُوقف حسابُه.
+ *
+ *   وصنفٌ خاصٌّ لا `Error` عامّة: `safeSend` تُصنّف الأخطاء، وما يقع في
+ *   الفرع العامّ يُرفَع **حادثةً حرجة** «فشل إرسال رسالة» ويُعاد المحاولة.
+ *   والإيقافُ ليس فشلاً ولا يُصلحه تكرار.
+ */
+export class TenantBlockedError extends Error {
+  readonly code = 'TENANT_SUSPENDED';
+  constructor() {
+    super('حساب العميل موقوفٌ — لا إرسال');
+  }
+}
+
+/**
  * يُعلّم الصفَّ المحجوز فاشلاً ويبثّ الحالة — فيرى الموظّف ما لم يصل.
  * ويُبتلع خطؤه: فشلُ تعليم الفشل لا يجوز أن يُخفي الفشل الأصليّ.
  */
@@ -96,7 +115,9 @@ export async function sendOutbound(job: SendJob): Promise<{ messageId: string; e
       ? new Error('أُغلقت نافذة الردّ الحرّ قبل الإرسال — لا يصل إلّا بقالبٍ معتمد')
       : e instanceof QuotaExceededError
         ? new Error('بلغ الحساب سقف الباقة — لم تُرسَل')
-        : e);
+        : e instanceof TenantBlockedError
+          ? new Error('حسابك موقوف — لم تُرسَل. تواصل معنا لرفع الإيقاف.')
+          : e);
     throw e;
   }
 }
@@ -106,10 +127,14 @@ async function sendOutboundInner(job: SendJob): Promise<{ messageId: string; ext
 
   const ctx = await withTenant(db, job.tenantId, async (tx) => {
     const rows = await tx
-      .select({ conv: conversations, ch: tenantChannels, ident: channelIdentities })
+      .select({
+        conv: conversations, ch: tenantChannels, ident: channelIdentities,
+        tenantStatus: tenants.status,
+      })
       .from(conversations)
       .innerJoin(tenantChannels, eq(tenantChannels.id, conversations.channelId))
       .innerJoin(channelIdentities, eq(channelIdentities.id, conversations.identityId))
+      .innerJoin(tenants, eq(tenants.id, conversations.tenantId))
       .where(eq(conversations.id, job.conversationId))
       .limit(1);
     if (!rows[0]) throw new Error('محادثةٌ غير موجودة');
@@ -125,6 +150,11 @@ async function sendOutboundInner(job: SendJob): Promise<{ messageId: string; ext
 
     return { ...rows[0], win: win[0] ?? null };
   });
+
+  /* ⓪ حالةُ الحساب — قبل كلّ شيء.
+     ولا استثناءَ لمصدرٍ ولا لدور: بوتٌ نُشر قبل الإيقاف، أو موظّفٌ يكتب من
+     الإنبوكس، كلاهما يُرسل باسم عميلٍ أُوقف حسابُه وعلى حساب المنصّة. */
+  if (tenantBlocked(ctx.tenantStatus)) throw new TenantBlockedError();
 
   /* ① حارس النافذة — لا التفاف، ولا استثناء لمصدرٍ ولا لدور. */
   const now = Date.now();

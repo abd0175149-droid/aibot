@@ -11,7 +11,9 @@ import {
 } from '@aibot/core';
 import { getProvider, computeCost, DEFAULT_CHAT_MODEL, AiError, type ToolCall } from '@aibot/ai';
 import { mediaPlaceholder, type OutboundMessage } from '@aibot/shared';
-import { sendOutbound, checkQuota, WindowClosedError, QuotaExceededError } from './outbound.js';
+import {
+  sendOutbound, checkQuota, WindowClosedError, QuotaExceededError, TenantBlockedError,
+} from './outbound.js';
 import { RagKnowledge } from './retrieval.js';
 import { execTenantTool } from './tools.js';
 import { raiseIncident, resolveOpenOfKinds } from './incidents.js';
@@ -595,6 +597,11 @@ async function safeSend(job: Parameters<typeof sendOutbound>[0]): Promise<void> 
     await sendOutbound(job);
   } catch (e) {
     if (e instanceof WindowClosedError) return;
+    /* ★ الإيقافُ ليس فشلاً ولا يُصلحه تكرار: بلا هذا الفرع يقع في الفرع
+       العامّ فتُرفَع **حادثةٌ حرجة** «فشل إرسال رسالة» عند كلّ ردٍّ من بوتٍ
+       ما زال يعمل على نوافذَ مفتوحة، ويُعاد المحاولة أسّيّاً — ضجيجٌ يُغرق
+       سيلَ الحوادث في اللحظة التي تكون فيها المنصّةُ قد أوقفت الحسابَ قصداً. */
+    if (e instanceof TenantBlockedError) return;
     if (e instanceof QuotaExceededError) {
       await raiseIncident({
         tenantId: job.tenantId, kind: 'quota_exceeded', severity: 'warn',

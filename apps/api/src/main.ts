@@ -3,7 +3,7 @@ import { REDACT_PATHS } from '@aibot/crypto';
 import { AppError } from '@aibot/shared';
 import { pingDb, closeDb } from '@aibot/db';
 import { registerWebhooks } from './webhooks.js';
-import { registerAuth } from './auth.js';
+import { registerAuth, requireAuth } from './auth.js';
 import { registerInbox } from './routes/inbox.js';
 import { registerContacts } from './routes/contacts.js';
 import { registerBot } from './routes/bot.js';
@@ -65,7 +65,21 @@ app.get('/api/health', async (_req, reply) => {
   return reply.code(db && redis ? 200 : 503).send(body);
 });
 
-app.get('/api/health/deep', async () => ({
+/**
+ * ★ **الفحصُ العميق خلف توكن — وكان مفتوحاً للعموم عبر النفق.**
+ *
+ *   `/api/health` السطحيّ يبقى مفتوحاً: بوّابةُ النشر ومراقبٌ خارجيٌّ يحتاجانه،
+ *   وما فيه هو ما يُعلَن أصلاً (خدمةٌ · نسخةٌ · حيٌّ أم لا).
+ *   و`deep` غيرُه: أعماقُ الطوابير وعدَدُ الفاشلة و`uptime` — وهي خريطةُ حملٍ
+ *   وتوقيتٍ تُقرأ من الخارج. عمقُ طابورٍ يرتفع يقول إنّ العامل متعثّر، وهي
+ *   اللحظةُ التي يُختار فيها الضغط. والنفقُ يمرّر `api/*` كلَّه، فما كان
+ *   «داخليّاً» لم يكن داخليّاً يوماً.
+ *
+ * ⚠️ ويُسجَّل خلف `preHandler` لا `onRequest`: `requireAuth` يقرأ الترويسة
+ *    وحدها فلا فرق أمنيّ، والتسجيلُ على مستوى المسار يُبقيه خارج موجّه
+ *    `/api` المُسجَّل أدناه — فلا يتغيّر عنوانُه.
+ */
+app.get('/api/health/deep', { preHandler: requireAuth({ console: true }) }, async () => ({
   service: 'aibot' as const,
   rev: GIT_REV,
   db: await pingDb(),

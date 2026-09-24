@@ -1,7 +1,9 @@
 import { createHmac, randomBytes, scrypt as _scrypt, timingSafeEqual } from 'node:crypto';
 import { promisify } from 'node:util';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
-import { AppError, ErrorCode, type Role } from '@aibot/shared';
+import {
+  AppError, ErrorCode, tenantBlocked, TENANT_BLOCKED_AR, type Role,
+} from '@aibot/shared';
 import { getDb, withPlatform, users, sessions, tenants, auditLog, eq, and, ne, isNull, gt, sql } from '@aibot/db';
 import { sha256 } from '@aibot/crypto';
 import { enforceRate, loginRules } from './ratelimit.js';
@@ -203,13 +205,25 @@ export async function registerAuth(app: FastifyInstance) {
        المنصّة بلا `tenant_id` أصلاً. فالبحث عن المستخدم يمرّ بالدور المتجاوز
        صراحةً — وهذا أوضح من سياسةٍ تفتح الجدول للجميع.
        (كشفه أوّل تشغيلٍ بدورٍ عاديّ: قبله كان التطبيق سوبريوزر فلم يظهر.) */
-    const rows = await withPlatform(getDb(), 'مصادقة: البحث عن المستخدم بالبريد',
-      (tx) => tx.select().from(users).where(eq(users.email, email)).limit(1));
-    const user = rows[0];
+    const rows = await withPlatform(getDb(), 'مصادقة: البحث عن المستخدم بالبريد وحالةِ مستأجره',
+      (tx) => tx.select({ u: users, tenantStatus: tenants.status })
+        .from(users)
+        .leftJoin(tenants, eq(tenants.id, users.tenantId))
+        .where(eq(users.email, email)).limit(1));
+    const user = rows[0]?.u;
     // رسالةٌ واحدة للحالتين — لا نكشف أيّ بريدٍ مسجَّل
     const bad = () => new AppError(ErrorCode.UNAUTHORIZED, 'البريد أو كلمة السرّ غير صحيحة', 401);
     if (!user || !user.isActive) throw bad();
     if (!(await verifyPassword(password, user.passwordHash))) throw bad();
+
+    /* ★ **حالةُ المستأجر تُفحص بعد كلمة السرّ لا قبلها.**
+       قبلَها تصير مقياساً يُميّز بريداً مسجَّلاً من غيره بلا معرفة الكلمة.
+       وبعدَها: من يعرف كلمتَه يستحقّ أن يُقال له **لماذا** لا يدخل — و«البريد
+       أو كلمة السرّ غير صحيحة» على حسابٍ موقوفٍ تُرسل صاحبَه إلى استعادة
+       كلمةٍ لا تُصلح شيئاً. */
+    if (tenantBlocked(rows[0]?.tenantStatus)) {
+      throw new AppError(ErrorCode.TENANT_SUSPENDED, TENANT_BLOCKED_AR, 403);
+    }
 
     const { refresh, sessionId } = await createSession(user.id, {
       ip: req.ip, userAgent: req.headers['user-agent'],
@@ -232,10 +246,21 @@ export async function registerAuth(app: FastifyInstance) {
       return reply.header('set-cookie', clearRefreshCookie()).code(401)
         .send({ error: { code: ErrorCode.UNAUTHORIZED, message: 'انتهت الجلسة' } });
     }
-    const rows = await withPlatform(getDb(), 'مصادقة: تجديد الجلسة',
-      (tx) => tx.select().from(users).where(eq(users.id, rotated.userId)).limit(1));
-    const user = rows[0];
+    const rows = await withPlatform(getDb(), 'مصادقة: تجديد الجلسة وحالةُ مستأجرها',
+      (tx) => tx.select({ u: users, tenantStatus: tenants.status })
+        .from(users)
+        .leftJoin(tenants, eq(tenants.id, users.tenantId))
+        .where(eq(users.id, rotated.userId)).limit(1));
+    const user = rows[0]?.u;
     if (!user?.isActive) throw new AppError(ErrorCode.UNAUTHORIZED, 'الحساب معطَّل', 401);
+
+    /* ★ والتجديدُ هو نقطةُ الفحص التي يوثّقها هذا الملفّ: التوكن يعيش ربعَ
+       ساعة، والكوكي ثلاثين يوماً. فبلا فحصٍ هنا يبقى حسابٌ أُوقف اليومَ
+       يُجدّد جلستَه شهراً كاملاً. */
+    if (tenantBlocked(rows[0]?.tenantStatus)) {
+      return reply.header('set-cookie', clearRefreshCookie()).code(403)
+        .send({ error: { code: ErrorCode.TENANT_SUSPENDED, message: TENANT_BLOCKED_AR } });
+    }
 
     const access = signAccess({ sub: user.id, tid: user.tenantId, role: user.role, sid: rotated.sessionId });
     return reply.header('set-cookie', refreshCookie(rotated.refresh)).send({ access });
