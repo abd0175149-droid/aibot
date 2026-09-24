@@ -253,10 +253,39 @@ export async function handleReply(job: { conversationId: string }): Promise<void
         : null;
     }
 
+    /**
+     * ★ **رسالةُ خارج الدوام تُقال مرّةً لا مع كلّ رسالة.**
+     *
+     *   كانت تُرسَل لكلّ مهمّة ردّ: الزبون الذي يكتب ثلاث رسائل متباعدةٍ
+     *   ليلاً يستلم ثلاثَ نسخٍ متطابقةٍ من «مغلقون الآن». وذاك مزعجٌ، لكنّ
+     *   الأثقل أنّها تخرج بمصدر `system` عبر طبقة الإرسال — **فتختم نافذة
+     *   الفوترة** كأنّها ردُّ بوت. أي أنّ العميل يدفع نافذةً كاملةً ثمنَ
+     *   ردٍّ آليٍّ يقول «نحن مغلقون».
+     *
+     *   والشرطُ أن تكون آخرُ رسالةٍ صادرةٍ في هذه المحادثة ليست هي نفسَها:
+     *   فتُقال مرّةً في كلّ فترة إغلاق، وتُقال من جديدٍ بعد أن يردّ البوتُ
+     *   أو الموظّف في الدوام التالي.
+     */
     if (!withinBusinessHours(cfg.businessHours as BusinessHours | null)) {
-      return cfg.outsideHoursMessage
-        ? { conversationId: conv.id, sends: [{ source: 'system', message: { kind: 'text', body: cfg.outsideHoursMessage } }] }
-        : null;
+      if (!cfg.outsideHoursMessage) return null;
+
+      const lastOutbound = (await tx
+        .select({ body: messages.body })
+        .from(messages)
+        .where(and(
+          eq(messages.conversationId, conv.id),
+          eq(messages.direction, 'out'),
+          isNull(messages.deletedAt),
+        ))
+        .orderBy(desc(messages.createdAt))
+        .limit(1))[0];
+
+      if (lastOutbound?.body?.trim() === cfg.outsideHoursMessage.trim()) return null;
+
+      return {
+        conversationId: conv.id,
+        sends: [{ source: 'system', message: { kind: 'text', body: cfg.outsideHoursMessage } }],
+      };
     }
 
     /* ── السياق ── */

@@ -8,6 +8,7 @@ import { seal } from '@aibot/crypto';
 import { DEFAULT_CHAT_MODEL } from '@aibot/ai';
 import { decideKnowledgeMode, estimateTokens, linkHostsFrom, execHttpTool, assertPublicUrl, type HttpToolSpec } from '@aibot/core';
 import { requireAuth, tenantOf } from '../auth.js';
+import { enforceRate } from '../ratelimit.js';
 import { enqueueEmbed, enqueueIngest } from '../queues.js';
 import { mkdir, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -514,6 +515,16 @@ export async function registerBot(app: FastifyInstance) {
         keyVersion: sealed?.keyVersion ?? 1,
         confirmRequired: Boolean(b.confirmRequired),
         confirmTemplate: b.confirmTemplate ?? null,
+        /* ★ **تُنشأ معطَّلةً ما لم يُقَل غيرُ ذلك صراحةً.**
+           التجربةُ تحتاج صفّاً محفوظاً (السرُّ مشفَّرٌ في القاعدة)، فالباني
+           يحفظ عند أوّل ضغطةٍ على «جرّبها». وكان الصفُّ يُنشأ **مفعَّلاً**،
+           وعاملُ الردّ يعرض كلَّ أداةٍ مفعَّلةٍ على النموذج في كلّ رسالة بلا
+           علاقةٍ بالنسخة المنشورة. فأداةٌ نصفُ مبنيّةٍ — مسارٌ خاطئ، بلا
+           خريطةِ ردّ، بلا تأكيد — تصير في متناول البوت أمام الزبائن من
+           **لحظة الضغط على «جرّبها»**. ثمّ تُخفق حتّى يفتح قاطعُ الدائرة،
+           فيقرأ المالك «أداةٌ عُطِّلت آليّاً» قبل أن يفهم ما جرى.
+           و«احفظ الأداة» هو ما يُفعّلها. */
+        enabled: b.enabled === true,
       }).returning();
       const { secretsEnc, ...safe } = row!;
       return safe;
@@ -530,22 +541,39 @@ export async function registerBot(app: FastifyInstance) {
     { preHandler: auth },
     async (req) => {
       const tenantId = tenantOf(req);
-      return withTenant(getDb(), tenantId, async (tx) => {
-        const tool = (await tx.select().from(botTools).where(eq(botTools.id, req.params.id)).limit(1))[0];
-        if (!tool) throw new AppError(ErrorCode.VALIDATION, 'أداةٌ غير موجودة', 404);
-        const secrets: Record<string, string> = tool.secretsEnc
-          ? JSON.parse((await import('@aibot/crypto')).open(tool.secretsEnc, tool.keyVersion))
-          : {};
-        const res = await execHttpTool(
-          tool.http as HttpToolSpec,
-          req.body?.sampleParams ?? {},
-          secrets,
-          (tool.responseMap ?? null) as Record<string, string> | null,
-          { debug: true },
-        );
-        // الترويسات لا تُعاد — فيها السرّ الذي حقنّاه للتوّ
-        return { ok: res.ok, status: res.status, mapped: res.mapped, error: res.error, ms: res.ms, debug: res.debug };
-      });
+
+      /* ★ **حدٌّ على التجربة — وبلاه عطلٌ ذاتيٌّ عابرٌ للمستأجرين.**
+         الطلبُ متاحٌ لكلّ صاحب صلاحيّةِ إعدادات، والنداءُ خارجيٌّ بمهلةٍ
+         طويلة. فمالكٌ واحدٌ يضغط «جرّب» عشرَ مرّاتٍ على أداةٍ خادمُها لا
+         يجيب كان يحتجز بِركةَ الاتّصالات كلَّها (عشرةٌ فقط) — فتتوقّف كلُّ
+         مسارات الـAPI **لكلّ المستأجرين**، ويفشل الويبهوك في حلّ مستأجره.
+         فعلٌ بريءٌ من مالكٍ واحدٍ يُسقط المنصّة. */
+      await enforceRate(
+        [{ key: `rl:tooltest:${tenantId}`, limit: 5, windowSec: 60 }],
+        'جرّبتَ الأداة خمسَ مرّاتٍ في الدقيقة — انتظر قليلاً. والنداءُ الخارجيّ قد يكون بطيئاً.',
+      );
+
+      /* ★ **القراءةُ في معاملةٍ قصيرة، والنداءُ الخارجيُّ خارجها.**
+         كان `execHttpTool` يجري **داخل** `withTenant`: خادمُ العميل البطيء
+         يحتجز اتّصالَ قاعدةٍ ستَّ عشرةَ ثانية بلا سببٍ — والمشروعُ يوثّق
+         العكسَ في `/channel/test`. والقاعدةُ عامّة: لا نداءَ شبكةٍ داخل
+         معاملة. */
+      const tool = await withTenant(getDb(), tenantId, async (tx) =>
+        (await tx.select().from(botTools).where(eq(botTools.id, req.params.id)).limit(1))[0]);
+      if (!tool) throw new AppError(ErrorCode.VALIDATION, 'أداةٌ غير موجودة', 404);
+
+      const secrets: Record<string, string> = tool.secretsEnc
+        ? JSON.parse((await import('@aibot/crypto')).open(tool.secretsEnc, tool.keyVersion))
+        : {};
+      const res = await execHttpTool(
+        tool.http as HttpToolSpec,
+        req.body?.sampleParams ?? {},
+        secrets,
+        (tool.responseMap ?? null) as Record<string, string> | null,
+        { debug: true },
+      );
+      // الترويسات لا تُعاد — فيها السرّ الذي حقنّاه للتوّ
+      return { ok: res.ok, status: res.status, mapped: res.mapped, error: res.error, ms: res.ms, debug: res.debug };
     },
   );
 

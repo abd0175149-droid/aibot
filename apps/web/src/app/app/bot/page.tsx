@@ -658,14 +658,23 @@ export default function BotPage() {
   }
 
   /** التفعيل اليدويّ يُصفّر قاطع الدائرة — العميل أصلح الخلل عند نظامه. */
-  async function reenableTool(id: string) {
+  /**
+   * ★ **الإيقافُ المؤقّت — وكان المخرجُ الوحيد الحذف.**
+   *
+   *   الشاشةُ تنصح بالتعطيل عند الشكّ، ولا زرَّ له: فمن أراد إسكاتَ أداةٍ
+   *   ساعةً اضطرّ إلى حذفها **بسرّها** ثمّ بنائها من جديد. والمسارُ يقبل
+   *   `enabled` منذ كُتب.
+   */
+  async function setToolEnabled(id: string, enabled: boolean) {
     setBusyTool(id);
     try {
-      await patch(`/bot/tools/${id}`, { enabled: true });
-      toast('أُعيد تفعيلها، وصُفّر عدّاد الإخفاق');
+      await patch(`/bot/tools/${id}`, { enabled });
+      toast(enabled
+        ? 'شُغّلت، وصُفّر عدّاد الإخفاق — ويراها بوتك من الآن'
+        : 'أُوقفت مؤقّتاً — لا يراها بوتك، وسرُّها ومسارُها محفوظان');
       await tools.reload();
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'تعذّر إعادة التفعيل');
+      toast(e instanceof ApiError ? e.message : 'تعذّر التغيير');
     } finally { setBusyTool(null); }
   }
 
@@ -1274,7 +1283,10 @@ export default function BotPage() {
             {editing && (
               <ToolBuilder
                 initial={editing}
-                onClose={() => setEditing(null)}
+                /* ★ الإغلاقُ يعيد الجلب دائماً: أوّلُ «جرّبها» يحفظ صفّاً
+                   في القاعدة، فإغلاقُ النافذة بلا «احفظ» كان يترك أداةً
+                   موجودةً **ومخفيّةً عن القائمة** حتّى تحديث الصفحة. */
+                onClose={() => { setEditing(null); void tools.reload(); }}
                 onSaved={() => { setEditing(null); void tools.reload(); }}
               />
             )}
@@ -1302,6 +1314,14 @@ export default function BotPage() {
                     actions={(
                       <>
                         {t.disabledReason && <Pill tone="crit" label="معطَّلة آليّاً" />}
+                        {/* ★ **مسوّدةٌ لا يراها بوتك** — وكانت الأداةُ تُنشأ
+                            مفعَّلةً عند أوّل «جرّبها»، فتصير في متناول البوت
+                            أمام الزبائن وهي نصفُ مبنيّة. و«معطَّلةٌ بيدك»
+                            غيرُ «معطَّلةٍ آليّاً»: الأولى قرارُك والثانية
+                            قاطعُ دائرةٍ فُتح. */}
+                        {!t.enabled && !t.disabledReason && (
+                          <Pill tone="warn" label="مسوّدة — لا يراها بوتك" />
+                        )}
                         {/* ★ «مخصَّصة» ليست تحذيراً: كانت `warn` فكلّ أداةٍ بناها
                             العميل تبدو عطلاً دائماً. وسمٌ بصيغة الخطّ — بلا سطحٍ
                             فلا يُقرأ حالة. */}
@@ -1367,16 +1387,27 @@ export default function BotPage() {
                         >
                           عدّلها وجرّبها
                         </Button>
-                        {t.disabledReason && (
+                        {t.disabledReason ? (
                           <Button
                             size="sm"
                             variant="primary"
                             busy={busyTool === t.id}
                             disabled={locked}
                             reason={lockReason ?? undefined}
-                            onClick={() => void reenableTool(t.id)}
+                            onClick={() => void setToolEnabled(t.id, true)}
                           >
                             أعِد تفعيلها
+                          </Button>
+                        ) : (
+                          <Button
+                            size="sm"
+                            variant={t.enabled ? 'quiet' : 'primary'}
+                            busy={busyTool === t.id}
+                            disabled={locked}
+                            reason={lockReason ?? undefined}
+                            onClick={() => void setToolEnabled(t.id, !t.enabled)}
+                          >
+                            {t.enabled ? 'أوقفها مؤقّتاً' : 'شغّلها'}
                           </Button>
                         )}
                         {/* ★ الحذف موجودٌ في الخادم ولم يكن له زرّ. وهو فعلٌ لا

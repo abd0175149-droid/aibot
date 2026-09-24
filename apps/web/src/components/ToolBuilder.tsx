@@ -124,10 +124,15 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
     };
   }
 
-  async function save(): Promise<string | null> {
+  /**
+   * `enabled` صريحٌ في كلّ حفظ:
+   *  · التجربةُ تحفظ **معطَّلةً** — فلا يراها البوت الحيّ وهي نصفُ مبنيّة.
+   *  · و«احفظ الأداة» يفعّلها — وهو القرارُ الذي يقصده المالك.
+   */
+  async function save(enabled: boolean): Promise<string | null> {
     setErr(null);
     try {
-      const body = toPayload();
+      const body = { ...toPayload(), enabled };
       const saved = d.id
         ? await patch<{ id: string }>(`/bot/tools/${d.id}`, body)
         : await post<{ id: string }>('/bot/tools', body);
@@ -141,14 +146,15 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
 
   /**
    * التجربة تحتاج الأداة محفوظةً (السرّ مشفَّرٌ في القاعدة ولا يُرسَل في نداء
-   * تجربة). فنحفظ أوّلاً ثمّ نجرّب — والحفظ لا ينشرها للبوت الحيّ، فهي مسوّدةٌ
-   * حتّى تُفعَّل.
+   * تجربة). فنحفظ أوّلاً ثمّ نجرّب — **معطَّلةً**، فلا يراها البوت الحيّ.
+   * وكان الحفظُ يُنشئها مفعَّلة، فتصير في متناول البوت أمام الزبائن من لحظة
+   * الضغط على «جرّبها» وهي نصفُ مبنيّة.
    */
   async function runTest() {
     setBusy(true);
     setTest(null);
     try {
-      const id = d.id ?? (await save());
+      const id = d.id ?? (await save(false));
       if (!id) return;
       let sampleParams: Record<string, unknown> = {};
       try { sampleParams = JSON.parse(sample || '{}') as Record<string, unknown>; } catch {
@@ -165,7 +171,7 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
   }
 
   async function finish() {
-    const id = await save();
+    const id = await save(true);
     if (id) onSaved();
   }
 
