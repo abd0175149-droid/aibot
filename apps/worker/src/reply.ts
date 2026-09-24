@@ -14,7 +14,7 @@ import type { OutboundMessage } from '@aibot/shared';
 import { sendOutbound, WindowClosedError, QuotaExceededError } from './outbound.js';
 import { RagKnowledge } from './retrieval.js';
 import { execTenantTool } from './tools.js';
-import { raiseIncident, resolveOpenOfKind } from './incidents.js';
+import { raiseIncident, resolveOpenOfKinds } from './incidents.js';
 
 /**
  * عامل الردّ.
@@ -360,8 +360,14 @@ export async function handleReply(job: { conversationId: string }): Promise<void
     throw e; // إعادة المحاولة تتولّاها BullMQ — والحادثة لا تُلغي الفشل
   });
 
-  /* نجاحٌ لاحقٌ يُبطل ما قبله: نداءُ نموذجٍ تمّ يعني أنّ العطل العابر مضى. */
-  if (modelOk) await resolveOpenOfKind(tenantId, 'ai_error').catch(() => 0);
+  /* نجاحٌ لاحقٌ يُبطل ما قبله: نداءُ نموذجٍ تمّ يعني أنّ العطل العابر مضى.
+     و`price_missing` تُغلق معه **إن وُجد سعر**: الحادثة تقول «الكلفة تُحسب
+     صفراً»، وشوطٌ سُعِّر فعلاً هو دليل زوالها. وبلا هذا تبقى مفتوحةً بعد
+     إدخال صفّ السعر إلى الأبد — ومعها يصمت كلُّ تكرارٍ حقيقيٍّ للنقص. */
+  if (modelOk) {
+    await resolveOpenOfKinds(tenantId, unpriced ? ['ai_error'] : ['ai_error', 'price_missing'])
+      .catch(() => 0);
+  }
 
   if (unpriced) {
     const u = unpriced as { provider: string; model: string };

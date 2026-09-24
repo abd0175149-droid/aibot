@@ -291,7 +291,9 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
         {step === 5 && created && (
           <Stack gap="md">
             <Note>
-              <b>جاهز.</b> بوت «{created.tenant.name}» منشورٌ ويستقبل. والخطوة الأخيرة عند ميتا:
+              {/* ★ «منشورٌ ويستقبل» كانت تُقال والبوتُ قد يكون مطفأً ولا قناةَ
+                  موصولة. والنصّ الآن يقول ما تمّ وما بقي — لا أكثر. */}
+              <b>جاهز.</b> نُشرت نسخة بوت «{created.tenant.name}» وشُغِّل. والخطوة الأخيرة عند ميتا:
               الصِق هذين في WhatsApp ← Configuration، ثمّ فعّل الحقل <b>messages</b>.
             </Note>
             <CodeBlock label="Callback URL" text={conn?.webhookUrl ?? created.webhookUrl} />

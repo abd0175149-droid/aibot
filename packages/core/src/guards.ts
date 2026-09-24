@@ -130,3 +130,34 @@ export function applyGuards(raw: string, ctx: GuardContext): GuardResult {
 
 const norm = (s: string) => s.replace(/[ً-ْـ]/g, '').replace(/\s+/g, ' ').trim().toLowerCase();
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * ★ مضيفو الروابط المسموحة — **مستخرَجون من معرفة العميل نفسها**.
+ *
+ *   العطل الذي وُلدت منه هذه الدالّة: `stripDisallowedLinks` تحذف كلّ رابطٍ
+ *   مضيفُه ليس في `params.linkHosts`، ولا مسارَ في الـAPI ولا حقلَ في الواجهة
+ *   يضبط تلك القائمة إطلاقاً. فالقائمة فارغةٌ عند **كلّ** مستأجرٍ على المنصّة
+ *   (مقيسٌ على الخادم الحيّ: `params = {}`)، وكلُّ بوتٍ يحذف كلّ رابطٍ يكتبه
+ *   — فيصل الزبونَ «موقعنا على الخريطة:» ثمّ لا شيء. عطلٌ يراه الزبون اليوم.
+ *
+ *   والاستخراجُ من المعرفة هو الإجابة الصحيحة لا حقلٌ يُملأ يدويّاً: الرابط
+ *   الذي كتبه المالك في معرفته هو بعينه الرابط الذي يريد لبوته أن يرسله،
+ *   والقاعدة تبقى قائمة — لا يخرج رابطٌ **لم يكتبه المالك**. فالحارس يمنع ما
+ *   يخترعه النموذج، ولا يمنع ما أملاه صاحب النشاط.
+ *
+ * ⚠️ والمضيف يُخزَّن بلا `www.`: المطابقة في `stripDisallowedLinks` تُسقطها من
+ *    الرابط الوارد، فتخزينُها هنا يُنتج قائمةً لا تطابق شيئاً.
+ */
+export function linkHostsFrom(...texts: Array<string | null | undefined>): string[] {
+  const hosts = new Set<string>();
+  for (const t of texts) {
+    if (!t) continue;
+    for (const m of t.matchAll(/https?:\/\/[^\s<>"'،)\]]+/g)) {
+      try {
+        const h = new URL(m[0]).hostname.replace(/^www\./, '').toLowerCase();
+        if (h) hosts.add(h);
+      } catch { /* رابطٌ مشوّه في المعرفة — لا يُضاف ولا يُسقط الاستخراج */ }
+    }
+  }
+  return [...hosts].sort();
+}

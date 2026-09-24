@@ -1,4 +1,4 @@
-import { getDb, withPlatform, incidents, eq, and, sql } from '@aibot/db';
+import { getDb, withPlatform, incidents, eq, and, sql, inArray } from '@aibot/db';
 import { sha256 } from '@aibot/crypto';
 
 /**
@@ -94,7 +94,19 @@ async function recordIncident(i: IncidentInput): Promise<{ id: string; isNew: bo
  * الحلّ الآليّ مسموحٌ **فقط** لما سببه عابر، و**بعد فحصين سليمين متتاليين**.
  * أمّا مخالفة حسابٍ عند ميتا فتبقى يدويّة — ذلك قرارٌ بشريّ لا يُؤتمت.
  */
-const AUTO_RESOLVABLE = new Set(['channel_down', 'token_invalid', 'webhook_silent', 'send_failed', 'ai_error']);
+const AUTO_RESOLVABLE = new Set([
+  'channel_down', 'token_invalid', 'webhook_silent', 'send_failed', 'ai_error',
+  /* ★ أربعةٌ أُضيفت بعد أن كُشف أنّ القائمة وحدها لا تحلّ شيئاً: النوع يكون
+     فيها ولا يناديه أحد. وهذا ما أبقى `webhook_silent` مفتوحةً عند مستأجرٍ
+     حيٍّ بعدّادٍ يتجاوز ٨٠٠ — وما دامت البصمة مفتوحة فإنّ `isNew` كاذبة،
+     فلا إشعارَ لأيّ تكرارٍ حقيقيٍّ لاحق. أي أنّ حادثةً لا تُغلق **تُعمي
+     عن نفسها**. */
+  'webhook_unsubscribed', 'quality_drop', 'no_reply', 'send_failure_rate',
+  /* واثنان كشفهما حارسُ «كلُّ ما يُرفع يُحلّ»: `price_missing` تزول بإدخال
+     صفّ سعرٍ — ودليلُها شوطٌ لاحقٌ وجد سعراً؛ و`quota_exceeded` تزول بانقلاب
+     الشهر أو رفع الباقة — ودليلُها إرسالٌ نجح بعدها. */
+  'price_missing', 'quota_exceeded',
+]);
 
 /**
  * حلٌّ آليٌّ **بالنوع** لا بالبصمة.
@@ -106,15 +118,27 @@ const AUTO_RESOLVABLE = new Set(['channel_down', 'token_invalid', 'webhook_silen
  *   الأبد على أكوادٍ لم تتكرّر. ونجاحُ نداءِ نموذجٍ لهذا المستأجر يُبطل كلَّ
  *   ما سبقه من فشلٍ عليه — وهذا هو الفحص السليم بعينه.
  */
-export async function resolveOpenOfKind(tenantId: string, kind: string): Promise<number> {
-  if (!AUTO_RESOLVABLE.has(kind)) return 0;
+/**
+ * ★ حلٌّ آليٌّ **بالنوع** لا بالبصمة، ولأنواعٍ عدّة في عبارةٍ واحدة.
+ *
+ *   ولماذا بالنوع: بصمةُ الحادثة تشمل `causeKey`، وكودُ خطأ المزوّد يتغيّر
+ *   بين فشلٍ وفشل (‏503 ثمّ 429)، فحلٌّ بالبصمة يترك حوادثَ مفتوحةً إلى الأبد
+ *   على أكوادٍ لم تتكرّر. ونجاحُ العمليّة نفسها — نداءٌ تمّ، رسالةٌ خرجت،
+ *   واردٌ وصل — يُبطل كلَّ ما سبقه من فشلٍ من ذلك النوع على هذا المستأجر.
+ *
+ *   ويُنادى في المسار الساخن، فثلاثُ عباراتٍ لكلّ رسالة ثمنٌ لا يُدفع:
+ *   تُجمع في `in (...)` واحدة تُصيب صفراً في الحالة الغالبة.
+ */
+export async function resolveOpenOfKinds(tenantId: string, kinds: string[]): Promise<number> {
+  const allowed = kinds.filter((k) => AUTO_RESOLVABLE.has(k));
+  if (!allowed.length) return 0;
   const res = await withPlatform(getDb(), 'حوادث: حلٌّ آليٌّ بعد نجاحٍ لاحق',
     (tx) => tx.update(incidents).set({
       status: 'resolved',
       resolvedAt: new Date(),
     }).where(and(
       eq(incidents.tenantId, tenantId),
-      eq(incidents.kind, kind),
+      inArray(incidents.kind, allowed),
       sql`${incidents.status} <> 'resolved'`,
     )).returning({ id: incidents.id }));
   return res.length;

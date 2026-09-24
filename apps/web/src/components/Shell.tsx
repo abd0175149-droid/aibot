@@ -6,6 +6,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSession } from '@/lib/session';
 import { bootstrap, post, setToken } from '@/lib/api';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { PushToggle } from '@/components/PushToggle';
 import { Skeleton, Note, Button, Sheet } from '@/components/ui';
 
 export interface NavItem {
@@ -247,6 +248,11 @@ export function Shell({
             `ThemeToggle` وزرُّ الخروج مرسومَين مرّتين — شجرتان لا شجرة.
             وزرُّ الخروج يبقى **الوحيد** في التطبيق وقابلاً للطَّرق من الهاتف،
             وهو العطلُ الذي أُصلح سابقاً ولا يعود. */}
+        {/* ★ الإشعارات تسكن هنا لا في شاشةِ إعداداتٍ مستقلّة: هي إعدادُ
+            **جهاز** لا إعدادُ حساب، وذيلُ الحساب هو الموضع الوحيد الذي يعمل
+            على كلّ عرضٍ بنسخةٍ واحدةٍ في الشجرة. */}
+        <PushToggle />
+
         <div className="side-foot">
           <div className="side-user">{me.user.name}</div>
           <ThemeToggle />

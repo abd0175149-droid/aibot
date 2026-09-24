@@ -1,10 +1,10 @@
 import {
   getDb, withPlatform, tenantChannels, healthChecks, conversations, messages, tenants,
-  eq, and, sql, desc,
+  eq, and, sql, desc, inArray,
 } from '@aibot/db';
 import { getAdapter, type ChannelKind } from '@aibot/channels';
 import { open as decrypt } from '@aibot/crypto';
-import { raiseIncident, resolveIfAuto } from './incidents.js';
+import { raiseIncident, resolveOpenOfKinds } from './incidents.js';
 
 /**
  * المراقبة.
@@ -25,7 +25,12 @@ export async function runHealthPoll(job: { channelId?: string } = {}): Promise<v
   const rows = await withPlatform(db, 'مراقبة: فحص صحّة كلّ القنوات', (tx) =>
     job.channelId
       ? tx.select().from(tenantChannels).where(eq(tenantChannels.id, job.channelId))
-      : tx.select().from(tenantChannels).where(eq(tenantChannels.status, 'connected')));
+      /* ★ `error` تُفحص أيضاً — وإلّا فالتنزيل طريقٌ بلا عودة.
+         حين صار الفحص يُنزل الحالة عند العطل، كان الاستعلامُ يقصر على
+         `connected` فقط: أوّلُ تنزيلٍ يُخرج القناة من المراقبة إلى الأبد،
+         فلا تُرفع حالتُها ولا تُحلّ حادثتُها ولو عاد التوكن سليماً. */
+      : tx.select().from(tenantChannels)
+        .where(inArray(tenantChannels.status, ['connected', 'error'])));
 
   for (const ch of rows) {
     await pollChannel(ch).catch(() => undefined); // عطلُ قناةٍ لا يوقف فحص البقيّة
@@ -59,25 +64,46 @@ async function pollChannel(ch: typeof tenantChannels.$inferSelect): Promise<void
     latencyMs: Date.now() - started,
   }));
 
-  await withPlatform(db, 'مراقبة: تحديث حالة القناة', (tx) => tx.update(tenantChannels).set({
-    qualityRating: report.qualityRating,
-    messagingTier: report.messagingTier,
-    lastCheckedAt: new Date(),
-    lastError: report.issues[0] ?? null,
-    status: report.level === 'ok' ? 'connected' : ch.status,
-  }).where(eq(tenantChannels.id, ch.id)));
-
-  /* التنبيه عند **تغيّر الحالة** لا عند كلّ فحص — وإلّا فتنبيهٌ كلّ عشر دقائق. */
+  /* التنبيه عند **تغيّر الحالة** لا عند كلّ فحص — وإلّا فتنبيهٌ كلّ عشر دقائق.
+     ويُقرأ **قبل** تحديث الحالة لأنّ القرار يعتمد عليه. و`prev[0]` هو الفحص
+     الذي كُتب للتوّ، و`prev[1]` سابقُه. */
   const prev = await withPlatform(db, 'مراقبة: قراءة آخر فحصين', (tx) =>
     tx.select({ level: healthChecks.level }).from(healthChecks)
       .where(eq(healthChecks.channelId, ch.id))
       .orderBy(desc(healthChecks.checkedAt)).limit(3));
 
+  /* ★ الحالة تُنزَّل فعلاً — وكانت لا تُنزَّل أبداً.
+     السطر كان `report.level === 'ok' ? 'connected' : ch.status`: فشلٌ يكتب
+     `lastError` ويترك الحالة `connected` كما هي. وكلّ شاشات المالك تُشتقّ من
+     `status`، فبقيت الرئيسيّة وصفحة القنوات خضراوين وتوكن القناة باطل —
+     وهي حالةُ مستأجرٍ حيٍّ قِيست: `token_invalid` بعدّادٍ يتجاوز ٣٥٠ وقناةٌ
+     «موصولة». وبينما كان الفحص اليدويّ في `reports.ts` يُنزلها فوراً:
+     قاعدتان لنفس النتيجة، والمستخدم يرى أيّهما صادف.
+     والتنزيل بعد **فحصين متتاليين** لا واحد — تماثلاً مع الرفع، فلا تُقلَب
+     الشاشة على تعثّرٍ عابرٍ عند ميتا. و`degraded` تبقى موصولة: تعمل بجودةٍ
+     أقلّ لا معطوبة — نفسُ تمييز الفحص اليدويّ. */
+  const twoBad = report.level !== 'ok' && report.level !== 'degraded'
+    && prev.length >= 2 && prev[1]?.level !== 'ok' && prev[1]?.level !== 'degraded';
+
+  await withPlatform(db, 'مراقبة: تحديث حالة القناة', (tx) => tx.update(tenantChannels).set({
+    qualityRating: report.qualityRating,
+    messagingTier: report.messagingTier,
+    lastCheckedAt: new Date(),
+    lastError: report.issues[0] ?? null,
+    status: report.level === 'ok' || report.level === 'degraded'
+      ? 'connected'
+      : twoBad ? 'error' : ch.status,
+  }).where(eq(tenantChannels.id, ch.id)));
+
   if (report.level === 'ok') {
     // الرفع التلقائيّ بعد **فحصين سليمين متتاليين** لا واحد
     if (prev.length >= 2 && prev[1]?.level === 'ok') {
-      await resolveIfAuto({ tenantId: ch.tenantId, channelId: ch.id, kind: 'channel_down' });
-      await resolveIfAuto({ tenantId: ch.tenantId, channelId: ch.id, kind: 'token_invalid' });
+      /* ★ الأربعة لا اثنان: `webhook_unsubscribed` و`quality_drop` كانتا
+         تُرفَعان هنا ولا تُحلّان في أيّ موضع — فتبقيان مفتوحتين إلى الأبد
+         بعد أن يُصلح العميل السبب. */
+      await resolveOpenOfKinds(ch.tenantId, [
+        'channel_down', 'token_invalid', 'webhook_unsubscribed', 'quality_drop',
+      ]);
     }
     return;
   }

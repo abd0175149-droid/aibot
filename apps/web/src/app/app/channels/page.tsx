@@ -10,6 +10,7 @@ import {
   Skeleton, ErrorBox, KV, KVRow, type Tone,
 } from '@/components/ui';
 import { Band, Hero, Vital, Fold, ScreenDock, MARK, SEV, type Sev } from '@/components/screen';
+import { ChannelConnectForm } from '@/components/ChannelConnectForm';
 
 /**
  * القنوات.
@@ -132,6 +133,8 @@ export default function ChannelsPage() {
   const [reports, setReports] = useState<Record<string, TestReport>>({});
   const [steps, setSteps] = useState<'wa' | 'ig' | null>(null);
   const [stepsOpen, setStepsOpen] = useState(false);
+  /* ورقةُ الربط/التجديد — الباب الذي كانت ثلاثةُ نصوصٍ تُحيل إليه ولا وجود له. */
+  const [connectOpen, setConnectOpen] = useState(false);
 
   function openSteps(k: 'wa' | 'ig') {
     setSteps(k);
@@ -328,8 +331,12 @@ export default function ChannelsPage() {
                   <KVRow k="آخر فحص">{fmt.when(wa.lastCheckedAt)}</KVRow>
                 </KV>
                 <p className="muted-p">
-                  استبدالُ المفتاح يجري من لوحة المالك معك، لأنّ الرقم مملوكٌ لحسابك عند ميتا
-                  ولا نستطيع لمسه عنك. ولا سرَّ يُعرض هنا أبداً — بصمةٌ وتاريخٌ فقط.
+                  {/* ★ كان هنا: «استبدالُ المفتاح يجري من لوحة المالك معك» — إحالةٌ
+                      إلى بابٍ غير موجود: لا زرَّ ربطٍ في ورقة العميل باللوحة، ولا
+                      مستدعيَ لمسار الربط في الواجهة كلّها إلّا معالجُ عميلٍ جديد.
+                      فكان تجديدُ توكنٍ منتهٍ يمرّ بمكالمةٍ ثمّ سكربتٍ على الخادم. */}
+                  التوكن مملوكٌ لحسابك عند ميتا، فتجديدُه بيدك من زرّ «جدّد الربط» أدناه.
+                  ولا سرَّ يُعرض هنا أبداً — بصمةٌ وتاريخٌ فقط.
                 </p>
               </Fold>
             )}
@@ -346,11 +353,20 @@ export default function ChannelsPage() {
                   افحص الاتّصال
                 </Button>
               ) : (
-                /* ★ كان هنا زرٌّ **معطَّلٌ دائماً** («ابدأ الربط») — وزرٌّ لا يُضغط
-                   أبداً يُقرأ «المنتج معطوب». والفعلُ الحقيقيُّ المتاح الآن هو
-                   معرفةُ ما يحتاجه الربط قبل المكالمة، فصار هو الزرّ. */
                 <Button size="md" onClick={() => openSteps('wa')}>أرِني ما يحتاجه الربط</Button>
               )}
+              {/* ★ «جدّد الربط» مرئيٌّ في الحالتين: القناة الموصولة توكنها ينتهي،
+                  وغيرُ الموصولة تحتاج الربط نفسه. وهذا هو المسار الذي كان
+                  موجوداً في الخادم ومقطوعاً عن كلّ شاشة. */}
+              <Button
+                size="md"
+                variant={wa?.status === 'connected' ? 'quiet' : 'primary'}
+                disabled={can.readOnly}
+                reason={can.readOnly ? 'حسابك للقراءة فقط' : undefined}
+                onClick={() => setConnectOpen(true)}
+              >
+                {wa?.status === 'connected' ? 'جدّد الربط…' : 'اربط الرقم…'}
+              </Button>
             </Row>
           </Stack>
         </Card>
@@ -483,6 +499,24 @@ export default function ChannelsPage() {
 
       {/* ★ ورقةٌ صاعدةٌ لا منسدلة، وشرطُ هيئتها الفأرةُ لا العرض (في CSS):
           لوحٌ لمسيٌّ عريضٌ يستحقّ ورقةً تصعد. */}
+      {/* ورقةُ الربط والتجديد — نفسُ نموذج المعالج بلا نسخةٍ ثانية. */}
+      <Sheet
+        open={connectOpen}
+        title={wa?.status === 'connected' ? 'جدّد ربط واتساب' : 'اربط رقم واتساب'}
+        onClose={() => setConnectOpen(false)}
+        hint="يُفحص التوكن عند ميتا قبل أن يُحفظ — فلا يُستبدل ربطٌ عاملٌ بآخر مكسور."
+      >
+        <ChannelConnectForm
+          endpoint="/channel/connect"
+          submitLabel={wa?.status === 'connected' ? 'افحص واحفظ التوكن الجديد' : 'افحص واربط'}
+          onDone={() => {
+            setConnectOpen(false);
+            toast('فُحص التوكن عند ميتا وحُفظ — والقناة موصولة.');
+            void reload();
+          }}
+        />
+      </Sheet>
+
       <Sheet
         open={stepsOpen}
         onClose={() => setStepsOpen(false)}

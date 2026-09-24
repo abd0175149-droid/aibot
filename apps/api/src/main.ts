@@ -11,8 +11,9 @@ import { registerConsole } from './routes/console.js';
 import { registerReports } from './routes/reports.js';
 import { registerPlayground } from './routes/playground.js';
 import { registerTeam } from './routes/team.js';
+import { registerPush } from './routes/push.js';
 import { attachRealtime, closeRealtime } from './realtime.js';
-import { pingRedis, closeQueues, queueDepths } from './queues.js';
+import { pingRedis, closeQueues, queueDepths, workerBeat } from './queues.js';
 import { closeRateLimiter } from './ratelimit.js';
 
 const PORT = Number(process.env.PORT ?? 4100);
@@ -52,8 +53,15 @@ app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, 
  * التي نُشرت للتوّ لا القديمة التي ما زالت تعمل.
  */
 app.get('/api/health', async (_req, reply) => {
-  const [db, redis] = await Promise.all([pingDb(), pingRedis()]);
-  const body = { service: 'aibot' as const, rev: GIT_REV, db, redis };
+  const [db, redis, beat] = await Promise.all([pingDb(), pingRedis(), workerBeat()]);
+  /* ★ `worker` معروضٌ ولا يُغيّر كودَ الحالة **بعد**: بوّابةُ النشر تحرس على
+     هذه النقطة، وتحويلُ عاملٍ بطيء الإقلاع إلى فشلِ نشرٍ قرارٌ يُتّخذ في
+     خطوته لا كأثرٍ جانبيٍّ لإضافة حقل. وحتّى ذلك الحين يراه المراقبُ
+     الخارجيّ في الجسم — وهو أوّل مرّةٍ يُرى فيها من خارج المضيف. */
+  const body = {
+    service: 'aibot' as const, rev: GIT_REV, db, redis,
+    worker: beat.alive, workerAgeSec: beat.ageSec,
+  };
   return reply.code(db && redis ? 200 : 503).send(body);
 });
 
@@ -63,6 +71,7 @@ app.get('/api/health/deep', async () => ({
   db: await pingDb(),
   redis: await pingRedis(),
   queues: await queueDepths(),
+  worker: await workerBeat(),
   uptimeSec: Math.round(process.uptime()),
 }));
 
@@ -76,6 +85,7 @@ await app.register(async (api) => {
   await registerReports(api);
   await registerPlayground(api);
   await registerTeam(api);
+  await registerPush(api);
 }, { prefix: '/api' });
 
 app.setErrorHandler((err, req, reply) => {

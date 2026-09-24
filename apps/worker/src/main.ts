@@ -119,11 +119,48 @@ for (const w of workers) {
   );
 }
 
+/**
+ * ★ نبضةُ العامل — **مفتاحُ الرجل الميّت**.
+ *
+ *   كلّ ما يجعل البوت يردّ يعيش في هذه العمليّة، ولا شيءَ خارجها يعرف إن كانت
+ *   حيّة: بوّابةُ النشر تطابق `rev` الـAPI وحده، وcompose بلا فحصِ صحّةٍ
+ *   للعامل، والإشارةُ السلبيّة «رسائل بلا ردود» تُحسب بمهمّةٍ متكرّرة يشغّلها
+ *   العاملُ نفسه. فعاملٌ ساقطٌ يعني بوتاتٍ صامتةً لكلّ العملاء بينما كلُّ
+ *   شاشةٍ خضراء.
+ *
+ *   والنبضةُ تُكتب من هذه العمليّة إلى ريدِس بعمرٍ محدود: **غيابُها هو الخبر**
+ *   لا وجودُها. فلا تحتاج من يسأل العاملَ إن كان حيّاً — يكفي أن يسأل ريدِس
+ *   متى نبض آخر مرّة. وهذا ما يجعلها تعمل حين تموت العمليّة فجأةً بلا وداع.
+ *
+ * ⚠️ والعمر ضعفُ الفترة وزيادة: نبضةٌ تأخّرت ثانيتين بسبب مهمّةٍ ثقيلة ليست
+ *    عاملاً ميّتاً، وإنذارٌ يكذب مرّةً يُصبح إنذاراً لا يُقرأ.
+ */
+const BEAT_KEY = 'aibot:worker:beat';
+const BEAT_EVERY_MS = 15_000;
+const BEAT_TTL_SEC = 45;
+
+async function beat(): Promise<void> {
+  await connection.set(
+    BEAT_KEY,
+    JSON.stringify({ at: new Date().toISOString(), rev: process.env.GIT_REV ?? 'unknown', pid: process.pid }),
+    'EX', BEAT_TTL_SEC,
+  ).catch(() => undefined); // نبضةٌ فائتة ليست عطلاً يُسقط العامل
+}
+
+await beat();
+const beatTimer = setInterval(() => { void beat(); }, BEAT_EVERY_MS);
+// لا تُبقِ العمليّةَ حيّةً من أجل النبضة وحدها
+beatTimer.unref?.();
+
 log('العمّال يعملون', { queues: workers.map((w) => w.name), rev: process.env.GIT_REV });
 
 for (const sig of ['SIGTERM', 'SIGINT'] as const) {
   process.on(sig, async () => {
     log('إغلاقٌ لطيف — إنهاء المهامّ الجارية قبل الخروج');
+    clearInterval(beatTimer);
+    /* النبضةُ تُمحى صراحةً عند الإغلاق اللطيف: انتظارُ انقضاء العمر يعني
+       خمسَ وأربعين ثانيةً يقول فيها المراقبُ «حيّ» والعاملُ يُغلق. */
+    await connection.del(BEAT_KEY).catch(() => undefined);
     await Promise.all(workers.map((w) => w.close()));
     await connection.quit();
     await closeDb();

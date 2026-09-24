@@ -65,9 +65,9 @@ interface Incident {
  */
 const RUNBOOK: Record<string, string[]> = {
   token_invalid: [
-    'افتح بطاقة العميل ← القنوات',
-    'اطلب منه توليد توكن مستخدم نظام بلا تاريخ انتهاء',
-    'الصقه واضغط «اختبر الاتّصال»',
+    'اطلب من العميل توكن مستخدم نظام بلا تاريخ انتهاء (Business Settings ← System users)',
+    'افتح «العملاء» ← بطاقة العميل ← «اربط/جدّد القناة…» والصقه',
+    'أو يفعلها العميل بنفسه من «القنوات ← جدّد الربط»',
     'تُغلق الحادثة آليّاً بعد فحصين سليمين متتاليين',
   ],
   webhook_unsubscribed: [
@@ -146,7 +146,12 @@ const RUNBOOK: Record<string, string[]> = {
  * ما يُحلّ آليّاً — منقولٌ من `AUTO_RESOLVABLE` في `worker/src/incidents.ts`.
  * وعرضُه في سطر البطاقة يجيب السؤال الذي يقرّر: أقوم من السرير أم لا؟
  */
-const AUTO_RESOLVES = new Set(['channel_down', 'token_invalid', 'webhook_silent', 'send_failed', 'ai_error']);
+/* ★ تطابقُ `AUTO_RESOLVABLE` في `apps/worker/src/incidents.ts` — ودلالةٌ تكذب
+   أسوأ من دلالةٍ غائبة: الشاشةُ كانت تعد بحلٍّ آليٍّ لأنواعٍ لا يحلّها أحد. */
+const AUTO_RESOLVES = new Set([
+  'channel_down', 'token_invalid', 'webhook_silent', 'send_failed', 'ai_error',
+  'webhook_unsubscribed', 'quality_drop', 'no_reply', 'send_failure_rate',
+]);
 
 const SEV: Record<Incident['severity'], { tone: Tone; label: string; edge: string; head: string }> = {
   critical: { tone: 'crit', label: 'حرج', edge: 'crit', head: 'حرج — يحتاجك الآن' },

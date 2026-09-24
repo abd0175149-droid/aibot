@@ -94,7 +94,11 @@ export const put = <T>(p: string, body: unknown) =>
 /** تعديلٌ جزئيّ: ما لا يُذكَر لا يُلمَس — فحفظُ تسميةٍ لا يمحو سرّاً. */
 export const patch = <T>(p: string, body: unknown) =>
   api<T>(p, { method: 'PATCH', body: JSON.stringify(body) });
-export const del = <T>(p: string) => api<T>(p, { method: 'DELETE' });
+/* ★ `DELETE` بجسمٍ اختياريّ: إلغاءُ اشتراك الدفع يحتاج `endpoint` وهو نصٌّ
+   طويلٌ لا يصلح في مسارٍ ولا في استعلامٍ يُسجَّل. والوسيط اختياريٌّ فلا
+   يمسّ أيّ مُستدعٍ قائم. */
+export const del = <T>(p: string, body?: unknown) =>
+  api<T>(p, { method: 'DELETE', ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
 
 /**
  * تنزيل ملفٍّ من نقطةٍ محميّة.

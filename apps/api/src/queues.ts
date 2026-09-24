@@ -126,6 +126,33 @@ export async function pingRedis(): Promise<boolean> {
   }
 }
 
+/**
+ * ★ آخرُ نبضةٍ للعامل — يُقرأ من ريدِس لا من العامل.
+ *
+ *   والسؤال الذي يجيب عنه لم يكن له جواب: «هل العامل حيّ؟». بوّابةُ النشر
+ *   تطابق `rev` الـAPI، وcompose بلا فحصِ صحّةٍ للعامل، فنشرةٌ تكسر مسار
+ *   العامل وحده تُطبع ✅ بينما كلُّ الردود متوقّفة.
+ *
+ *   والغياب هو الخبر: المفتاح بعمرٍ محدود يكتبه العامل كلّ خمس عشرة ثانية،
+ *   فانقطاعُه — سقوطاً أو قتلاً أو حلقةً عالقة — يُقرأ هنا بلا أن يُسأل أحد.
+ */
+export interface WorkerBeat { alive: boolean; ageSec: number | null; rev: string | null }
+
+export async function workerBeat(): Promise<WorkerBeat> {
+  try {
+    const raw = await Promise.race([
+      connection().get('aibot:worker:beat'),
+      new Promise<null>((r) => { setTimeout(() => r(null), PING_TIMEOUT_MS); }),
+    ]);
+    if (!raw) return { alive: false, ageSec: null, rev: null };
+    const b = JSON.parse(raw) as { at?: string; rev?: string };
+    const ageSec = b.at ? Math.round((Date.now() - Date.parse(b.at)) / 1000) : null;
+    return { alive: true, ageSec, rev: b.rev ?? null };
+  } catch {
+    return { alive: false, ageSec: null, rev: null };
+  }
+}
+
 export async function queueDepths(): Promise<Record<string, number>> {
   const out: Record<string, number> = {};
   for (const name of Object.values(QUEUE)) {
@@ -223,6 +250,36 @@ export async function enqueueOutbound(job: OutboundJob): Promise<void> {
     backoff: { type: 'exponential', delay: 2000 },
     removeOnComplete: 1000,
     removeOnFail: 5000,
+  });
+}
+
+/**
+ * ★ إشعارٌ لمستخدم — أوّل منتِجٍ لطابور `notify-push` في المستودع.
+ *
+ *   الطابور كان مسجَّلاً في العامل بلا منتِجٍ واحد، والحوادث الحرجة تُنبَّه
+ *   بنداءٍ مباشر داخل العامل. فكلّ ما ليس حادثةً حرجة — تحويلٌ إلى موظّف،
+ *   عتبةُ سقف، تنبيهٌ تجريبيّ — لم يكن له طريقٌ إلى الإشعار إطلاقاً.
+ *
+ * `jobId` من الوسم والمستخدم: دفعتان لنفس الموضوع في ثانيةٍ واحدة إشعارٌ
+ * واحد، وهو الدرس نفسه الذي وُلد منه الفريدُ الجزئيّ على `notifications`.
+ */
+export interface NotifyJob {
+  userId: string;
+  tenantId?: string | null;
+  tag: string;
+  title: string;
+  body?: string;
+  url?: string;
+  severity?: 'info' | 'warn' | 'critical';
+}
+
+export async function enqueueNotify(job: NotifyJob): Promise<void> {
+  await q(QUEUE.notify).add('notify', job, {
+    jobId: `n-${job.userId}-${job.tag}-${Math.floor(Date.now() / 1000)}`,
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 3000 },
+    removeOnComplete: 200,
+    removeOnFail: 1000,
   });
 }
 

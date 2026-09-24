@@ -5,7 +5,7 @@ import {
 } from '@aibot/db';
 import { AppError, ErrorCode } from '@aibot/shared';
 import { seal } from '@aibot/crypto';
-import { decideKnowledgeMode, estimateTokens, execHttpTool, assertPublicUrl, type HttpToolSpec } from '@aibot/core';
+import { decideKnowledgeMode, estimateTokens, linkHostsFrom, execHttpTool, assertPublicUrl, type HttpToolSpec } from '@aibot/core';
 import { requireAuth, tenantOf } from '../auth.js';
 import { enqueueEmbed, enqueueIngest } from '../queues.js';
 import { mkdir, writeFile, unlink } from 'node:fs/promises';
@@ -96,7 +96,21 @@ export async function registerBot(app: FastifyInstance) {
         toolsConfig: (draft.toolsConfig ?? {}) as object,
         provider,
         model,
-        params: (draft.params ?? {}) as object,
+        /* ★ `linkHosts` تُستخرج من الشخصيّة والمعرفة عند كلّ نشر — ولا تُملأ
+           يدويّاً. كانت القائمة فارغةً عند كلّ مستأجر لأنّ لا مسارَ ولا شاشةَ
+           تضبطها، فكان الحارس يحذف **كلّ** رابطٍ من كلّ ردّ: الزبون يقرأ
+           «موقعنا على الخريطة:» ثمّ فراغاً. والقاعدة تبقى قائمةً كما هي —
+           لا يخرج رابطٌ لم يكتبه المالك — لكنّ ما كتبه يخرج.
+           وما ضبطه المالك صراحةً في المسوّدة يُضمّ ولا يُستبدل. */
+        params: {
+          ...((draft.params ?? {}) as Record<string, unknown>),
+          linkHosts: [...new Set([
+            ...(Array.isArray((draft.params as { linkHosts?: unknown })?.linkHosts)
+              ? ((draft.params as { linkHosts: string[] }).linkHosts)
+              : []),
+            ...linkHostsFrom(String(draft.persona ?? ''), kb),
+          ])],
+        } as object,
         knowledgeMode: mode,
         knowledgeBudget: (draft.knowledgeBudget ?? {}) as object,
         embedStatus: mode === 'full' ? 'skipped' : 'pending',
@@ -105,15 +119,34 @@ export async function registerBot(app: FastifyInstance) {
         note,
       }).returning();
 
+      /* ★ **أوّلُ نشرٍ يُشعل البوت** — ولم يكن يفعل.
+         `bot_configs.enabled` افتراضه `false`، والإنشاء من اللوحة لا يمسّه،
+         والنشر لا يمسّه، ولا شيء في المسار يمسّه. فكان العميل ينشر بنجاح
+         وتقول له الشاشة «بوتك يردّ بها من الآن» ويقول المعالج «منشورٌ
+         ويستقبل» — والبوت مطفأ، وكلّ رسالةٍ تصل تُسقَط عند البوّابة الأولى
+         في `reply.ts` بلا سجلٍّ ولا حادثة.
+         والشرط `!cfg.publishedVersionId` لا زينة: **أوّل** نشرٍ وحده يُشعل.
+         فمن أطفأ بوته عمداً ثمّ عدّل نصّه ونشر لا يُشعَل من تحته — وذاك قرارٌ
+         له لا لنا. */
+      const firstPublish = !cfg.publishedVersionId;
+
       // النسخة الجديدة تُنشر فوراً في وضع full، وتنتظر التضمين في غيره
       if (mode === 'full') {
-        await tx.update(botConfigs).set({ publishedVersionId: ver!.id })
+        await tx.update(botConfigs)
+          .set({ publishedVersionId: ver!.id, ...(firstPublish ? { enabled: true } : {}) })
           .where(eq(botConfigs.tenantId, tenantId));
       } else {
+        if (firstPublish) {
+          await tx.update(botConfigs).set({ enabled: true })
+            .where(eq(botConfigs.tenantId, tenantId));
+        }
         await enqueueEmbed({ tenantId, versionId: ver!.id });
       }
 
-      return { version: ver, knowledgeMode: mode, kbTokens, embedding: mode !== 'full' };
+      /* `live` تقول الحقيقة للشاشة: هل يردّ البوت **الآن**؟ وهي شرطان معاً —
+         مُشعَلٌ، ونسخةٌ منشورةٌ فعلاً (لا تنتظر تضميناً). */
+      const live = (firstPublish || cfg.enabled) && mode === 'full';
+      return { version: ver, knowledgeMode: mode, kbTokens, embedding: mode !== 'full', live };
     });
   }
 
@@ -194,11 +227,27 @@ export async function registerBot(app: FastifyInstance) {
     });
   });
 
+  /**
+   * ★ التبديل — ويُنشئ الصفّ إن لم يكن.
+   *
+   *   كان `update ... returning()` وحده: مستأجرٌ بلا صفّ `bot_configs` (وهو
+   *   حالٌ قائمٌ على الخادم — عميلٌ أُنشئ خارج المعالج) يُصيب صفر صفوف، فيعود
+   *   `undefined` ويُردّ **جسمٌ فارغ بـ200**. والزرّ يفشل دائماً بتوستةٍ عامّة،
+   *   والمالك لا يعرف أنّ السبب صفٌّ ناقصٌ لا عطلٌ في الشبكة.
+   *   و`onConflictDoUpdate` يُصلح الحالتين بعبارةٍ واحدة: يُنشئ الناقص،
+   *   ويبدّل القائم — والصفّ الجديد يرث الافتراضات كما لو أُنشئ مع العميل.
+   */
   app.post<{ Body: { enabled: boolean } }>('/bot/toggle', { preHandler: auth }, async (req) => {
     const tenantId = tenantOf(req);
+    const enabled = Boolean(req.body?.enabled);
     return withTenant(getDb(), tenantId, async (tx) => {
-      const [row] = await tx.update(botConfigs).set({ enabled: Boolean(req.body?.enabled) })
-        .where(eq(botConfigs.tenantId, tenantId)).returning();
+      const [row] = await tx.insert(botConfigs)
+        .values({ tenantId, enabled, updatedBy: req.auth!.sub })
+        .onConflictDoUpdate({
+          target: botConfigs.tenantId,
+          set: { enabled, updatedBy: req.auth!.sub, updatedAt: new Date() },
+        })
+        .returning();
       return row;
     });
   });

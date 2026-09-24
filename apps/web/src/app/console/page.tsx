@@ -5,6 +5,7 @@ import { useApi, useToast, fmt } from '@/lib/useApi';
 import { post, ApiError } from '@/lib/api';
 import { useCan } from '@/lib/session';
 import { Onboarding } from '@/components/Onboarding';
+import { ChannelConnectForm } from '@/components/ChannelConnectForm';
 import {
   PageHead, Stack, Row, Meter, Pill, Tag, Dot, Note, Button, Table, DataView,
   ErrorBox, Sheet, Dock, KV, KVRow, Field, Input, type Column, type Tone,
@@ -147,6 +148,8 @@ export default function TenantsPage() {
   const [wizard, setWizard] = useState(false);
   /** العميلُ المفتوحةُ ورقتُه — معرّفٌ لا كائن، فلا تتعلّق الورقةُ بنسخةٍ قديمة. */
   const [openId, setOpenId] = useState<string | null>(null);
+  /* ربطُ/تجديدُ قناةٍ لعميلٍ قائم — الفعل الذي كان يمرّ بـssh وسكربت. */
+  const [connectFor, setConnectFor] = useState<string | null>(null);
   const [killWord, setKillWord] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -603,6 +606,26 @@ export default function TenantsPage() {
                 تقوله الخليّة لا ما تُخفيه.
               </Note>
 
+              {/* ورقةُ ربط القناة لعميلٍ يُسمّى صراحةً — لا بالانتحال. */}
+              <Sheet
+                open={Boolean(connectFor)}
+                title="اربط/جدّد قناة العميل"
+                onClose={() => setConnectFor(null)}
+                hint="يُفحص التوكن عند ميتا قبل أن يُحفظ، والفعل يُسجَّل باسمك في سجلّ العميل."
+              >
+                {connectFor && (
+                  <ChannelConnectForm
+                    endpoint={`/console/tenants/${connectFor}/channel/connect`}
+                    submitLabel="افحص واحفظ"
+                    onDone={() => {
+                      setConnectFor(null);
+                      toast('فُحص التوكن عند ميتا وحُفظ — والقناة موصولة.');
+                      void tenants.reload();
+                    }}
+                  />
+                )}
+              </Sheet>
+
               {/* ══════ ورقةُ العميل: الوِجهةُ التي لم تكن ══════ */}
               <Sheet
                 open={Boolean(sel)}
@@ -621,6 +644,11 @@ export default function TenantsPage() {
                         حوادثُ هذا العميل ‹
                       </a>
                     ) : null}
+                    {/* ★ «اربط/جدّد القناة» — المسار الصريح `/console/tenants/:id/channel/connect`
+                        كان مبنيّاً ولا يناديه إلّا معالجُ عميلٍ جديد، فانتهاءُ توكنٍ عند
+                        عميلٍ قائم لم يكن له مخرجٌ من اللوحة إطلاقاً. والانتحالُ قراءةٌ فقط
+                        عن قصد، فلا يصلح بديلاً. */}
+                    <Button size="lg" onClick={() => setConnectFor(sel.id)}>اربط/جدّد القناة…</Button>
                     <a className="btn lg" href="/console/margin">لوحةُ الهامش ‹</a>
                     <Button size="lg" onClick={closeSheet}>أغلِق</Button>
                   </Row>

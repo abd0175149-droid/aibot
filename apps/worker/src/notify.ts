@@ -183,7 +183,7 @@ export async function notifyCritical(incidentId: string): Promise<void> {
 /** الأخطاء بلغةٍ بشريّة — لا «error 190: OAuthException». */
 function humanize(kind: string): string {
   const map: Record<string, string> = {
-    token_invalid: 'انتهت صلاحيّة ربط القناة — جدّدها من صفحة الربط',
+    token_invalid: 'انتهت صلاحيّة ربط القناة — جدّدها من «القنوات ← جدّد الربط»',
     webhook_unsubscribed: 'التطبيق غير مشترك في حقول الويبهوك — لن تصل رسالة',
     webhook_silent: 'لا رسائل واردة منذ مدّة — راجع اشتراك الحقول ووضع التطبيق',
     quality_drop: 'هبط تقييم الرقم — أوقف أيّ إرسالٍ جماعيّ وراجع الردود',

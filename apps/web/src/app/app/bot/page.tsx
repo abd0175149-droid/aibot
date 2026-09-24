@@ -560,6 +560,7 @@ export default function BotPage() {
     try {
       const r = await post<{
         version: { version: number }; knowledgeMode: string; embedding: boolean; kbTokens: number;
+        live: boolean;
       }>('/bot/publish', { note: null });
 
       setAsk(null);
@@ -568,7 +569,13 @@ export default function BotPage() {
         toast(`نُشرت v${r.version.version} — تُجهَّز معرفتها الآن، والنسخة السابقة تخدم حتّى تجهز.`);
       } else {
         setPending(null);
-        toast('نُشرت النسخة الجديدة — بوتك يردّ بها من الآن');
+        /* ★ التوستة تقرأ `live` من الخادم ولا تفترض.
+           كانت تقول «بوتك يردّ بها من الآن» في كلّ حال — بينما البوت قد يكون
+           مطفأً فلا يردّ بشيء. وإعلانُ نجاحٍ لم يقع هو العطل الذي يدفع ثمنَه
+           العميلُ حين يكتشف من شكوى زبون. */
+        toast(r.live
+          ? 'نُشرت النسخة الجديدة — بوتك يردّ بها من الآن'
+          : 'نُشرت النسخة الجديدة — وبوتك متوقّف، فلن يردّ حتّى تشغّله.');
       }
       await bot.reload();
       await kb.reload();

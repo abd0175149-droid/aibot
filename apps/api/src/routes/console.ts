@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import {
   getDb, withPlatform, tenants, users, plans, subscriptions, tenantChannels,
   conversationWindows, aiRuns, incidents, auditLog, botConfigs,
-  eq, and, desc, sql,
+  eq, and, desc, asc, sql,
 } from '@aibot/db';
 import { AppError, ErrorCode } from '@aibot/shared';
 import { publicId, seal, sha256 } from '@aibot/crypto';
@@ -80,6 +80,8 @@ export async function registerConsole(app: FastifyInstance) {
           publicId: publicId(), name: b.name!, slug: b.slug!,
           status: 'trial', planId: b.planId ?? null,
         }).returning();
+        /* ولماذا يبقى `planId` على المستأجر رغم الاشتراك: هو ما تقرأه لوحة
+           العملاء في صفٍّ واحدٍ بلا ضمّ. والمصدرُ الحاكم للسقف هو الاشتراك. */
 
         await tx.insert(users).values({
           tenantId: tenant!.id, email: b.ownerEmail!.toLowerCase(),
@@ -88,6 +90,41 @@ export async function registerConsole(app: FastifyInstance) {
         });
 
         await tx.insert(botConfigs).values({ tenantId: tenant!.id });
+
+        /* ★ اشتراكٌ لكلّ عميلٍ يُنشأ — ولا عميلَ بسقفٍ لا نهائيّ.
+           العطل الذي وُلد منه هذا: المعالج كان يكتب `planId` على صفّ المستأجر
+           ولا يُنشئ صفّ `subscriptions` إطلاقاً، و`checkQuota` ترجع عند غياب
+           الاشتراك `{ allowed: true, limit: Infinity }`. فكلُّ عميلٍ أُنشئ من
+           اللوحة كان بلا سقفٍ ولا عتباتِ إنذارٍ ولا سياسةِ تجاوز — وشاشةُ
+           الاستهلاك عنده تقول «من 0». مُثبَتٌ على الخادم الحيّ: مستأجرٌ
+           قائمٌ بلا صفّ اشتراك.
+           والباقة تُحلّ صراحةً: معرّفٌ غير موجود يُردّ عليه 400 لا 500. */
+        const plan = b.planId
+          ? (await tx.select().from(plans).where(eq(plans.id, b.planId)).limit(1))[0]
+          : (await tx.select().from(plans).where(eq(plans.isPublic, true))
+              .orderBy(asc(plans.sort)).limit(1))[0];
+        if (!plan) {
+          throw new AppError(
+            ErrorCode.VALIDATION,
+            b.planId ? 'الباقة المختارة غير موجودة' : 'لا باقةَ منشورة — أضِف باقةً قبل إنشاء عميل',
+            400,
+          );
+        }
+
+        /* ⚠️ المدّة سنةٌ لا شهر **عن قصد**: `checkQuota` تختار الاشتراك النشط
+           بأبعد `period_end` ولا تقرأ التاريخ إطلاقاً، والتجديد يدويٌّ اليوم
+           بقرارٍ مكتوب. فشهرٌ ينقضي بلا تجديدٍ آليٍّ يُنتج عميلاً يبدو منتهياً
+           في التقارير بينما سقفه يعمل — وهو التباسٌ لا حاجة إليه. */
+        const now = new Date();
+        const periodEnd = new Date(now);
+        periodEnd.setUTCFullYear(periodEnd.getUTCFullYear() + 1);
+        await tx.insert(subscriptions).values({
+          tenantId: tenant!.id,
+          planId: plan.id,
+          status: 'active',
+          periodStart: now,
+          periodEnd,
+        });
 
         await tx.insert(auditLog).values({
           tenantId: tenant!.id, actorUserId: req.auth!.sub,

@@ -40,6 +40,9 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
   const job = reviveJob(raw);
   const db = getDb();
   const caps = capabilitiesFor(job.kind);
+  /* هل وصلت رسالةُ زبونٍ فعلاً في هذه الدفعة؟ حالاتُ التسليم وحدها لا تُثبت
+     أنّ الويبهوك يحمل رسائل، والحادثة التي تُحَلّ أدناه عن الرسائل لا عنها. */
+  let sawInbound = false;
 
   await withTenant(db, job.tenantId, async (tx) => {
     for (const m of job.parsed.messages) {
@@ -107,6 +110,7 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
       /* ⑤ جدولة الردّ بتأخيرٍ ومعرّفٍ ثابت — دمج الرسائل المتتالية. */
       const { enqueueReply } = await import('./enqueue.js');
       await enqueueReply(conv.id);
+      sawInbound = true;
     }
 
     /* حالات التسليم: كانت تُكتب بلا بثّ، فعلامات ✓ و✓✓ و«فشلت» تتجمّد على
@@ -131,6 +135,18 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
 
   /* ⑥ أحداث الحساب (جودة الرقم، مراجعة WABA) خارج معاملة المستأجر —
      تُنتج حوادث لا رسائل. تُنفَّذ في المرحلة الخامسة. */
+
+  /* ★ ⑦ رسالةٌ وصلت ⟹ الويبهوك ليس صامتاً — والحادثة تُغلق.
+     `webhook_silent` كانت مدرجةً في `AUTO_RESOLVABLE` ولا يناديها أحد، فبقيت
+     مفتوحةً عند مستأجرٍ حيٍّ بعدّادٍ يتجاوز ٨٠٠ رغم أنّ الرسائل تصل. وحادثةٌ
+     لا تُغلق ليست ضجيجاً فحسب: `raiseIncident` لا يُنبّه إلّا إن كانت البصمة
+     **جديدة**، فما دامت مفتوحةً فإنّ أيّ انقطاعٍ حقيقيٍّ لاحق يُزيد العدّاد
+     بصمتٍ ولا يُنبّه أحداً. أي أنّ الحادثة المفتوحة تُعمي عن نفسها.
+     وخارج المعاملة: حلُّ حادثةٍ لا يستحقّ إبقاء معاملة المستأجر مفتوحة. */
+  if (sawInbound) {
+    const { resolveOpenOfKinds } = await import('./incidents.js');
+    await resolveOpenOfKinds(job.tenantId, ['webhook_silent']).catch(() => 0);
+  }
 }
 
 async function upsertIdentity(

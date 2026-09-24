@@ -309,3 +309,21 @@
 @media (prefers-reduced-motion: reduce) {
   .side .navi:active { transform: none; }
 }
+
+/* ══════════════ الإشعارات — إعدادُ جهازٍ في ذيل الحساب ══════════════ */
+/* ★ يسكن الورقة لا شاشةً مستقلّة: هو إعدادُ **هذا الجهاز** لا إعدادُ الحساب،
+   ونسخةٌ واحدةٌ في الشجرة تعمل على كلّ عرض — نفسُ قاعدة `.side-foot`. */
+.push-tg {
+  display: grid; gap: 8px;
+  padding: 12px 14px;
+  border-block-start: 1px solid var(--rule-soft);
+}
+.push-hd { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.push-t { font-weight: 600; font-size: var(--t-sm); }
+/* الحالةُ نصٌّ لا لون: «محظورة» و«غير مدعومة» جوابان مختلفان تماماً، واللونُ
+   وحده يجعلهما واحداً. */
+.push-s { font-size: 12.5px; color: var(--muted); margin-inline-start: auto; }
+.push-a { display: flex; gap: 8px; flex-wrap: wrap; }
+.push-n { font-size: 12.5px; color: var(--ink-2); line-height: 1.55; margin: 0; }
+.push-n.ok { color: var(--ok); }
+.push-n.bad { color: var(--crit); }

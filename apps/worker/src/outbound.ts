@@ -7,6 +7,7 @@ import type { OutboundMessage } from '@aibot/shared';
 import { open as decrypt } from '@aibot/crypto';
 import { emitToTenant } from './events.js';
 import { announceQuotaCrossing } from './quota.js';
+import { resolveOpenOfKinds } from './incidents.js';
 
 /**
  * ★ طبقة الإرسال — ولا مسار آخر إلى Graph API في هذا النظام.
@@ -179,6 +180,14 @@ export async function sendOutbound(job: SendJob): Promise<{ messageId: string; e
 
     return { messageId, externalId: sent.externalId };
   });
+
+  /* ★ إرسالٌ نجح ⟹ ما كان مفتوحاً عن الإرسال يُغلق.
+     `send_failed` كانت في `AUTO_RESOLVABLE` بلا مُنادٍ، و`send_failure_rate`
+     و`no_reply` لم تكونا فيها أصلاً — فثلاثةُ أنواعٍ حرجة تُرفع ولا تُحلّ
+     أبداً. والدليل على أنّ العطل زال هو نفسه الذي تنتظره: رسالةٌ خرجت.
+     وفشلُ الحلّ لا يُسقط إرسالاً تمّ. */
+  await resolveOpenOfKinds(job.tenantId, ['send_failed', 'send_failure_rate', 'no_reply', 'quota_exceeded'])
+    .catch(() => 0);
 
   /* ⑦ إنذارُ السقف — **بعد الإيداع**، وبعد أن صار العدّاد `quota.used + 1`.
      هنا وحده يُعرف أنّ نافذةً جديدة فُوتِرت فعلاً: الختم في ⑥ هو الحدث الذي
