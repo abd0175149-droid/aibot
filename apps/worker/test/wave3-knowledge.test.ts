@@ -17,6 +17,20 @@ import { join } from 'node:path';
 const REPO = join(__dirname, '..', '..', '..');
 const read = (rel: string) => readFileSync(join(REPO, rel), 'utf8');
 
+/**
+ * ★ الشيفرةُ بلا تعليقاتها.
+ *
+ *   الدرسُ من حارسٍ سابق: حارسٌ يبحث عن نمطٍ ممنوعٍ في الملفّ كلّه يُمسك
+ *   **شرحَ إصلاحه** — فيُدفَع صاحبُه إلى حذف الشرح ليمرّ الحارس. والتعليقُ
+ *   هو الموضعُ الوحيد الذي يجب أن يُذكر فيه النمطُ الممنوع.
+ */
+const code = (rel: string) => read(rel)
+  .replace(/\/\*[\s\S]*?\*\//g, ' ')
+  .replace(/^\s*\/\/.*$/gm, ' ');
+
+/** ونصُّ SQL بلا تعليقات `--`. */
+const sqlCode = (rel: string) => read(rel).replace(/^\s*--.*$/gm, ' ');
+
 describe('عمودُ البحث النصّيّ موجودٌ فعلاً', () => {
   it('الهجرة تُنشئ tsv وفهرسَه — والاستعلام كان يسأل عن عمودٍ لا وجود له', () => {
     const m = read('packages/db/migrations/0007_kb_chunks_tsv.sql');
@@ -40,6 +54,47 @@ describe('عمودُ البحث النصّيّ موجودٌ فعلاً', () => {
 
   it('ولا يُعلَن العمود في drizzle — إعلانُه يجعل كلّ insert يكتب فيه فتُرفض', () => {
     expect(read('packages/db/src/schema/bot.ts')).not.toMatch(/tsv:\s*\w+\(/);
+  });
+
+  /**
+   * ★ و`plainto_tsquery` تعطف بـAND، فسؤالٌ طبيعيٌّ لا يُطابق شيئاً.
+   *
+   *   مقيسٌ على الخادم الحيّ: مستندُ «سعر الغرفة المفردة ٤٥ ديناراً» والسؤالُ
+   *   «كم سعر الغرفة؟» يُنتج `'كم' & 'سعر' & 'غرفه'`، و«كم» ليست في المستند
+   *   — فالمطابقةُ `false`. أي أنّ كلمةَ استفهامٍ واحدةً تُبطل الفرعَ المعجميّ
+   *   كلَّه، وهي بعينها ما يبدأ به الزبون كلامه. ولا يظهر خطأً: الفرعُ يعود
+   *   بصفر صفوفٍ فيبقى المتّجهُ وحده، والهجينُ **يقول** إنّه فرعان.
+   */
+  it('★ العطفُ OR لا AND — لا plainto_tsquery في الاسترجاع', () => {
+    const r = code('apps/worker/src/retrieval.ts');
+    expect(r, 'plainto_tsquery تعطف بـAND فتُبطلها كلمةُ استفهامٍ واحدة')
+      .not.toMatch(/plainto_tsquery/);
+    expect(r).toMatch(/ar_tsq\(/);
+  });
+
+  it('و`ar_tsq` تُركَّب بلا اجتذارٍ ثانٍ — to_tsquery تجذّر اللفيظ مرّةً أخرى', () => {
+    const m = sqlCode('packages/db/migrations/0008_ar_tsq.sql');
+    expect(m).toMatch(/CREATE OR REPLACE FUNCTION ar_tsq/);
+    expect(m, 'التحويلُ المباشر إلى tsquery بلا قاموس').toMatch(/::tsquery/);
+    expect(m, 'to_tsquery بقاموس arabic تُعيد الاجتذار فتفقد المطابقة')
+      .not.toMatch(/to_tsquery\s*\(\s*'arabic'/);
+    expect(m, 'IMMUTABLE — وإلّا لم تصلح لفهرسٍ ولا لعمودٍ مولَّد').toMatch(/IMMUTABLE/);
+  });
+
+  it('والماسحُ يُسقط التعليقات فعلاً — وإلّا فالحارسُ يمرّ دائماً', () => {
+    /* تُقاس على ملفٍّ حقيقيّ: النمطُ الممنوع مذكورٌ في تعليقه لا في شيفرته. */
+    expect(read('apps/worker/src/retrieval.ts'), 'التعليقُ يشرح العطل فيذكر النمط')
+      .toMatch(/plainto_tsquery/);
+    expect(code('apps/worker/src/retrieval.ts'), 'والماسحُ لا يراه')
+      .not.toMatch(/plainto_tsquery/);
+    expect(read('packages/db/migrations/0008_ar_tsq.sql')).toMatch(/to_tsquery/);
+    expect(sqlCode('packages/db/migrations/0008_ar_tsq.sql'))
+      .not.toMatch(/to_tsquery\s*\(\s*'arabic'/);
+  });
+
+  it('★ والرتبةُ مُغلَّفةٌ بـcoalesce — سؤالُ ترقيمٍ يُنتج NULL يتقدّم في الترتيب', () => {
+    expect(read('apps/worker/src/retrieval.ts'))
+      .toMatch(/coalesce\(ts_rank\(/);
   });
 });
 

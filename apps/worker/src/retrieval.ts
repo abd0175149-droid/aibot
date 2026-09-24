@@ -132,19 +132,27 @@ export async function hybridSearch(
        ORDER BY c.embedding <=> ${vecLiteral}::vector
        LIMIT ${limit}
     `),
-    /* ★ الفرع المعجميّ. و`ar_norm` على **الطرفين**: العمود المولَّد مبنيٌّ
-       عليها (‏`0007_kb_chunks_tsv.sql`) والاستعلام يمرّ بها، وبلا ذلك تفشل
-       المطابقة على كلّ كلمةٍ فيها «ة» أو همزة — أي على أغلب العربيّة.
-       وكان العمود `tsv` نفسه غير موجودٍ إطلاقاً: كلّ سؤالٍ في وضع hybrid
-       يُسقط معاملة الردّ بلا حادثة. */
+    /* ★ الفرع المعجميّ — ثلاثة شروطٍ لا يعمل بغيرها.
+       ① `ar_norm` على **الطرفين**: العمود المولَّد مبنيٌّ عليها
+         (`0007_kb_chunks_tsv.sql`) والاستعلامُ يمرّ بها، وبلا ذلك تفشل
+         المطابقة على كلّ كلمةٍ فيها «ة» أو همزة — أي على أغلب العربيّة.
+       ② والعمود `tsv` نفسه لم يكن موجوداً إطلاقاً: كلُّ سؤالٍ في وضع
+         `hybrid` يُسقط معاملة الردّ بلا حادثة.
+       ③ والعطفُ **OR** لا AND: `plainto_tsquery` تعطف بـAND، فسؤال «كم سعر
+         الغرفة؟» لا يُطابق مستندَ «سعر الغرفة المفردة ٤٥ ديناراً» لأنّ «كم»
+         ليست فيه — فيسكت الفرعُ على أغلب أسئلة الزبائن الحقيقيّة. والدقّةُ
+         تأتي من `ts_rank` الذي يُرتّب بعدد الكلمات المُطابقة، لا من إقصاء
+         كلّ ما لم يُطابق كلَّ الكلمات (`0008_ar_tsq.sql`).
+       و`coalesce` على الرتبة: سؤالٌ كلُّه ترقيمٌ يُنتج `tsquery` فارغاً،
+       فالمجموعُ `NULL` وصفوفُه تتقدّم في `ORDER BY … DESC`. */
     db.execute<Hit>(sql`
       SELECT c.id, c.heading_path AS "headingPath", c.body, c.token_count AS "tokenCount",
              false AS pinned,
-             ts_rank(c.tsv, plainto_tsquery('arabic', ar_norm(${norm})))
+             coalesce(ts_rank(c.tsv, ar_tsq(${norm})), 0)
                + similarity(ar_norm(c.body), ar_norm(${norm})) AS score
         FROM kb_chunks c
        WHERE c.version_id = ${versionId} AND c.pinned = false
-         AND (c.tsv @@ plainto_tsquery('arabic', ar_norm(${norm}))
+         AND (c.tsv @@ ar_tsq(${norm})
               OR ar_norm(c.body) % ar_norm(${norm}))
        ORDER BY score DESC
        LIMIT ${limit}
