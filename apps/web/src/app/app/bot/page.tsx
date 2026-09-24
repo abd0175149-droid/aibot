@@ -6,6 +6,7 @@ import { put, post, patch, del, ApiError } from '@/lib/api';
 import { useCan } from '@/lib/session';
 import { ToolBuilder, EMPTY_DRAFT, type ToolDraft } from '@/components/ToolBuilder';
 import { KnowledgeFiles, type KbSource } from '@/components/KnowledgeFiles';
+import { BotBehavior } from '@/components/BotBehavior';
 import {
   PageHead, Tabs, Card, Grid, Stack, Row, Stat, Pill, Tag, Note, Button, Field, TextArea,
   Skeleton, Empty, ErrorBox, DataView, DiffView, Sheet, Dock,
@@ -77,8 +78,10 @@ interface BotState {
     /** مجموع أحرف الملفّات التي دخلت النسخة المنشورة — ومنه يُعرف أنّ ملفّاً رُفع بعدها. */
     sourceChars?: number;
   } | null;
-  /** المسوّدة jsonb — وهذه الشاشة تكتب الحقلَين معاً دائماً. */
+  /** المسوّدة jsonb — وهذه الشاشة تكتب حقلَين منها، والخادم يدمج الباقي. */
   draft: { persona?: string; knowledgeBase?: string } | null;
+  /** طابعُ المسوّدة ساعةَ جُلبت — يُعاد عند الحفظ فيُكتشف من كتب بعدنا. */
+  draftUpdatedAt: string | null;
 }
 
 interface KB {
@@ -527,20 +530,59 @@ export default function BotPage() {
     ?? (unsaved ? 'على الشاشة تغييرٌ غير محفوظ. احفظ المسوّدة أوّلاً — النشر ينشر المحفوظة.' : null);
   const saveReason = lockReason ?? (!unsaved ? 'لا تغييرَ غير محفوظ.' : null);
 
-  async function saveDraft() {
+  /**
+   * ★ **الحفظُ يُرسل ما تعرفه هذه الشاشة، ويحمل معه طابعَ ما قرأته.**
+   *
+   *   المسوّدةُ واحدةٌ لكلّ مستأجر، وتكتب فيها هذه الشاشةُ **والساحةُ** معاً.
+   *   فبلا طابعٍ يفوز آخرُ كاتبٍ بصمت: تصحيحٌ أضافه المالك من الساحة يُمحى
+   *   بحفظٍ تلقائيٍّ من تبويبٍ آخرَ ما زال مفتوحاً — والساحةُ قالت «أُضيف».
+   *   ثمّ يعود البوتُ إلى الخطأ نفسه أمام الزبون، فتنكسر حلقةُ «أخطأ ← أضِف
+   *   ← جرّب ← انشر» كلُّها، وهي حلقةُ المنتج الأساسيّة.
+   */
+  const [conflict, setConflict] = useState(false);
+
+  async function saveDraft(force = false) {
     if (saving.current) return;
     saving.current = true;
     setBusy('save');
     try {
-      await put('/bot/draft', { persona, knowledgeBase: knowledge });
+      await put('/bot/draft', {
+        persona,
+        knowledgeBase: knowledge,
+        /* و`null` تعني «لا تفحص»: هو ما يُرسَل حين يقرّر المالك الكتابةَ
+           فوق ما كُتب — وإلّا رُفض الحفظُ ثانيةً بنفس الطابع البائت. */
+        expectedUpdatedAt: force ? null : (bot.data?.draftUpdatedAt ?? null),
+      });
       setServer({ persona, knowledge, full: true });
+      setConflict(false);
+      await bot.reload();
       toast('حُفظت المسوّدة — والبوت الحيّ ما زال على النسخة المنشورة');
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'تعذّر الحفظ');
+      /* ★ التعارضُ ليس فشلاً عابراً يُعاد: هو خبرٌ يوقف الحفظ التلقائيّ
+         حتّى يقرّر المالك — وإلّا كتبت الشاشةُ فوق عمل غيرها في المحاولة
+         التالية بعد ثوانٍ. */
+      if (e instanceof ApiError && e.status === 409) {
+        setConflict(true);
+        toast('تغيّرت المسوّدة من مكانٍ آخر — حمّل الأحدث قبل أن تحفظ');
+      } else {
+        toast(e instanceof ApiError ? e.message : 'تعذّر الحفظ');
+      }
     } finally {
       saving.current = false;
       setBusy(null);
     }
+  }
+
+  /**
+   * حمّل الأحدث: يُسقط ما على الشاشة ويأخذ ما في القاعدة — بقرارٍ صريح.
+   * و`dirtyRef` يُطفأ أوّلاً وإلّا تخطّت المزامنةُ البياناتِ الواصلة — فهي
+   * مصمَّمةٌ ألّا تمسح ما يكتبه المستخدم الآن، وهنا يُراد مسحُه بطلبه.
+   */
+  async function takeLatest() {
+    setConflict(false);
+    dirtyRef.current = false;
+    await bot.reload();
+    toast('حُمّلت المسوّدة الأحدث');
   }
 
   /**
@@ -549,7 +591,9 @@ export default function BotPage() {
    */
   function autoSave() {
     // على فرق النصّ وحده — لا على «لا مسوّدة في القاعدة»
-    if (!locked && textChanged && !busy) void saveDraft();
+    /* ولا حفظَ تلقائيَّ ما دام التعارضُ قائماً: أوّلُ `blur` بعده يمحو
+       عملَ غيرك بلا أن تلمس شيئاً. */
+    if (!locked && textChanged && !busy && !conflict) void saveDraft();
   }
 
   /**
@@ -949,6 +993,24 @@ export default function BotPage() {
             </div>
           </details>
         </div>
+      )}
+
+      {/* ★ التعارضُ يُعلَن فوق كلّ شيء ويوقف الحفظ التلقائيّ: من كتب بعدك
+          له عملٌ لا يُمحى بضغطةٍ لم تقصدها. والخياران صريحان — تأخذ الأحدث
+          وتخسر ما على شاشتك، أو تحفظ فوقه بقرارٍ منك. */}
+      {conflict && (
+        <Note tone="warn">
+          <b>تغيّرت المسوّدة من مكانٍ آخر.</b>{' '}
+          يمكن أنّك فتحتَها في تبويبٍ ثانٍ، أو أضفتَ تصحيحاً من الساحة. أوقفنا
+          الحفظَ التلقائيّ حتّى لا يُمحى ذاك العمل.{' '}
+          <Button size="sm" onClick={() => void takeLatest()}>حمّل الأحدث</Button>{' '}
+          <Button
+            size="sm" variant="quiet"
+            onClick={() => { setConflict(false); void saveDraft(true); }}
+          >
+            احفظ ما على شاشتي فوقها
+          </Button>
+        </Note>
       )}
 
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
@@ -1389,64 +1451,15 @@ export default function BotPage() {
         {tab === 'behave' && (
           cfg ? (
             <Stack gap="lg">
-              <div className="sect">
-                <div className="sect-h">
-                  <h2>بعد أن يتدخّل موظّفك</h2>
-                </div>
-                <div className="rows bot-rows">
-                  <div className="row-m">
-                    <span className="rm-k">
-                      يسكت بوتك عن تلك المحادثة
-                      <span className="rm-note">
-                        أقصرُ من اللازم يقطع على موظّفك كلامه، وأطولُ منه يترك الزبون بلا ردّ.
-                      </span>
-                    </span>
-                    <span className="rm-v">
-                      <span className="num">{fmt.num(cfg.pauseMinutes)}</span> <small>دقيقة</small>
-                    </span>
-                    <span className="rm-c">
-                      <Tag line label="ثمّ يُستأنف من نفسه" />
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="sect">
-                <div className="sect-h">
-                  <h2>ما يقوله حين يعجز</h2>
-                  <span className="sect-c">نصٌّ يقرؤه زبونك بحرفه</span>
-                </div>
-                {cfg.failMessage
-                  ? <p className="bot-quote" dir="auto">{cfg.failMessage}</p>
-                  : (
-                    <p className="muted-p">
-                      لم يُكتب نصٌّ خاصٌّ بك: يعتذر برسالةٍ افتراضيّةٍ مهذّبة ثمّ يحوّل المحادثة.
-                    </p>
-                  )}
-                <p className="muted-p">
-                  وبعدها تُحوَّل المحادثة إلى موظّف وتظهر في الإنبوكس بوسم «تحتاج تدخّلك».
-                </p>
-              </div>
-
-              <div className="sect">
-                <div className="sect-h">
-                  <h2>وما يقوله خارج دوامك</h2>
-                </div>
-                {!cfg.businessHours?.days
-                  ? (
-                    <p className="muted-p">
-                      لا ساعاتِ دوامٍ مضبوطة، فبوتك يردّ في كلّ وقت — وهذه الرسالة لا تُستعمل.
-                    </p>
-                  )
-                  : cfg.outsideHoursMessage
-                    ? <p className="bot-quote" dir="auto">{cfg.outsideHoursMessage}</p>
-                    : (
-                      <p className="muted-p">
-                        لا رسالةَ خارج الدوام: يصمت بوتك عن الرسائل الواصلة خارج ساعات دوامك،
-                        وتنتظر في الإنبوكس حتّى تفتح.
-                      </p>
-                    )}
-              </div>
+              {/* ★ كانت ثلاثَ بطاقاتِ **قراءةٍ** تشرح أربعةَ سلوكيّاتٍ بعناية
+                  ثمّ تقول «لا تُعدَّل من هنا» — وهي لم تكن تُعدَّل من أيّ
+                  مكان. صارت نموذجاً يحفظ في `PATCH /bot/config`. */}
+              <BotBehavior
+                cfg={cfg}
+                readOnly={!can.settings || can.readOnly}
+                onSaved={() => void bot.reload()}
+                onToast={toast}
+              />
 
               {/* ★ التبويب كان ثلاثَ بطاقاتِ قراءةٍ بلا جملةٍ تقول من أين تُضبط،
                   وأرقاماً بلا وحدةٍ ولا عاقبة («دورات الأدوات: 3»). فما لا يُعدَّل

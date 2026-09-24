@@ -121,3 +121,50 @@ export function typeLabel(type: string): string {
 export function mediaPlaceholder(type: string): string {
   return `[أرسل الزبون ${typeLabel(type)} بلا نصّ]`;
 }
+
+/* ══════════════ سلوكُ البوت الذي يضبطه المالك ══════════════ */
+
+/**
+ * ★ **أربعةُ سلوكيّاتٍ يستهلكها العاملُ ولا شاشةَ تضبطها.**
+ *
+ *   التبويبُ في شاشة البوت يشرحها للمالك بعناية — متى يسكت البوت بعد تدخّل
+ *   موظّف، وماذا يقول حين يعجز، وماذا يقول خارج الدوام، وما ساعاتُ دوامه —
+ *   ثمّ يقول إنّها «لا تُعدَّل من هنا». والحقيقةُ أنّها لم تكن تُعدَّل من أيّ
+ *   مكان: لا مسارَ للمستأجر ولا للمنصّة ولا خطوةَ في معالج التهيئة. فكلُّ
+ *   مستأجرٍ يعيش على الافتراضات إلّا بـSQL على الخادم.
+ *
+ *   والثمنُ ملموس: مطعمٌ يغلق منتصف الليل يظلّ بوته يأخذ حجوزاتٍ الثالثةَ
+ *   فجراً ويعد بردّ موظّفٍ لا يأتي. والمالكُ الذي يقرأ «هذه الرسالة لا
+ *   تُستعمل» لا يجد كيف يجعلها تُستعمل، و«اطلبها من فريقنا» تقود إلى فريقٍ
+ *   لا يملك أداة.
+ */
+export const DAY_KEYS = ['sat', 'sun', 'mon', 'tue', 'wed', 'thu', 'fri'] as const;
+export type DayKey = (typeof DAY_KEYS)[number];
+
+export const DAY_AR: Record<DayKey, string> = {
+  sat: 'السبت', sun: 'الأحد', mon: 'الإثنين', tue: 'الثلاثاء',
+  wed: 'الأربعاء', thu: 'الخميس', fri: 'الجمعة',
+};
+
+/** «HH:MM» بأربعٍ وعشرين ساعة — نفسُ ما يقارنه `withinBusinessHours` نصّاً. */
+const HHMM = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'الوقت بصيغة HH:MM');
+
+/* ⚠️ والمفاتيحُ الثلاثيّة (`sat`…) ليست ذوقاً: `withinBusinessHours` يشتقّها
+   من `Intl` بـ`weekday: 'short'` ثمّ `toLowerCase()`، فأيُّ اسمٍ آخر لا
+   يُطابق شيئاً — وساعاتُ الدوام تصير «مغلقٌ دائماً» بصمت. */
+export const BusinessHours = z.object({
+  tz: z.string().min(1).max(64).default('Asia/Amman'),
+  days: z.record(z.enum(DAY_KEYS), z.array(z.tuple([HHMM, HHMM])).max(4)),
+});
+export type BusinessHours = z.infer<typeof BusinessHours>;
+
+export const BotBehaviorPatch = z.object({
+  /** سكوتُ البوت بعد ردّ موظّف — بالدقائق. */
+  pauseMinutes: z.number().int().min(1).max(1440).optional(),
+  /** ما يقوله حين يعجز. فارغٌ يعني «أعِد الافتراضيّ». */
+  failMessage: z.string().max(300).nullable().optional(),
+  /** ما يقوله خارج الدوام. ولا يُرسَل إن لم تُضبط ساعاتُ الدوام أصلاً. */
+  outsideHoursMessage: z.string().max(300).nullable().optional(),
+  businessHours: BusinessHours.nullable().optional(),
+}).refine((v) => Object.keys(v).length > 0, 'لا شيءَ لتغييره');
+export type BotBehaviorPatch = z.infer<typeof BotBehaviorPatch>;

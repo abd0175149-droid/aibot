@@ -1,10 +1,11 @@
 import type { FastifyInstance } from 'fastify';
 import {
   getDb, withTenant, withPlatform, botConfigs, botVersions, botTools, knowledgeSources, aiRuns,
-  kbChunks, auditLog, prices, eq, and, desc, sql,
+  kbChunks, auditLog, prices, eq, and, desc, sql, type Tx,
 } from '@aibot/db';
-import { AppError, ErrorCode } from '@aibot/shared';
+import { AppError, ErrorCode, BotBehaviorPatch } from '@aibot/shared';
 import { seal } from '@aibot/crypto';
+import { DEFAULT_CHAT_MODEL } from '@aibot/ai';
 import { decideKnowledgeMode, estimateTokens, linkHostsFrom, execHttpTool, assertPublicUrl, type HttpToolSpec } from '@aibot/core';
 import { requireAuth, tenantOf } from '../auth.js';
 import { enqueueEmbed, enqueueIngest } from '../queues.js';
@@ -33,23 +34,163 @@ export async function registerBot(app: FastifyInstance) {
           }
           : null,
         draft: cfg?.draft ?? null,
+        /* ★ طابعُ المسوّدة تحمله الشاشةُ وتُعيده عند الحفظ — فيُكتشف أنّ
+           غيرَها كتب بعد أن قرأت، بدل أن تمحوَ عملَه بصمت. */
+        draftUpdatedAt: cfg?.updatedAt?.toISOString() ?? null,
       };
     });
   });
 
-  app.put<{ Body: Record<string, unknown> }>('/bot/draft', { preHandler: auth }, async (req) => {
+  /**
+   * ★ **سلوكُ البوت — أربعةُ حقولٍ يقرؤها العاملُ ولم يكن يكتبها أحد.**
+   *
+   *   `pause_minutes` و`fail_message` و`outside_hours_message` و`business_hours`
+   *   كلُّها في المخطّط، ويقرؤها `reply.ts` في كلّ ردّ. ولا مسارَ يكتبها —
+   *   لا للمالك ولا للمنصّة — ولا خطوةَ في معالج التهيئة. فمطعمٌ يغلق منتصف
+   *   الليل يظلّ بوته يأخذ حجوزاتٍ الثالثةَ فجراً، ورسالةُ العجز الافتراضيّة
+   *   بلهجةٍ قد لا تناسب النشاط لا تُستبدل.
+   *
+   * ★ وهي **ليست** من المسوّدة: لا تُنشر ولا تُراجَع ولا يُتراجَع عنها بنشر
+   *   نسخةٍ قديمة. هي إعدادُ تشغيلٍ يسري لحظةَ حفظه — ولذلك مسارٌ مستقلّ
+   *   وصفُّ تدقيقٍ معه، لا حقلٌ في `draft`.
+   */
+  app.patch<{ Body: unknown }>('/bot/config', { preHandler: auth }, async (req) => {
     const tenantId = tenantOf(req);
+    const parsed = BotBehaviorPatch.safeParse(req.body);
+    if (!parsed.success) {
+      throw new AppError(ErrorCode.VALIDATION, 'قيمةٌ غير صالحة', 400, parsed.error.issues);
+    }
+    const p = parsed.data;
+
+    /* ★ ونطاقٌ ينتهي قبل أن يبدأ يُرفَض هنا لا يُترك للعامل: `withinBusinessHours`
+       يعامل `to <= from` نطاقاً **عابراً لمنتصف الليل**، فخطأٌ مطبعيٌّ
+       («17:00–09:00» بدل «09:00–17:00») يفتح الدوامَ ستَّ عشرةَ ساعةً بدل
+       ثمانٍ — بلا رسالةٍ ولا علامة. والقصدُ يُسأل عنه عند الكتابة. */
+    if (p.businessHours) {
+      for (const [day, ranges] of Object.entries(p.businessHours.days)) {
+        for (const [from, to] of ranges ?? []) {
+          if (to === from) {
+            throw new AppError(
+              ErrorCode.VALIDATION,
+              `نطاقٌ في ${day} يبدأ وينتهي في اللحظة نفسها — احذفه أو صحّحه.`,
+              400,
+            );
+          }
+        }
+      }
+    }
+
     return withTenant(getDb(), tenantId, async (tx) => {
+      const set: Record<string, unknown> = { updatedBy: req.auth!.sub, updatedAt: new Date() };
+      if (p.pauseMinutes !== undefined) set.pauseMinutes = p.pauseMinutes;
+      if (p.failMessage !== undefined) set.failMessage = p.failMessage?.trim() || null;
+      if (p.outsideHoursMessage !== undefined) {
+        set.outsideHoursMessage = p.outsideHoursMessage?.trim() || null;
+      }
+      if (p.businessHours !== undefined) set.businessHours = p.businessHours;
+
       const [row] = await tx.insert(botConfigs)
-        .values({ tenantId, draft: req.body as object, updatedBy: req.auth!.sub })
-        .onConflictDoUpdate({
-          target: botConfigs.tenantId,
-          set: { draft: req.body as object, updatedBy: req.auth!.sub, updatedAt: new Date() },
-        })
+        .values({ tenantId, ...set } as typeof botConfigs.$inferInsert)
+        .onConflictDoUpdate({ target: botConfigs.tenantId, set })
         .returning();
+
+      await tx.insert(auditLog).values({
+        tenantId, actorUserId: req.auth!.sub,
+        action: 'bot.config', entity: 'bot_config', entityId: tenantId,
+        diff: p as object, ip: req.ip,
+      });
       return row;
     });
   });
+
+  /**
+   * ★ **حفظُ المسوّدة دمجٌ لا استبدال — وكان استبدالاً صامتاً يُفقد البوتَ نصفَه.**
+   *
+   *   الشاشةُ ترسل حقلَين (`persona` و`knowledgeBase`)، وهذا المسارُ كان يكتب
+   *   جسمَ الطلب **مكان المسوّدة كلّها**. والنشرُ يقرأ من المسوّدة أيضاً:
+   *   `toolsConfig` و`params` (وفيها `linkHosts` و`constraints`) و`provider`
+   *   و`model` و`knowledgeBudget`. فأوّلُ حفظٍ روتينيٍّ من الشاشة يمحوها،
+   *   وأوّلُ نشرٍ بعده يُعوّضها بالفراغ والافتراضات.
+   *
+   *   والأثرُ على مستأجرٍ حيٍّ **ثلاثةُ أعطالٍ دفعةً واحدة، بلا رسالةٍ ولا
+   *   خطأ**: البوت يفقد أدواته المدمجة كلَّها — بما فيها التحويل لموظّف —
+   *   وتُحذف كلُّ الروابط المسموحة من ردوده (فالحارسُ يمحو ما ليس في قائمةٍ
+   *   فارغة)، ويُبدَّل نموذجُه إلى الافتراضيّ فتتغيّر فاتورتُه بلا قرارٍ من
+   *   أحد. وكلُّ ذلك من ضغطة «حفظ» على تعديل جملةٍ في الشخصيّة.
+   *
+   * ★ **وتفاؤليّةُ التزامن فوق الدمج.** المسوّدةُ واحدةٌ لكلّ مستأجر،
+   *   وتكتب فيها شاشةُ البوت **والساحةُ** معاً. فبلا شرطٍ على النسخة يفوز
+   *   آخرُ كاتبٍ بصمت: تصحيحٌ أضافه المالك من الساحة يُمحى بحفظٍ تلقائيٍّ من
+   *   تبويبٍ آخر مفتوح، والساحةُ قالت «أُضيف». ثمّ يعود البوتُ إلى الخطأ
+   *   نفسِه أمام الزبون — فيفقد المالك ثقتَه بحلقة «أخطأ ← أضِف ← جرّب ← انشر»
+   *   كلِّها، وهي حلقةُ المنتج الأساسيّة.
+   */
+  app.put<{ Body: Record<string, unknown> & { expectedUpdatedAt?: string | null } }>(
+    '/bot/draft',
+    { preHandler: auth },
+    async (req) => {
+      const tenantId = tenantOf(req);
+      const { expectedUpdatedAt, ...patch } = req.body ?? {};
+
+      return withTenant(getDb(), tenantId, async (tx) => {
+        const cfg = (await tx.select().from(botConfigs)
+          .where(eq(botConfigs.tenantId, tenantId)).limit(1))[0];
+
+        /* ★ التعارضُ يُقال ولا يُبتلع: الشاشةُ تعرض «تغيّرت من مكانٍ آخر»
+           وتُعطي زرَّ «حمّل الأحدث» بدل أن تكتب فوق عمل غيرها. */
+        if (expectedUpdatedAt !== undefined && expectedUpdatedAt !== null && cfg) {
+          const seen = new Date(expectedUpdatedAt).getTime();
+          const now = cfg.updatedAt?.getTime() ?? 0;
+          if (Number.isFinite(seen) && seen !== now) {
+            throw new AppError(
+              ErrorCode.CONFLICT,
+              'تغيّرت المسوّدة من مكانٍ آخر بعد أن فتحتَ هذه الشاشة — حمّل الأحدث قبل الحفظ.',
+              409,
+              { draft: cfg.draft ?? null, updatedAt: cfg.updatedAt?.toISOString() ?? null },
+            );
+          }
+        }
+
+        /* ★ والقاعدةُ التي تُملأ منها المسوّدةُ الغائبة هي **النسخة المنشورة**
+           لا الفراغ: مستأجرٌ نُشرت نسختُه بسكربتٍ (وهو حالٌ قائم) لا مسوّدةَ
+           له إطلاقاً، فأوّلُ حفظٍ كان يُنشئها من حقلَين وينسى الباقي. */
+        const base = (cfg?.draft ?? {}) as Record<string, unknown>;
+        const seed = Object.keys(base).length ? base : await seedFromPublished(tx, tenantId);
+        const draft = { ...seed, ...patch };
+
+        const [row] = await tx.insert(botConfigs)
+          .values({ tenantId, draft: draft as object, updatedBy: req.auth!.sub })
+          .onConflictDoUpdate({
+            target: botConfigs.tenantId,
+            set: { draft: draft as object, updatedBy: req.auth!.sub, updatedAt: new Date() },
+          })
+          .returning();
+        return row;
+      });
+    },
+  );
+
+  /**
+   * بذرةُ المسوّدة من النسخة المنشورة — كلُّ ما يقرؤه النشرُ ولا ترسله الشاشة.
+   * وبلا هذا يكون «الاحتياط» فراغاً، والفراغُ في `linkHosts` يعني **حذفَ كلّ
+   * رابطٍ** من كلّ ردّ، وفي `toolsConfig` يعني بوتاً لا يحوّل لموظّف.
+   */
+  async function seedFromPublished(tx: Tx, tenantId: string): Promise<Record<string, unknown>> {
+    const cfg = (await tx.select({ v: botConfigs.publishedVersionId }).from(botConfigs)
+      .where(eq(botConfigs.tenantId, tenantId)).limit(1))[0];
+    if (!cfg?.v) return {};
+    const ver = (await tx.select().from(botVersions).where(eq(botVersions.id, cfg.v)).limit(1))[0];
+    if (!ver) return {};
+    return {
+      persona: ver.persona,
+      knowledgeBase: ver.knowledgeBase,
+      toolsConfig: ver.toolsConfig ?? {},
+      params: ver.params ?? {},
+      provider: ver.provider,
+      model: ver.model,
+      knowledgeBudget: ver.knowledgeBudget ?? {},
+    };
+  }
 
   /**
    * النشر.
@@ -79,10 +220,18 @@ export async function registerBot(app: FastifyInstance) {
 
     const out = await withTenant(getDb(), tenantId, async (tx) => {
       const cfg = (await tx.select().from(botConfigs).where(eq(botConfigs.tenantId, tenantId)).limit(1))[0];
-      const draft = (cfg?.draft ?? {}) as Record<string, unknown>;
-      if (!cfg || !Object.keys(draft).length) {
+      const saved = (cfg?.draft ?? {}) as Record<string, unknown>;
+      if (!cfg || !Object.keys(saved).length) {
         throw new AppError(ErrorCode.VALIDATION, 'لا مسوّدة لنشرها', 400);
       }
+
+      /* ★ **الاحتياطُ هو النسخة المنشورة لا الفراغ.**
+         كلُّ حقلٍ غائبٍ عن المسوّدة كان يُعوَّض بـ`{}` أو باسم نموذجٍ مكتوبٍ
+         نصّاً. فمسوّدةٌ من حقلَين — وهو ما كانت الشاشةُ تنتجه — تُخرج نسخةً
+         بلا أدواتٍ وبلا روابطَ مسموحة وبنموذجٍ غير الذي كان يعمل.
+         والدمجُ في الحفظ يمنع هذا من الآن، وهذا يمنعه **بأثرٍ رجعيّ** عن
+         كلّ مسوّدةٍ ناقصةٍ محفوظةٍ قبل اليوم. */
+      const draft = { ...(await seedFromPublished(tx, tenantId)), ...saved };
 
       const last = (await tx.select({ v: botVersions.version }).from(botVersions)
         .where(eq(botVersions.tenantId, tenantId)).orderBy(desc(botVersions.version)).limit(1))[0];
@@ -110,7 +259,8 @@ export async function registerBot(app: FastifyInstance) {
         : kb;
 
       const provider = String(draft.provider ?? 'google');
-      const model = String(draft.model ?? 'gemini-2.5-flash');
+      /* ولا اسمَ نموذجٍ مكتوبٍ نصّاً: ثابتُ الحزمة يتغيّر في موضعٍ واحد. */
+      const model = String(draft.model ?? DEFAULT_CHAT_MODEL);
 
       /* ★ لا نشرَ لنموذجٍ بلا سعر.
          العطل الذي وُلد منه هذا الفحص: نسخةٌ نُشرت على نموذجٍ لا صفَّ سعرٍ له،

@@ -11,6 +11,9 @@ export const ErrorCode = {
   UNAUTHORIZED: 'UNAUTHORIZED',
   FORBIDDEN: 'FORBIDDEN',
   RATE_LIMITED: 'RATE_LIMITED',
+  /** ★ تعارضُ نسخةٍ: كتبَ غيرُك بعد أن قرأتَ. يُقال ولا يُبتلع — وإلّا
+      فازَ آخرُ كاتبٍ بصمتٍ ومُحي عملُ من سبقه. */
+  CONFLICT: 'CONFLICT',
   VALIDATION: 'VALIDATION',
   INTERNAL: 'INTERNAL',
 } as const;

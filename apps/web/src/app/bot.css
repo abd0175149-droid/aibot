@@ -213,3 +213,41 @@
 @media (min-width: 700px) {
   .bot-hero { gap: 10px; }
 }
+
+/* ══════════════ ساعات الدوام — شبكةُ أيّامٍ تُلمَس بالإبهام ══════════════
+   ★ الأربعةُ التي تضبطها هذه الشاشة كانت تُقرأ ولا تُكتب: التبويبُ يشرحها
+     بعناية ثمّ يقول «لا تُعدَّل من هنا»، ولا مسارَ في النظام كلّه يكتبها. */
+.bh-days { display: flex; flex-direction: column; gap: 8px; margin-block-start: 12px; }
+
+.bh-day {
+  display: grid; grid-template-columns: 82px minmax(0, 1fr);
+  align-items: start; gap: 10px;
+  padding-block: 8px; border-block-start: 1px solid var(--rule);
+}
+.bh-day:first-child { border-block-start: 0; }
+.bh-dn { font-weight: 600; padding-block-start: 7px; }
+
+.bh-rr { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.bh-r { display: inline-flex; align-items: center; gap: 6px; }
+
+/* ★ حقلُ الوقت يأخذ عرضَه **من محتواه**: `auto` لا رقمٌ مخمَّن.
+   والسببُ أنّ المتصفّح يعرضه بـ١٢ ساعةً أو ٢٤ بحسب لغة الجهاز — «10:00 PM»
+   أعرضُ من «22:00» بمقدار ثلاثة محارف. فعرضٌ ثابتٌ يكفي أحدَهما يقصّ الآخر:
+   رُئي في التصيير «10:00 PI» بلا الميم. */
+.bh-t { inline-size: auto; min-inline-size: 0; max-inline-size: 100%; flex: none; }
+
+.bh-off { color: var(--muted); font-size: var(--t-label); padding-inline-end: 4px; }
+
+.bh-x {
+  inline-size: 28px; block-size: 28px; flex: none;
+  display: grid; place-items: center;
+  border: 1px solid var(--rule-strong); border-radius: var(--radius);
+  background: transparent; color: var(--muted); cursor: pointer;
+}
+.bh-x:hover { color: var(--crit); border-color: var(--crit); }
+
+/* على الهاتف يصير اليومُ سطراً فوق فتراته: عمودان بعرض 82px يقصّان الحقول */
+@media (max-width: 560px) {
+  .bh-day { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .bh-dn { padding-block-start: 0; }
+}
