@@ -17,7 +17,14 @@ import { SessionProvider } from '@/lib/session';
 import { ThemeProvider, THEME_BOOT_SCRIPT } from '@/lib/theme';
 
 export const metadata: Metadata = {
-  title: 'AiBot — منصّة بوتات ذكيّة',
+  /* ★ قالبٌ لا نصٌّ ثابت: كلُّ شاشةٍ تُعطي اسمَها والقالبُ يُلحق العلامة.
+     وكانت التبويباتُ كلُّها «AiBot — منصّة بوتات ذكيّة»، فمن يفتح خمسَ
+     شاشاتٍ في خمس تبويبات لا يميّز بينها ولا يجدها في سجلّ متصفّحه.
+     و`default` للصفحات التي لا تسمّي نفسَها — الهبوطُ وما دونه. */
+  title: {
+    template: '%s · AiBot',
+    default: 'AiBot — بوت واتساب وإنستجرام لنشاطك',
+  },
   description: 'بوت واتساب وإنستجرام مخصَّص لنشاطك، تديره بنفسك.',
   manifest: '/manifest.json',
 };

@@ -40,6 +40,37 @@ export function parseCursor(raw: string | undefined): { at: string; id: string }
   return { at: iso, id: id && isUuid(id) ? id : '00000000-0000-0000-0000-000000000000' };
 }
 
+/**
+ * ★ **حرّاسُ المدخلات — أكثرُ المسارات استعمالاً كان أقلَّها حراسةً.**
+ *
+ *   `contacts.ts` و`team.ts` يفحصان الـUUID والمؤشّر والحدود قبل القاعدة
+ *   ويردّان ٤٠٠ أو ٤٠٤. و`inbox.ts` كان يمرّر `:id` و`before` و`status`
+ *   و`pauseMinutes` والوسوم إلى الاستعلام **كما جاءت**. وأيّ قيمةٍ خارج
+ *   المتوقَّع تصير خطأَ بوستجرس يُترجَم ٥٠٠ «خطأٌ داخليّ».
+ *
+ *   وثلاثةُ أضرارٍ من ذلك، أثقلُها الثالث:
+ *    ① رابطُ محادثةٍ مقصوصٌ — والموظّفون يتبادلون هذه الروابط على واتساب —
+ *      ينتهي بـ٥٠٠ بدل «لا محادثةَ بهذا المعرّف».
+ *    ② والسجلُّ يمتلئ بأخطاء ٥٠٠ **ليست أعطالاً**، فتُخفي الأعطالَ الحقيقيّة.
+ *    ③ وأيُّ عميلٍ يستطيع إنتاج ٥٠٠ بحرّيّة — وهو ضجيجٌ مجّانيٌّ على
+ *      المراقبة، ومعلومةٌ عن الداخل تُستخرج من رسالة الخطأ.
+ */
+function reqUuid(v: string, what = 'المعرّف'): string {
+  if (!isUuid(v)) throw new AppError(ErrorCode.VALIDATION, `${what} غير صالح`, 404);
+  return v;
+}
+
+/** طابعٌ زمنيٌّ من طلب — والمشوّهُ يُهمَل لا يُمرَّر `Invalid Date` للاستعلام. */
+function optDate(v: string | undefined, what: string): Date | undefined {
+  if (v === undefined) return undefined;
+  const t = Date.parse(v);
+  if (Number.isNaN(t)) throw new AppError(ErrorCode.VALIDATION, `${what} غير صالح`, 400);
+  return new Date(t);
+}
+
+const CONV_STATUS = new Set(['open', 'closed']);
+const CHANNEL_KINDS = new Set(['whatsapp_cloud', 'instagram']);
+
 export async function registerInbox(app: FastifyInstance) {
   app.get<{ Querystring: { status?: string; needsAttention?: string; channel?: string; q?: string; cursor?: string } }>(
     '/conversations',
@@ -49,6 +80,18 @@ export async function registerInbox(app: FastifyInstance) {
       const { status, needsAttention, channel, q, cursor } = req.query;
 
       return withTenant(getDb(), tenantId, async (tx) => {
+        if (status && !CONV_STATUS.has(status)) {
+          throw new AppError(ErrorCode.VALIDATION, 'حالةُ محادثةٍ غير معروفة', 400);
+        }
+        if (channel && !CHANNEL_KINDS.has(channel)) {
+          throw new AppError(ErrorCode.VALIDATION, 'قناةٌ غير معروفة', 400);
+        }
+        /* والبحثُ محدودُ الطول: نصٌّ بعشرة آلاف حرفٍ يمرّ إلى `ilike` فيمسح
+           الجدولَ بلا فائدةٍ لأحد. */
+        if (q && q.length > 80) {
+          throw new AppError(ErrorCode.VALIDATION, 'نصُّ البحث أطولُ من ٨٠ حرفاً', 400);
+        }
+
         const where = [eq(conversations.tenantId, tenantId)];
         if (status) where.push(eq(conversations.status, status as 'open' | 'closed'));
         if (needsAttention === 'true') where.push(eq(conversations.needsAttention, true));
@@ -153,15 +196,17 @@ export async function registerInbox(app: FastifyInstance) {
     { preHandler: requireAuth() },
     async (req) => {
       const tenantId = tenantOf(req);
+      const convId = reqUuid(req.params.id, 'معرّفُ المحادثة');
+      const before = optDate(req.query.before, 'طابعُ «قبل»');
       return withTenant(getDb(), tenantId, async (tx) => {
-        const where = [eq(messages.conversationId, req.params.id), isNull(messages.deletedAt)];
-        if (req.query.before) where.push(lt(messages.createdAt, new Date(req.query.before)));
+        const where = [eq(messages.conversationId, convId), isNull(messages.deletedAt)];
+        if (before) where.push(lt(messages.createdAt, before));
 
         const rows = await tx.select().from(messages)
           .where(and(...where)).orderBy(desc(messages.createdAt)).limit(50);
 
         const win = await tx.select().from(conversationWindows).where(and(
-          eq(conversationWindows.conversationId, req.params.id),
+          eq(conversationWindows.conversationId, convId),
           isNull(conversationWindows.closedAt),
         )).limit(1);
 
@@ -200,9 +245,8 @@ export async function registerInbox(app: FastifyInstance) {
     { preHandler: requireAuth() },
     async (req, reply) => {
       const tenantId = tenantOf(req);
-      if (!isUuid(req.params.id) || !isUuid(req.params.mid)) {
-        throw new AppError(ErrorCode.VALIDATION, 'معرّفٌ غير صالح', 400);
-      }
+      reqUuid(req.params.id, 'معرّفُ المحادثة');
+      reqUuid(req.params.mid, 'معرّفُ الرسالة');
 
       const found = await withTenant(getDb(), tenantId, async (tx) => {
         const m = (await tx.select({ payload: messages.payload, channelId: messages.channelId })
@@ -266,6 +310,7 @@ export async function registerInbox(app: FastifyInstance) {
     { preHandler: requireAuth() },
     async (req, reply) => {
       const tenantId = tenantOf(req);
+      reqUuid(req.params.id, 'معرّفُ المحادثة');
       const key = req.headers['idempotency-key'];
       if (!key || typeof key !== 'string') {
         throw new AppError(ErrorCode.VALIDATION, 'ترويسة Idempotency-Key مطلوبة', 400);
@@ -372,9 +417,8 @@ export async function registerInbox(app: FastifyInstance) {
     { preHandler: requireAuth() },
     async (req, reply) => {
       const tenantId = tenantOf(req);
-      if (!isUuid(req.params.messageId)) {
-        throw new AppError(ErrorCode.VALIDATION, 'لا رسالةَ بهذا المعرّف', 404);
-      }
+      reqUuid(req.params.id, 'معرّفُ المحادثة');
+      reqUuid(req.params.messageId, 'معرّفُ الرسالة');
 
       const row = await withTenant(getDb(), tenantId, async (tx) => {
         const [m] = await tx.update(messages)
@@ -432,6 +476,17 @@ export async function registerInbox(app: FastifyInstance) {
     { preHandler: requireAuth() },
     async (req) => {
       const tenantId = tenantOf(req);
+      reqUuid(req.params.id, 'معرّفُ المحادثة');
+      const pm = req.body?.pauseMinutes;
+      /* ★ `-1` مقصودةٌ (إعادةُ البوت تُنهي التوقّف يقيناً)، وما عداها محدودٌ
+         بيومٍ واحد: رقمٌ ضخمٌ يُنتج طابعاً خارج مدى `timestamptz` فيرمي
+         بوستجرس — ٥٠٠ على زرٍّ يضغطه الموظّف. */
+      if (pm != null && (!Number.isInteger(pm) || pm < -1 || pm > 1440)) {
+        throw new AppError(ErrorCode.VALIDATION, 'مدّةُ الإيقاف بالدقائق بين ٠ و١٤٤٠', 400);
+      }
+      if (req.body?.enabled === undefined && pm == null) {
+        throw new AppError(ErrorCode.VALIDATION, 'لا شيءَ لتغييره — أرسل enabled أو pauseMinutes', 400);
+      }
       return withTenant(getDb(), tenantId, async (tx) => {
         const set: Record<string, unknown> = {};
         if (typeof req.body?.enabled === 'boolean') set.botEnabled = req.body.enabled;
@@ -473,6 +528,7 @@ export async function registerInbox(app: FastifyInstance) {
     { preHandler: requireAuth() },
     async (req) => {
       const tenantId = tenantOf(req);
+      reqUuid(req.params.id, 'معرّفُ المحادثة');
       const raw = req.body?.userId ?? null;
       if (raw !== null && !isUuid(raw)) {
         throw new AppError(ErrorCode.VALIDATION, 'معرّف مستخدمٍ غير صالح', 400);
@@ -498,6 +554,7 @@ export async function registerInbox(app: FastifyInstance) {
 
   app.post<{ Params: { id: string } }>('/conversations/:id/read', { preHandler: requireAuth() }, async (req) => {
     const tenantId = tenantOf(req);
+    reqUuid(req.params.id, 'معرّفُ المحادثة');
     return withTenant(getDb(), tenantId, async (tx) => {
       const row = orMissing((await tx.update(conversations)
         .set({ unreadCount: 0 }).where(eq(conversations.id, req.params.id)).returning())[0]);
@@ -511,12 +568,30 @@ export async function registerInbox(app: FastifyInstance) {
     { preHandler: requireAuth() },
     async (req) => {
       const tenantId = tenantOf(req);
+      reqUuid(req.params.id, 'معرّفُ المحادثة');
+      /* ★ وسومٌ بلا حدّ: قائمةٌ بألف وسمٍ كلٌّ منها بعشرة آلاف حرفٍ تُكتب في
+         عمودٍ واحد، فيصير صفُّ المحادثة ميغابايتاً يُقرأ في كلّ صفحةٍ من
+         القائمة. والحدُّ هنا لا في الشاشة: الشاشةُ ليست الحارس. */
+      const tagsOf = (v: unknown): string[] => {
+        if (v === undefined) return [];
+        if (!Array.isArray(v) || v.length > 20) {
+          throw new AppError(ErrorCode.VALIDATION, 'الوسومُ قائمةٌ من عشرين على الأكثر', 400);
+        }
+        return v.map((t) => {
+          if (typeof t !== 'string' || !t.trim() || t.length > 40) {
+            throw new AppError(ErrorCode.VALIDATION, 'كلُّ وسمٍ نصٌّ من ٤٠ حرفاً فأقلّ', 400);
+          }
+          return t.trim();
+        });
+      };
+      const addTags = tagsOf(req.body?.add);
+      const removeTags = tagsOf(req.body?.remove);
       return withTenant(getDb(), tenantId, async (tx) => {
         const cur = orMissing((await tx.select({ tags: conversations.tags }).from(conversations)
           .where(eq(conversations.id, req.params.id)).limit(1))[0]);
         const next = new Set(cur.tags ?? []);
-        for (const t of req.body?.add ?? []) next.add(t);
-        for (const t of req.body?.remove ?? []) next.delete(t);
+        for (const t of addTags) next.add(t);
+        for (const t of removeTags) next.delete(t);
         const row = orMissing((await tx.update(conversations).set({ tags: [...next] })
           .where(eq(conversations.id, req.params.id)).returning())[0]);
         emitToTenant(tenantId, 'conversation:update', row);

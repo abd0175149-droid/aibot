@@ -153,14 +153,7 @@ export default function TenantsPage() {
   const [killWord, setKillWord] = useState('');
   const [busy, setBusy] = useState(false);
 
-  /* حوارٌ `aria-modal` بلا مخرجٍ من لوحة المفاتيح مصيدة. و`Sheet` تُغلق بالنقر
-     خارجها وبزرّها، ومفتاحُ الهروب يُربَط عند موضع الاستدعاء كما في القشرة. */
-  useEffect(() => {
-    if (!openId) return undefined;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpenId(null); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [openId]);
+  /* ★ مفتاحُ الهروب وإدارةُ التركيز صارا داخل `Sheet` — لا نسخةَ هنا. */
 
   function closeSheet() {
     setOpenId(null);

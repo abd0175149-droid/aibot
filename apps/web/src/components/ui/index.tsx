@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode, CSSProperties } from 'react';
 
 /**
@@ -558,15 +558,84 @@ export function Table<T>({ columns, rows, keyOf, onRowClick }: {
 
 /* ══════════════ الحوار ══════════════ */
 
+
+/**
+ * ★ **إدارةُ التركيز في الحوار — مرّةً واحدةً هنا لا في كلّ شاشة.**
+ *
+ *   `aria-modal` تُخفي ما خلف الورقة عن قارئ الشاشة، لكنّ التركيز يبقى على
+ *   الزرّ الذي فتحها — **خارجَ** الورقة. فيقف قارئُ الشاشة في فراغٍ معلَن:
+ *   لا يقرأ ما تحت المؤشّر ولا يجد طريقاً إلى المحتوى.
+ *   و`Tab` يخرج منها إلى ما خلفها، ولا يعود التركيزُ إلى موضعه عند الإغلاق،
+ *   فيبدأ المستخدم من رأس الصفحة بعد كلّ تأكيدٍ خطِر.
+ *   و`Escape` كانت قاعدةً كتبها تعليقٌ في الإطار («حوارٌ بلا مخرجٍ مصيدة»)
+ *   ثمّ تُركت لكلّ شاشةٍ تُعيد كتابتها — فنسيتها الأوراقُ كلُّها.
+ *
+ *   والأربعةُ هنا معاً: نقلٌ · حبسٌ · إرجاعٌ · ومخرجٌ بمفتاح.
+ */
+function useDialogFocus(open: boolean, onClose: () => void) {
+  const box = useRef<HTMLDivElement>(null);
+  const opener = useRef<Element | null>(null);
+
+  /** ما يُركَّز فعلاً — ويُحسب عند كلّ ضغطة لأنّ المحتوى يتغيّر. */
+  const focusables = useCallback((): HTMLElement[] => {
+    const el = box.current;
+    if (!el) return [];
+    return [...el.querySelectorAll<HTMLElement>(
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]),'
+      + ' select:not([disabled]), [tabindex]:not([tabindex="-1"])',
+    )].filter((n) => n.offsetParent !== null || n === document.activeElement);
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    opener.current = document.activeElement;
+    /* العنوانُ أوّلاً لا أوّلُ زرّ: قارئُ الشاشة يقرأ ما فُتح قبل ما يُفعل. */
+    const head = box.current?.querySelector<HTMLElement>('h2') ?? focusables()[0];
+    head?.focus();
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
+      if (e.key !== 'Tab') return;
+      const items = focusables();
+      if (!items.length) return;
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      const at = document.activeElement;
+      /* الحبس: من آخرِ عنصرٍ إلى أوّله والعكس — فلا يخرج التركيز إلى ما
+         أخفاه `aria-modal` عن القارئ أصلاً. */
+      if (!e.shiftKey && (at === last || !box.current?.contains(at))) {
+        e.preventDefault(); first.focus();
+      } else if (e.shiftKey && (at === first || !box.current?.contains(at))) {
+        e.preventDefault(); last.focus();
+      }
+    };
+
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('keydown', onKey, true);
+      /* الإرجاع: إلى الزرّ الذي فتحها — وإن اختفى فلا شيء، ولا رميَ. */
+      const back = opener.current;
+      if (back instanceof HTMLElement && document.contains(back)) back.focus();
+    };
+  }, [open, onClose, focusables]);
+
+  return box;
+}
+
 export function Modal({ title, onClose, children, footer, wide }: {
   title: string; onClose: () => void; children: ReactNode; footer?: ReactNode; wide?: boolean;
 }) {
+  const box = useDialogFocus(true, onClose);
   return (
-    <div className="scrim" role="dialog" aria-modal="true" aria-label={title} onClick={onClose}>
+    <div className="scrim" onClick={onClose}>
       {/* الإيقاف هنا فقط: النقر على الخلفيّة يُغلق، وداخل البطاقة لا */}
-      <div className={`modal${wide ? ' wide' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <div
+        ref={box} role="dialog" aria-modal="true" aria-label={title}
+        className={`modal${wide ? ' wide' : ''}`} onClick={(e) => e.stopPropagation()}
+      >
         <header>
-          <h2>{title}</h2>
+          {/* `tabIndex={-1}` ليُركَّز برمجيّاً ولا يدخل دورةَ `Tab`. */}
+          <h2 tabIndex={-1}>{title}</h2>
           <button type="button" className="x" onClick={onClose} aria-label="إغلاق">✕</button>
         </header>
         <div className="modal-b">{children}</div>
@@ -673,15 +742,21 @@ export function Sheet({ open, title, onClose, children, footer, hint, kind = 'sh
   /** `menu` تُثبَّت تحت الترويسة على الفأرة فتُقرأ منسدلة */
   kind?: 'sheet' | 'menu';
 }) {
+  const box = useDialogFocus(open, onClose);
   return (
     <div className={`sheetwrap${open ? ' on' : ''}`} data-kind={kind}>
       {/* ★ زرٌّ حقيقيٌّ لا `div` بمعالج: «أغلِق بالنقر خارجها» فعلٌ يجب أن
-          يُنطَق ويُبلَغ بالمفتاح، وإلّا صارت الورقةُ مصيدةً لمن لا فأرةَ له. */}
-      <button type="button" className="sheet-scrim" aria-label="إغلاق بالنقر خارج الورقة" onClick={onClose} />
-      <div className="sheet" role="dialog" aria-modal="true" aria-label={title}>
+          يُنطَق ويُبلَغ بالمفتاح، وإلّا صارت الورقةُ مصيدةً لمن لا فأرةَ له.
+          و`tabIndex={-1}` عليه: هو **خارج** الورقة، فبقاؤه في دورة `Tab`
+          يُخرج التركيزَ منها عند أوّل ضغطة — ووظيفتُه يؤدّيها `Escape`. */}
+      <button
+        type="button" className="sheet-scrim" tabIndex={-1}
+        aria-label="إغلاق بالنقر خارج الورقة" onClick={onClose}
+      />
+      <div ref={box} className="sheet" role="dialog" aria-modal="true" aria-label={title}>
         <span className="grab" aria-hidden="true" />
         <header>
-          <h2>{title}</h2>
+          <h2 tabIndex={-1}>{title}</h2>
           <button type="button" className="x" onClick={onClose} aria-label="إغلاق">✕</button>
         </header>
         <div className="sheet-b">{children}</div>

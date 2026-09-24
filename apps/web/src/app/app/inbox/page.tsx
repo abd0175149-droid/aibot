@@ -7,7 +7,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi, useToast, fmt, AR_LOCALE } from '@/lib/useApi';
 import { api, post, idempotencyKey, ApiError } from '@/lib/api';
-import { MESSAGE_TYPE_AR } from '@aibot/shared';
+import { MESSAGE_TYPE_AR, type MessageDTO } from '@aibot/shared';
 import { useCan, useSession } from '@/lib/session';
 import { useSocket, useLink, useFallbackPoll } from '@/lib/socket';
 import {
@@ -88,23 +88,11 @@ interface Conv {
   assignedName: string | null;
 }
 
-interface Msg {
-  id: string;
-  direction: 'in' | 'out';
-  source: string;
-  type: string;
-  body: string | null;
-  payload: {
-    options?: Array<{ id: string; title: string }>;
-    buttonPayload?: string | null;
-    mediaId?: string | null;
-    /** إحداثيّاتُ الموقع — محفوظةٌ بها لا مذكورةٌ في نصّ. */
-    location?: { lat: number; lng: number; name: string | null; address: string | null } | null;
-  } | null;
-  status: string | null;
-  errorMessage?: string | null;
-  createdAt: string;
-}
+/**
+ * ★ الشكلُ من `@aibot/shared` لا مكتوبٌ هنا: العاملُ يبثّه وهذه الشاشةُ
+ *   ترسمه، ونسختان تتباعدان فتُرسَم رسالةٌ ناقصةٌ بلا أن يشكو شيء.
+ */
+type Msg = MessageDTO;
 
 interface Thread {
   /** معرّفُ المحادثة التي تخصّها هذه الحمولة — حارسُ «كلامٌ تحت اسمٍ آخر». */
@@ -145,8 +133,18 @@ const FILTERS = [
   { id: 'instagram', label: 'إنستجرام' },
 ] as const;
 
-const DELIVERY: Record<string, string> = {
-  queued: 'قيد الإرسال…', sent: '✓', delivered: '✓✓', read: '✓✓ قُرئت', failed: 'لم تصل',
+/**
+ * ★ علامةُ التسليم لها **نصٌّ مسموع**.
+ *   «✓» و«✓✓» تُقرآن «علامة صح» و«علامة صح علامة صح» عند قارئ الشاشة — أي
+ *   لا شيء. والفرقُ بين «وصلت للخادم» و«وصلت للزبون» هو الفرقُ الذي يقرّر
+ *   إن كان على الموظّف أن يتصرّف.
+ */
+const DELIVERY: Record<string, { mark: string; say: string }> = {
+  queued: { mark: 'قيد الإرسال…', say: 'قيد الإرسال' },
+  sent: { mark: '✓', say: 'أُرسلت' },
+  delivered: { mark: '✓✓', say: 'وصلت جهازَه' },
+  read: { mark: '✓✓ قُرئت', say: 'قرأها' },
+  failed: { mark: 'لم تصل', say: 'لم تصل' },
 };
 
 const SOURCE: Record<string, { label: string; mark: string }> = {
@@ -711,7 +709,12 @@ function InboxScreen() {
       <section className="ibx-list" aria-label="المحادثات">
         <header className="ibx-lhead">
           <input
-            className="ibx-search" type="search" value={search} dir="auto"
+            className="ibx-search" type="search" value={search}
+            /* ★ `dir="auto"` على حقلٍ **فارغ** يُحاذي نائبَه من اليسار: لا
+               محرفَ قويّاً في القيمة فيرتدّ إلى الافتراضيّ. والنائبُ عربيٌّ
+               فيظهر مقلوبَ المحاذاة في شاشةٍ عربيّة. و`auto` تبقى بعد أوّل
+               حرفٍ فيُكتب الرقمُ من اليسار والاسمُ من اليمين. */
+            dir={search ? 'auto' : 'rtl'}
             placeholder="ابحث باسمٍ أو رقمٍ أو نصّ رسالة…"
             aria-label="بحث في المحادثات"
             onChange={(e) => setSearch(e.target.value)}
@@ -1090,7 +1093,8 @@ function InboxScreen() {
                           <span>{fmt.clock(m.createdAt)}</span>
                           {m.direction === 'out' && m.status && (
                             <span className={m.status === 'failed' ? 'ibx-bad' : undefined}>
-                              {DELIVERY[m.status] ?? m.status}
+                              <span aria-hidden="true">{DELIVERY[m.status]?.mark ?? m.status}</span>
+                              <span className="sr">{DELIVERY[m.status]?.say ?? m.status}</span>
                             </span>
                           )}
                           {/* سببُ الفشل كان مجلوباً ولا يُعرض: «فشلت» بلا سبب */}

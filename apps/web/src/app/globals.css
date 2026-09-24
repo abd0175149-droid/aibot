@@ -369,3 +369,34 @@ tbody tr.clk { cursor: pointer; } tbody tr.clk:hover { background: var(--surface
 
 .toast { position: fixed; inset-block-end: 20px; inset-inline-start: 50%; transform: translateX(50%); background: var(--ink); color: var(--bg); padding: 10px 20px; border-radius: 20px; font-size: 12.5px; box-shadow: var(--shadow); z-index: 60; max-width: 88vw; text-align: center; }
 .err { color: var(--crit); font-size: 12.5px; margin-bottom: 12px; }
+
+/* ★ نصٌّ للقارئ الصوتيّ وحده.
+   العطلُ الذي وُلد منه: علامات التسليم «✓» و«✓✓» تُقرآن «علامة صح» و«علامة
+   صح علامة صح» — أي لا شيء. والفرقُ بين «وصلت الخادم» و«وصلت الزبون» هو
+   الفرقُ الذي يقرّر إن كان على الموظّف أن يتصرّف.
+   و`clip-path` لا `display:none`: الثانية تُخرجه من شجرة القراءة أيضاً. */
+.sr {
+  position: absolute; width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden; white-space: nowrap;
+  clip-path: inset(50%);
+}
+
+/* ══════════════ صفحتا الخطأ — ما بين الشاشات ══════════════
+   ★ كانتا صفحتَي Next الافتراضيّتين: إنجليزيّتان، من اليسار إلى اليمين،
+     بخطٍّ غير خطّ المنتج، وبلا رابطٍ يُخرج منهما. وهما أوّلُ ما يراه المستخدم
+     حين يُخطئ — فيقرأ أنّ ما بين يديه غيرُ مكتمل، ويبقى عالقاً في التطبيق
+     المثبَّت حيث لا شريطَ عنوانٍ ولا زرَّ رجوع. */
+.oops {
+  min-height: 100dvh; display: grid; align-content: center; justify-items: center;
+  gap: 14px; padding: 32px 16px; text-align: center; background: var(--bg);
+}
+.oops-k {
+  font-size: 44px; font-weight: 800; line-height: 1;
+  color: var(--rule-strong); margin: 0;
+}
+.oops h1 { margin: 0; font-size: var(--t-h1, 26px); text-wrap: balance; }
+.oops-b { margin: 0; max-width: 46ch; color: var(--muted); line-height: 1.8; }
+.oops-d { margin: 0; color: var(--muted); font-size: var(--t-label); }
+.oops-d code { direction: ltr; unicode-bidi: isolate; }
+.oops-a { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-block-start: 6px; }

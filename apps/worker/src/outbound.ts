@@ -246,7 +246,12 @@ async function sendOutboundInner(job: SendJob): Promise<{ messageId: string; ext
         source: job.source === 'bot' ? 'bot' : job.source === 'agent' ? 'agent' : 'system',
         type: msg.kind === 'choices' ? 'interactive' : msg.kind,
         body: 'body' in msg ? msg.body : null,
-        payload: msg,
+        /* ★ الحمولةُ المبثوثة **مبنيّةٌ صراحةً** لا نيّةُ الإرسال كما هي.
+           كانت `payload: msg` — أي كائنُ `OutboundMessage` بحقوله الخاصّة
+           بالإرسال (`kind`، `url`، `lat`…) — والشاشةُ تقرأ منه `options`
+           وحدها. فما يُبثّ غيرُ ما يُقرأ، وكلُّ حقلٍ يُضاف للإرسال يعبر
+           إلى الشاشة بلا أن يعرف أحد. والعقدُ المنمَّط أظهر ذلك. */
+        payload: msg.kind === 'choices' ? { options: msg.options } : null,
         status: 'sent',
         createdAt: new Date().toISOString(),
       },

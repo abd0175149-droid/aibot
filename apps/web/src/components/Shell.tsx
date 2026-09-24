@@ -65,13 +65,8 @@ export function Shell({
     setMore(false);
   }, [path]);
 
-  /* Escape يُغلق: حوارٌ `aria-modal` بلا مخرجٍ من لوحة المفاتيح مصيدة. */
-  useEffect(() => {
-    if (!more) return undefined;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setMore(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [more]);
+  /* ★ مفتاحُ الهروب وإدارةُ التركيز داخل `Sheet` — وهذه كانت النسخةَ الأولى
+     من قاعدةٍ نسختها شاشتان ونسيتها ثلاث. */
 
   useEffect(() => {
     if (loading) return;
@@ -194,9 +189,20 @@ export function Shell({
             التطبيق أصلاً، فلا يُقرأ مرّتين. ودونه 1100 يُخفى بالعرض. */}
         <span className="side-mark" aria-hidden="true">AiBot</span>
 
-        {primary.map((n) => (
+        {/* ★ **الفائضُ يُرسَم في الرصيف ويُخفى بالعرض — لا يُقصّ من الشجرة.**
+            كان الحسابُ على طول القائمة وحده، فخمسٌ من تسع وجهاتٍ تختفي خلف
+            «المزيد» **على الحاسوب أيضاً** — حيث الرصيفُ عمودٌ جانبيٌّ فيه
+            متّسعٌ لتسعٍ وأكثر. فالوصول إلى التقارير والفريق والاستهلاك صار
+            نقرتين وحواراً يغطّي الشاشة، ولا بندَ نشطاً ظاهراً حين تكون
+            الشاشةُ الحاليّة خلف المِصرف.
+            و`navi-x` صنفٌ يُخفيه دون ١١٠٠ ويُظهره فوقها — **بالـCSS وحده**،
+            فلا `matchMedia` ولا `innerWidth` في هذا الملفّ (والحارسُ القائم
+            يمنع ذلك، ومعه سببُه: تفريعُ JS على العرض يُنتج شجرتَين تتباعدان
+            ويكسر التصيير على الخادم). */}
+        {visible.map((n, i) => (
           <Link
-            key={n.href} href={n.href} className="navi"
+            key={n.href} href={n.href}
+            className={`navi${i >= primary.length ? ' navi-x' : ''}`}
             aria-current={n.href === activeHref ? 'page' : undefined}
           >
             <span className="navi-i">
@@ -209,6 +215,8 @@ export function Shell({
 
         <span className="side-sep" aria-hidden="true" />
 
+        {/* والمِصرفُ نفسُه يُخفى فوق ١١٠٠ إن لم يبقَ خلفه إلّا ما ظهر —
+            ويبقى إن كان يحمل الحساب. */}
         <button
           type="button" className="navi navi-more"
           aria-haspopup="dialog" aria-expanded={more}
@@ -228,8 +236,11 @@ export function Shell({
       {/* ══════ مِصرفُ «المزيد»: ورقةٌ صاعدة — وعلى الفأرة فوق 1100 تصير
           حواراً مركزيّاً (نفس العقدة بهيئةٍ أخرى، `components.css`). ══════ */}
       <Sheet open={more} title="المزيد" onClose={() => setMore(false)}>
+        {/* ★ `opts-x`: فوق ١١٠٠ صارت هذه الوجهاتُ ظاهرةً في الرصيف نفسِه،
+            فبقاؤها هنا تكرارٌ يسمعه قارئُ الشاشة مرّتين. و`display: none`
+            تُخرجها من شجرة القراءة — بخلاف `visibility` أو الإزاحة. */}
         {rest.length > 0 && (
-          <div className="opts">
+          <div className="opts opts-x">
             {rest.map((n) => (
               <Link
                 key={n.href} href={n.href} className="opt"

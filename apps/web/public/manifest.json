@@ -1,11 +1,24 @@
 {
-  "name": "AiBot",
+  "name": "AiBot — بوت واتساب وإنستجرام لنشاطك",
   "short_name": "AiBot",
   "start_url": "/app",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f1f3f2",
-  "theme_color": "#00998a",
+  "orientation": "portrait",
+  "background_color": "#e7ebe8",
+  "theme_color": "#141b1a",
   "lang": "ar",
   "dir": "rtl",
-  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "categories": [
+    "business",
+    "productivity"
+  ],
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
 }

@@ -131,7 +131,10 @@ export async function registerConsole(app: FastifyInstance) {
           action: 'tenant.create', entity: 'tenant', entityId: tenant!.id, ip: req.ip,
         });
 
-        emitToPlatform('tenant:update', tenant);
+        /* ★ `tenant!` في السطور أعلاه، والبثُّ بلا `!` — فكان يمرّر
+           `undefined` إلى الغرفة لو لم يُدرَج الصفّ: حدثٌ بلا معرّف تقرؤه
+           لوحةُ المالك فتحدّث صفّاً لا وجودَ له. والعقدُ المنمَّط أمسكها. */
+        if (tenant) emitToPlatform('tenant:update', tenant);
         return {
           tenant,
           // كلمة المرور المؤقّتة تُعرض **مرّةً واحدة** ولا تُخزَّن نصّاً في أيّ مكان
@@ -217,6 +220,11 @@ export async function registerConsole(app: FastifyInstance) {
           ? { status: 'ack' as const }
           : { status: 'resolved' as const, resolvedAt: new Date(), resolvedBy: req.auth!.sub };
         const [row] = await tx.update(incidents).set(set).where(eq(incidents.id, req.params.id)).returning();
+        /* ★ حادثةٌ بمعرّفٍ لا وجودَ له تُصيب صفرَ صفوف، فيعود `undefined`.
+           وكان يُبثّ كما هو ويُردّ **جسماً فارغاً بـ200**: الشاشة تقول
+           «حُلَّت» ولا شيء حُلّ. والعقدُ المنمَّط أمسك البثّ، والحالةُ نفسُها
+           تستحقّ ٤٠٤ لا ٢٠٠. */
+        if (!row) throw new AppError(ErrorCode.VALIDATION, 'لا حادثةَ بهذا المعرّف', 404);
         emitToPlatform('incident:update', row);
         return row;
       });

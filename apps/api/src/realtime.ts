@@ -1,7 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { Server as SocketServer } from 'socket.io';
 import IORedis from 'ioredis';
-import { EVENT_CHANNEL, decodeEvent } from '@aibot/shared';
+import {
+  EVENT_CHANNEL, decodeEvent, type EventMap, type PlatformEventMap,
+} from '@aibot/shared';
 import { verifyAccess } from './auth.js';
 
 /**
@@ -85,11 +87,15 @@ export function attachRealtime(app: FastifyInstance): void {
  * الحمولة تحمل **الصفّ الجديد كاملاً** لا معرّفه.
  * يوفّر جولة ذهابٍ وإياب، ويُبقي الواجهة متّسقة عند تعدّد التبويبات.
  */
-export function emitToTenant(tenantId: string, event: string, payload: unknown): void {
+export function emitToTenant<K extends keyof EventMap>(
+  tenantId: string, event: K, payload: EventMap[K],
+): void {
   io?.to(`t:${tenantId}`).emit(event, payload);
 }
 
-export function emitToPlatform(event: string, payload: unknown): void {
+export function emitToPlatform<K extends keyof PlatformEventMap>(
+  event: K, payload: PlatformEventMap[K],
+): void {
   io?.to('platform').emit(event, payload);
 }
 

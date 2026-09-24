@@ -122,6 +122,15 @@
 .side-mark { display: none; }
 .side-sep { display: none; }
 
+/* ★ **الفائضُ مرسومٌ في الرصيف ومخفيٌّ بالعرض.**
+   كان يُقصّ من الشجرة بحسابٍ على طول القائمة وحده، فخمسٌ من تسع وجهاتٍ تختفي
+   خلف «المزيد» **على الحاسوب أيضاً** — حيث الرصيفُ عمودٌ جانبيٌّ فيه متّسعٌ
+   لتسعٍ وأكثر. والقرارُ هنا لا في JS: تفريعُ الشجرة على العرض يُنتج شجرتَين
+   تتباعدان ويكسر التصيير على الخادم.
+
+ ⚠️ والوزنُ مقصود: `.side .navi` تضبط `display: flex` بوزن (0,2,0)، فقاعدةٌ
+   بوزن (0,1,0) لا تُخفي شيئاً — تُرسَم الوجهاتُ التسعُ كلُّها في شريط الهاتف
+   بعناوينَ مقصوصة. (رُئي في التصيير قبل أن يُشحن.) */
 .side .navi {
   flex: 1 1 0; min-width: 0; min-height: 56px;
   display: flex; flex-direction: column;
@@ -132,6 +141,11 @@
   font-size: 11.5px; font-weight: 600; line-height: 1.25;
   text-align: center; text-decoration: none;
 }
+
+/* ⚠️ وموضعُها **بعد** `.side .navi` مقصود: الوزنُ نفسُه (0,2,0)، فالترتيبُ
+   هو الحاسم. وقبلها كانت `display: flex` تغلبها فتُرسَم الوجهاتُ التسعُ
+   كلُّها في شريط الهاتف بعناوينَ مقصوصة — رُئي في التصيير قبل أن يُشحن. */
+.side .navi-x { display: none; }
 .side .navi:hover { background: var(--surface-2); color: var(--ink); }
 .side .navi[aria-current='page'] {
   background: var(--surface-2); color: var(--ink); font-weight: 700;
@@ -274,6 +288,16 @@
     height: 1px; margin: 8px 6px; margin-block-start: auto;
     background: var(--rule);
   }
+  /* فوق ١١٠٠ يظهر الفائضُ في العمود، ويختفي المِصرفُ وفاصلُه معه:
+     لم يعد خلفه شيء، وزرٌّ يفتح ورقةً فارغةً وعدٌ كاذب.
+     و`:has()` غيرُ لازمة — البندُ المخفيُّ يظهر، والمِصرفُ يبقى للحساب
+     وحده حين يحمله (وهو يحمله دائماً في هذا الإطار). */
+  .side .navi-x { display: flex; }
+  /* ونسخةُ الورقة تختفي: الوجهاتُ ظاهرةٌ في الرصيف، وتكرارُها يُسمَع مرّتين. */
+  .opts-x { display: none; }
+  /* وشارةُ المِصرف كذلك: عددٌ يجمع ما صار ظاهراً بجانبه مباشرةً يُربك. */
+  .side .navi-more .bdg { display: none; }
+
   .side .navi {
     flex: 0 0 auto; flex-direction: row; justify-content: flex-start;
     min-height: 46px; gap: 13px; padding-inline: 14px;

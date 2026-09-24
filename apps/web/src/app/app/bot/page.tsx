@@ -455,13 +455,10 @@ export default function BotPage() {
     }
   }, [vers.data, pendingVersion, bot, kb]);
 
-  /* حوارٌ `aria-modal` بلا مخرجٍ من لوحة المفاتيح مصيدة. */
-  useEffect(() => {
-    if (!ask) return undefined;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setAsk(null); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [ask]);
+  /* ★ مفتاحُ الهروب صار داخل `Sheet` نفسِها (`ui/index.tsx`) ومعه نقلُ
+     التركيز وحبسُه وإرجاعُه. وكان مكتوباً هنا وفي شاشتَين أُخريَين ومنسيّاً
+     في الباقية: قاعدةٌ كتبها تعليقٌ في الإطار ثمّ تُركت لكلّ شاشةٍ تُعيد
+     كتابتها — فاختلف سلوكُ الأوراق في المنتج الواحد. */
 
   /**
    * ★ الهيكلُ للتحميل **الأوّل** وحده، والخطأُ الكاملُ حين لا بيانات.

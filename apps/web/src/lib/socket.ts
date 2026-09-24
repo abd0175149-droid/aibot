@@ -4,6 +4,7 @@ import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { io, type Socket } from 'socket.io-client';
 import { getToken, bootstrap } from './api';
 import { useSession } from './session';
+import type { EventMap } from '@aibot/shared';
 
 let socket: Socket | null = null;
 
@@ -74,7 +75,14 @@ function ensure(): Socket | null {
   return socket;
 }
 
-export function useSocket(handlers: Record<string, (payload: any) => void>): void {
+/**
+ * ★ المعالِجاتُ مقيَّدةٌ بـ`EventMap`: اسمٌ خارج العقد لا يُترجَم، وحمولةٌ
+ *   بحقلٍ غير موجودٍ لا تُترجَم. وكان النوعُ `Record<string, (p: any)=>void>` —
+ *   أي أنّ حرفاً واحداً في الاسم يُسكت التحديثَ اللحظيَّ بصمت.
+ */
+export type SocketHandlers = { [K in keyof EventMap]?: (payload: EventMap[K]) => void };
+
+export function useSocket(handlers: SocketHandlers): void {
   const { me } = useSession();
   const ref = useRef(handlers);
   ref.current = handlers;
@@ -84,9 +92,9 @@ export function useSocket(handlers: Record<string, (payload: any) => void>): voi
     const s = ensure();
     if (!s) return;
 
-    const names = Object.keys(ref.current);
+    const names = Object.keys(ref.current) as Array<keyof EventMap>;
     const bound = names.map((n) => {
-      const fn = (p: unknown) => ref.current[n]?.(p);
+      const fn = (p: unknown) => (ref.current[n] as ((x: unknown) => void) | undefined)?.(p);
       s.on(n, fn);
       return [n, fn] as const;
     });

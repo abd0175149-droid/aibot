@@ -22,6 +22,76 @@
 /** قناةُ ريدِس الوحيدة. الاسم ثابتٌ في العمليّتين. */
 export const EVENT_CHANNEL = 'aibot:events';
 
+/**
+ * ★ **عقدُ الأحداث — والجسرُ كان بلا نوعٍ عبر العمليّات الثلاث.**
+ *
+ *   العامل يبثّ اسماً **حرفيّاً** وحمولةً مبنيّةً بيده، والـAPI يعيد البثّ
+ *   كما هو، والشاشةُ تستقبل `any` وتفترض شكلاً. لا شيءَ يربط الثلاثة — فحرفٌ
+ *   واحدٌ في اسمٍ، أو حقلٌ يُعاد تسميتُه، يُعيد العطلَ الأصليَّ بعينه: حدثٌ
+ *   يُستمع له ولا يبثّه أحد. والشاشةُ تعود إلى «حدّث الصفحة لتعرف إن راسلك
+ *   أحد» ولا يشكو أيُّ اختبار.
+ *
+ *   و`EventMap` تُلزم الثلاثة بالاسم **والحمولة** معاً: اسمٌ خارجها لا
+ *   يُترجم، وحقلٌ ناقصٌ لا يُترجم. والحارسُ هو `tsc` نفسُه لا اختبارٌ يُنسى.
+ */
+/**
+ * حمولةُ الرسالة — **شكلٌ واحدٌ يكتبه العاملُ ويقرؤه الحوار.**
+ * وكان `unknown` في البثّ و«شكلاً مفترَضاً» في الشاشة: إضافةُ حقلٍ في طرفٍ
+ * لا تصل الآخر، فتُرسَم رسالةٌ ناقصةٌ بلا أن يشكو شيء.
+ */
+export interface MessagePayload {
+  options?: Array<{ id: string; title: string }>;
+  buttonPayload?: string | null;
+  mediaId?: string | null;
+  location?: { lat: number; lng: number; name: string | null; address: string | null } | null;
+}
+
+export interface MessageDTO {
+  id: string;
+  direction: 'in' | 'out';
+  source: string;
+  type: string;
+  body: string | null;
+  payload: MessagePayload | null;
+  status: string | null;
+  createdAt: string;
+  errorMessage?: string | null;
+}
+
+export interface EventMap {
+  'message:new': { conversationId: string; message: MessageDTO };
+  'message:status': {
+    conversationId: string;
+    id: string;
+    status: string;
+    /** رمزُ خطأ المزوّد — يُبثّ ولا تعرضه الشاشة، ويُقرأ في التشخيص. */
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  };
+  /** تحديثُ صفٍّ في القائمة. من الـAPI يحمل الصفَّ كاملاً، ومن العامل معرّفَه. */
+  'conversation:update': { id: string; [k: string]: unknown };
+}
+
+/** أحداثُ غرفة المنصّة — قرّاؤها لوحةُ المالك وحدها. */
+export interface PlatformEventMap {
+  'tenant:update': { id: string; [k: string]: unknown };
+  'incident:update': { id: string; [k: string]: unknown };
+}
+
+export type EventName = keyof EventMap;
+export type PlatformEventName = keyof PlatformEventMap;
+
+/** الأسماءُ في وقت التشغيل — يقرؤها `decodeEvent` فيرفض ما ليس منها. */
+export const EVENT_NAMES = [
+  'message:new', 'message:status', 'conversation:update',
+] as const satisfies readonly EventName[];
+
+export const PLATFORM_EVENT_NAMES = [
+  'tenant:update', 'incident:update',
+] as const satisfies readonly PlatformEventName[];
+
+const KNOWN = new Set<string>([...EVENT_NAMES, ...PLATFORM_EVENT_NAMES]);
+
 export interface TenantEvent {
   tenantId: string;
   event: string;
@@ -41,6 +111,11 @@ export function decodeEvent(raw: string): TenantEvent | null {
     const v = JSON.parse(raw) as Partial<TenantEvent>;
     if (typeof v.tenantId !== 'string' || !v.tenantId) return null;
     if (typeof v.event !== 'string' || !v.event) return null;
+    /* ★ واسمٌ خارج العقد لا يُعاد بثّه. والسببُ ليس أماناً بل **وضوحاً**:
+       بلا هذا يمرّ اسمٌ مطبوعٌ خطأً إلى الشاشة بصمت، فيبدو أنّ البثّ يعمل
+       ولا أحدَ يستمع له — وهو بعينه الشكلُ الذي أخفى أنّ الإنبوكس لم يكن
+       حيّاً يوماً. وهنا يسقط عند الحدّ بدل أن يتسرّب. */
+    if (!KNOWN.has(v.event)) return null;
     return { tenantId: v.tenantId, event: v.event, payload: v.payload ?? null };
   } catch {
     return null;

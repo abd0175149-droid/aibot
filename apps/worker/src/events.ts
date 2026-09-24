@@ -1,5 +1,5 @@
 import IORedis from 'ioredis';
-import { EVENT_CHANNEL, encodeEvent } from '@aibot/shared';
+import { EVENT_CHANNEL, encodeEvent, type EventMap } from '@aibot/shared';
 
 /**
  * ناشر الأحداث اللحظيّة.
@@ -26,7 +26,14 @@ function conn(): IORedis | null {
   return pub;
 }
 
-export function emitToTenant(tenantId: string, event: string, payload: unknown): void {
+/**
+ * ★ الاسمُ والحمولةُ من `EventMap` لا نصّاً حرّاً.
+ *   اسمٌ مطبوعٌ خطأً، أو حقلٌ أُعيدت تسميتُه في طرفٍ دون الآخر، كان يُعيد
+ *   العطلَ الأصليَّ بعينه: حدثٌ يُستمع له ولا يبثّه أحد — بصمتٍ تامّ.
+ */
+export function emitToTenant<K extends keyof EventMap>(
+  tenantId: string, event: K, payload: EventMap[K],
+): void {
   const c = conn();
   if (!c) return;
   void c.publish(EVENT_CHANNEL, encodeEvent({ tenantId, event, payload })).catch(() => undefined);
