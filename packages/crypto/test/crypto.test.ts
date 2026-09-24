@@ -90,7 +90,7 @@ describe('مُنقِّي السجلّات', () => {
     for (const name of [
       'token', 'apiKey', 'secret', 'password', 'appSecret',
       'token_enc', 'app_secret_enc', 'key_enc',
-      'tempPassword', 'access', 'refresh', 'passwordHash', 'refreshHash', 'verifyToken',
+      'tempPassword', 'access', 'refresh', 'passwordHash', 'refreshHash', 'prevRefreshHash', 'verifyToken',
     ]) expect(REDACT_PATHS, name).toContain(`*.${name}`);
   });
 

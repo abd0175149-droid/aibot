@@ -41,6 +41,12 @@ export const sessions = pgTable('sessions', {
   id: uuid('id').primaryKey().default(uuid7),
   userId: uuid('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   refreshHash: text('refresh_hash').notNull(),
+  /** ★ تجزئةُ التوكن السابق بعد التدوير — نافذةُ سماحٍ لمتسابقٍ من تبويبٍ آخر.
+      وبلاها كان تبويبان يُجدّدان معاً يُسقطان المستخدم من الحساب: الخاسرُ
+      يُردّ ٤٠١ ومعه مسحُ الكوكي، والكوكي مشتركٌ فيسقط الفائزُ أيضاً. */
+  prevRefreshHash: text('prev_refresh_hash'),
+  /** لحظةُ آخر تدوير — حدُّ نافذة السماح، فلا يبقى السابقُ صالحاً للأبد. */
+  rotatedAt: timestamp('rotated_at', { withTimezone: true }),
   userAgent: text('user_agent'),
   ip: text('ip'),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),

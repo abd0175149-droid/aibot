@@ -107,9 +107,12 @@ function strength(pw: string): Grade {
 function PasswordForm() {
   const router = useRouter();
   const params = useSearchParams();
-  const { reload } = useSession();
-  /* ★ هذا هو المفتاح الذي يقلب الشاشةَ بوّابةً: يأتي من تحويل الدخول وحده. */
-  const first = params.get('first') === '1';
+  const { me, reload } = useSession();
+  /* ★ **البوّابةُ تُقرأ من حالة الحساب لا من شريط العنوان.**
+     كانت `?first=1` يضعها تحويلُ الدخول وحده، فحذفُ ستّة محارف من العنوان
+     يقلب الإلزامَ إلى لوحِ إعداداتٍ يُغلَق بزرّ. والمُعامِلُ يبقى مقبولاً
+     لأنّ تحويلَ الدخول ما زال يضعه، فلا ينكسر رابطٌ مفتوحٌ ساعةَ النشر. */
+  const first = Boolean(me?.user.mustChangePassword) || params.get('first') === '1';
 
   const [current, setCurrent] = useState('');
   const [next, setNext] = useState('');

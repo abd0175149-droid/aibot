@@ -142,5 +142,7 @@ export const REDACT_PATHS = [
   '*.refresh',
   '*.passwordHash',
   '*.refreshHash',
+  /* والتجزئةُ السابقة سرٌّ ثانٍ بنفس عمر الثلاثين يوماً — وُلد مع نافذة السماح. */
+  '*.prevRefreshHash',
   '*.verifyToken',
 ];

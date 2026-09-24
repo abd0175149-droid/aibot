@@ -94,30 +94,65 @@ export async function createSession(
 }
 
 /**
- * تدوير الـrefresh عند كلّ استعمال.
- * إبطال الجلسة يُفحص **هنا فقط** لا في كلّ طلب — الكلفة لا تستحقّها،
- * ونافذة الخطر 15 دقيقةً على الأكثر (عمر توكن الوصول).
+ * ★ **نافذةُ سماحٍ للتوكن السابق — وتبويبان كانا يُسقطان المستخدم من الحساب.**
+ *
+ *   الموظّف يفتح الإنبوكس وجهةَ اتّصالٍ في تبويبَين، وكلاهما يُجدّد حين ينتهي
+ *   توكنُ الوصول (ربعُ ساعة). فيصل الثاني بتوكنٍ صار سابقاً، ويُردّ ٤٠١
+ *   **ومعه مسحُ الكوكي** — والكوكي مشتركٌ بين التبويبات كلِّها، فيسقط التبويبُ
+ *   الأوّل الذي كان يعمل بنجاحٍ قبل ثانية. والمستخدم لم يفعل شيئاً إلّا أنّه
+ *   فتح شاشتين.
+ *
+ *   فنصفُ دقيقةٍ يبقى فيها السابقُ مقبولاً: الخاسرُ يأخذ توكنَ وصولٍ جديداً
+ *   ولا يلمس الكوكي (‏`refresh: null`). وثلاثون ثانيةً سقفٌ مقصود: هي مدى
+ *   تسابقٍ بين تبويبين، لا عمرُ توكنٍ مسروق.
  */
+export const REFRESH_GRACE_MS = 30_000;
+
 export async function rotateSession(
   refresh: string,
-): Promise<{ userId: string; sessionId: string; refresh: string } | null> {
+): Promise<{ userId: string; sessionId: string; refresh: string | null } | null> {
   const db = getDb();
   const hash = sha256(refresh);
-  // rls-exempt: sessions جدولٌ عامّ خارج RLS — مفتاحه user_id لا tenant_id
-  const rows = await db.select().from(sessions).where(and(
-    eq(sessions.refreshHash, hash),
-    isNull(sessions.revokedAt),
-    gt(sessions.expiresAt, new Date()),
-  )).limit(1);
-  const row = rows[0];
-  if (!row) return null;
-
   const next = randomBytes(32).toString('base64url');
+  const now = new Date();
+
+  /* ★ **عبارةٌ واحدةٌ لا قراءةٌ ثمّ كتابة.**
+     القراءةُ المنفصلة تسمح لمتسابقَين أن يمرّا معاً فيُصدر كلٌّ منهما توكناً
+     ويُخزَّن آخرُهما وحده — فيحمل كوكي أحدِهما توكناً لا يطابق شيئاً، ويسقط
+     في التجديد التالي. والعبارةُ الواحدة تُقفل الصفَّ فيفوز واحدٌ بيقين. */
   // rls-exempt: sessions جدولٌ عامّ خارج RLS — مفتاحه user_id لا tenant_id
-  await db.update(sessions)
-    .set({ refreshHash: sha256(next), expiresAt: new Date(Date.now() + REFRESH_TTL_SEC * 1000) })
-    .where(eq(sessions.id, row.id));
-  return { userId: row.userId, sessionId: row.id, refresh: next };
+  const won = await db.update(sessions)
+    .set({
+      refreshHash: sha256(next),
+      prevRefreshHash: hash,
+      rotatedAt: now,
+      expiresAt: new Date(now.getTime() + REFRESH_TTL_SEC * 1000),
+    })
+    .where(and(
+      eq(sessions.refreshHash, hash),
+      isNull(sessions.revokedAt),
+      gt(sessions.expiresAt, now),
+    ))
+    .returning({ id: sessions.id, userId: sessions.userId });
+
+  if (won[0]) return { userId: won[0].userId, sessionId: won[0].id, refresh: next };
+
+  /* ★ ولم يفز: فلعلّه المتسابقُ الخاسر. يُقبل توكنُه السابق نصفَ دقيقة،
+     ويُعطى وصولاً جديداً **بلا كوكي** — كوكي الفائز هو الصحيح، وترويسةٌ من
+     الخاسر تُصيبه بتوكنٍ ميّتٍ إن وصلت أخيراً. */
+  // rls-exempt: sessions جدولٌ عامّ خارج RLS — مفتاحه user_id لا tenant_id
+  const grace = await db.select({ id: sessions.id, userId: sessions.userId })
+    .from(sessions)
+    .where(and(
+      eq(sessions.prevRefreshHash, hash),
+      isNull(sessions.revokedAt),
+      gt(sessions.expiresAt, now),
+      gt(sessions.rotatedAt, new Date(now.getTime() - REFRESH_GRACE_MS)),
+    ))
+    .limit(1);
+
+  if (grace[0]) return { userId: grace[0].userId, sessionId: grace[0].id, refresh: null };
+  return null;
 }
 
 export async function revokeSession(sessionId: string): Promise<void> {
@@ -263,6 +298,8 @@ export async function registerAuth(app: FastifyInstance) {
     }
 
     const access = signAccess({ sub: user.id, tid: user.tenantId, role: user.role, sid: rotated.sessionId });
+    /* ★ الخاسرُ لا يُرسل كوكي — انظر `rotateSession`. */
+    if (rotated.refresh === null) return reply.send({ access });
     return reply.header('set-cookie', refreshCookie(rotated.refresh)).send({ access });
   });
 
@@ -345,7 +382,15 @@ export async function registerAuth(app: FastifyInstance) {
       return { user: u, tenant: t };
     });
     return {
-      user: { id: user.id, name: user.name, email: user.email, role: user.role },
+      /* ★ **بلا هذا الحقل كان الإلزامُ يعيش في ردّ الدخول وحده.**
+         استئنافُ الجلسة من كوكي التحديث يُعيد بطاقةً بلا علَم، فلا تملك
+         القشرةُ ما تحرس به. والبوّابةُ كانت مُعامِلاً في العنوان (`?first=1`)
+         يضعه تحويلُ الدخول وحده — فمن حذفه أو كتب `/app/inbox` بأصابعه مرّ،
+         وبقيت كلمةٌ **يعرفها من أنشأ الحساب** صالحةً إلى الأبد. */
+      user: {
+        id: user.id, name: user.name, email: user.email, role: user.role,
+        mustChangePassword: user.mustChangePassword,
+      },
       tenant: tenant && { id: tenant.id, name: tenant.name, status: tenant.status, capabilities: tenant.capabilities },
       permissions: PERMISSIONS[user.role],
       impersonating: req.auth!.imp ?? null,

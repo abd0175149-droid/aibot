@@ -77,7 +77,25 @@ export function Shell({
        والواجهة هي التي أخطأت بإبقائه هناك.
        وحين ينتحل عميلاً يصير له tenant فيُسمح له — ولذلك الشرط على
        وجود المستأجر لا على الدور. */
-    if (!me.tenant && path.startsWith('/app')) { router.replace('/console'); return; }
+    /* ★ **شاشةُ كلمة السرّ مستثناةٌ من التحويلَين معاً.**
+       هي تحت `/app` وصاحبُها قد يكون بلا مستأجرٍ فعلاً — صفُّ مالك المنصّة
+       بلا `tenant_id`. فالسطرُ الذي يحرس `/app` كان يقذفه منها إلى `/console`،
+       ولا `/console/password` هناك: من رُفع علَمُه بـ`ops/set-password` لم
+       يبقَ له طريقٌ إلى تغيير كلمته إطلاقاً، لا بالتحويل ولا بكتابة العنوان. */
+    const onPasswordGate = path === '/app/password';
+
+    /* ★ **والإلزامُ يُحرَس هنا لا في شريط العنوان.**
+       كان مُعامِلاً (`?first=1`) يضعه تحويلُ الدخول وحده، فحذفُه يُخرج من
+       الخطوة — وكذلك رابطٌ في الشريط خلف الحوار، وهو قابلٌ للوصول بالمفتاح
+       لأنّ الغطاء ستارةٌ بلا حبسِ تركيز.
+       والانتحالُ مستثنًى: توكنُه يُرفض على كلّ فعلٍ كاتب، فحبسُ جلسةِ انتحالٍ
+       هنا يُنتج شاشةً زرُّها الوحيد يردّ ٤٠٣ دائماً. */
+    if (me.user.mustChangePassword && !me.impersonating && !onPasswordGate) {
+      router.replace('/app/password');
+      return;
+    }
+
+    if (!me.tenant && path.startsWith('/app') && !onPasswordGate) { router.replace('/console'); return; }
     if (!me.permissions.console && path.startsWith('/console')) router.replace('/app');
   }, [loading, me, path, router]);
 

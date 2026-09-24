@@ -4,7 +4,12 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from '
 import { bootstrap, get } from './api';
 
 export interface Me {
-  user: { id: string; name: string; email: string; role: 'platform_owner' | 'tenant_owner' | 'tenant_agent' };
+  user: {
+    id: string; name: string; email: string;
+    role: 'platform_owner' | 'tenant_owner' | 'tenant_agent';
+    /** ★ كلمةٌ مؤقّتةٌ يعرفها من عيّنها — والقشرةُ تحبس صاحبَها في شاشة التغيير. */
+    mustChangePassword: boolean;
+  };
   tenant: { id: string; name: string; status: string; capabilities: Record<string, boolean> } | null;
   permissions: { write: boolean; settings: boolean; billing: boolean; console: boolean };
   impersonating: string | null;
