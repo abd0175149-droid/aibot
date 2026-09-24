@@ -6,8 +6,8 @@ import { getAdapter, type ChannelKind } from '@aibot/channels';
 import { open as decrypt } from '@aibot/crypto';
 import {
   assembleContext, runAgent, buildToolDeclarations, choicesMessage, decideKnowledgeMode,
-  estimateTokens, execHttpTool, FullKnowledge, buildRetrievalQuery,
-  type KnowledgeProvider, type KnowledgeChunk, type HttpToolSpec,
+  estimateTokens, execHttpTool, FullKnowledge, buildRetrievalQuery, hoursSnapshot,
+  type KnowledgeProvider, type KnowledgeChunk, type HttpToolSpec, type BusinessHours,
 } from '@aibot/core';
 import { getProvider, computeCost, DEFAULT_CHAT_MODEL, type ToolCall } from '@aibot/ai';
 import type {
@@ -61,9 +61,11 @@ const CH_LABEL: Record<string, string> = {
  *   هنا تصير **تكتب في بيانات عميلٍ من زرّ تجربة** — بلا أن يفشل شيء.
  */
 export const WRITES: Record<string, string> = {
-  handoff_to_human: 'في الحيّ تُوسَم المحادثة «تحتاج تدخّلك» ويتوقّف البوت عنها.',
-  escalate_complaint: 'في الحيّ تُوسَم المحادثة شكوًى وتُحوَّل لموظّف فوراً.',
-  collect_lead: 'في الحيّ يُحفظ الاسم على بطاقة الزبون ويُوسَم «مهتمّ».',
+  handoff_to_human: 'في الحيّ تُوسَم المحادثة «تحتاج تدخّلك»، ويُكتب سببُ التحويل ملاحظةً في الحوار.',
+  escalate_complaint: 'في الحيّ تُوسَم المحادثة شكوًى، وتُكتب خلاصتُها ومرجعُها ملاحظةً في الحوار.',
+  /* ★ كان النصّ «يُحفظ الاسم» — ووثّق الإسقاطَ نفسَه بدقّة: الهاتفُ والطلبُ
+     كانا يُرميان. فصار يصف ما يجري فعلاً بعد الإصلاح. */
+  collect_lead: 'في الحيّ تُحفظ بياناته (الاسم والهاتف وما يطلبه) على بطاقته، ويُوسَم «مهتمّ»، وتظهر ملاحظةٌ في الحوار.',
   save_note: 'في الحيّ تُضاف الملاحظة إلى بطاقة الزبون.',
   set_contact_attribute: 'في الحيّ تُكتب الخاصيّة على بطاقة الزبون.',
 };
@@ -523,8 +525,31 @@ async function dryTool(ctx: DryCtx): Promise<{
     );
   }
 
+  /* ★ **والساحةُ هي الموضعُ الذي يثبت فيه الخطأ.**
+     `{ open: true }` الثابتة كانت في الحيّ والساحة معاً. وفي الحيّ تسترها
+     بوّابةُ الدوام في `reply.ts` (خارجَ الدوام لا تُبلَغ حلقةُ الأدوات
+     أصلاً)، أمّا هنا فلا بوّابة: المالكُ الذي يجرّب بوته الثالثةَ فجراً في
+     يومِ عطلته يُقال له «مفتوح» — ويصدّق أنّ بوته سيقول ذلك لزبائنه. */
   if (name === 'check_business_hours') {
-    return done({ open: true, note: 'استعمل هذه النتيجة ولا تخترع ساعاتٍ أخرى.' }, { ran: true });
+    const cfg = (await ctx.tx.select({ bh: botConfigs.businessHours }).from(botConfigs)
+      .where(eq(botConfigs.tenantId, ctx.tenantId)).limit(1))[0];
+    const snap = hoursSnapshot((cfg?.bh ?? null) as BusinessHours | null);
+    return done(
+      {
+        open: snap.open,
+        configured: snap.configured,
+        todayHours: snap.today,
+        opensNext: snap.opensNext,
+        say: snap.say,
+        note: 'قل «say» كما هي. ولا تخترع ساعاتٍ غيرَ المذكورة هنا.',
+      },
+      {
+        ran: true,
+        note: snap.configured
+          ? 'قُرئت ساعاتُ دوامك المحفوظة — ونفسُها يقرؤها بوتك الحيّ.'
+          : 'لا ساعاتِ دوامٍ محفوظة، فالبوت لا يستطيع تأكيدَ وقت الفتح. اضبطها من تبويب السلوك.',
+      },
+    );
   }
 
   /* ③ بحثُ المعرفة — قراءةٌ خالصة، وأنفعُ ما يُرى في اللوح: بمفرداتٍ

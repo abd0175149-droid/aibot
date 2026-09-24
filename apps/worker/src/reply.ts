@@ -6,7 +6,8 @@ import {
 import { getAdapter, type ChannelKind } from '@aibot/channels';
 import {
   assembleContext, runAgent, buildToolDeclarations, choicesMessage, BUILTIN_TOOLS,
-  FullKnowledge, buildRetrievalQuery, PLATFORM_RULES, type KnowledgeProvider,
+  FullKnowledge, buildRetrievalQuery, PLATFORM_RULES, withinBusinessHours,
+  type KnowledgeProvider, type BusinessHours,
 } from '@aibot/core';
 import { getProvider, computeCost, DEFAULT_CHAT_MODEL, AiError, type ToolCall } from '@aibot/ai';
 import { mediaPlaceholder, type OutboundMessage } from '@aibot/shared';
@@ -611,11 +612,6 @@ async function safeSend(job: Parameters<typeof sendOutbound>[0]): Promise<void> 
 
 /* ───────────────────────── مساعدات ───────────────────────── */
 
-interface BusinessHours {
-  tz?: string;
-  days?: Record<string, Array<[string, string]>>;
-}
-
 /**
  * هل الإجراء المحفوظ غير صالحٍ للتنفيذ؟ ثلاثة فحوصٍ — والضغط وحده لا يكفي:
  *  ① يوجد إجراءٌ محفوظ  ② يطابق الزرّ المضغوط  ③ لم تنقضِ صلاحيّته.
@@ -636,22 +632,15 @@ export function isPendingStale(
   return pending.expiresAt ? new Date(pending.expiresAt) <= at : false;
 }
 
-export function withinBusinessHours(bh: BusinessHours | null, at = new Date()): boolean {
-  if (!bh?.days) return true;
-  const tz = bh.tz ?? 'Asia/Amman';
-  const fmt = new Intl.DateTimeFormat('en-GB', {
-    timeZone: tz, weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false,
-  }).formatToParts(at);
-  const day = fmt.find((p) => p.type === 'weekday')!.value.toLowerCase();
-  const hh = fmt.find((p) => p.type === 'hour')!.value;
-  const mm = fmt.find((p) => p.type === 'minute')!.value;
-  const cur = `${hh}:${mm}`;
-  const ranges = bh.days[day];
-  if (!ranges?.length) return false;
-  return ranges.some(([from, to]) =>
-    // نطاقٌ يعبر منتصف الليل: 12:00–00:00 تعني حتّى نهاية اليوم
-    to <= from ? cur >= from || cur < to : cur >= from && cur < to);
-}
+/**
+ * ★ مُعادةُ التصدير من `@aibot/core` — والنسخةُ كانت هنا وحدها.
+ *
+ *   والنقلُ ليس ترتيباً: أداةُ `check_business_hours` تحتاج نفسَ الحساب،
+ *   والساحةُ تحتاجه، والـAPI يتحقّق من نفس الشكل. وثلاثُ نسخٍ لقاعدةِ «متى
+ *   نحن مفتوحون» تعني بوتاً يقول شيئاً وشاشةً تقول غيرَه.
+ *   و`billing.test.ts` يستورد هذا الاسم من هنا، فيبقى مصدَّراً.
+ */
+export { withinBusinessHours };
 
 function nowIn(tz: string): string {
   return new Intl.DateTimeFormat('ar-JO', {
