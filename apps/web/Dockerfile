@@ -18,7 +18,11 @@ RUN pnpm --filter @aibot/web run build
 
 FROM node:22-alpine
 WORKDIR /app
-ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1
+# ★ `GIT_REV` يُعاد إعلانُه في طبقة التشغيل — و`ARG` في طبقة البناء لا يعبر.
+#   ومسارُ `/rev` يقرؤه **وقت التشغيل** (‏`force-dynamic`)، فبلا هذا يقول
+#   «unknown» فتُفشل بوّابةُ النشر نشراً سليماً — إنذارٌ كاذبٌ أسوأ من غيابها.
+ARG GIT_REV=unknown
+ENV NODE_ENV=production NEXT_TELEMETRY_DISABLED=1 GIT_REV=${GIT_REV}
 # standalone يحمل تبعيّاته معه — لا pnpm install في صورة التشغيل
 COPY --from=build /app/apps/web/.next/standalone ./
 COPY --from=build /app/apps/web/.next/static ./apps/web/.next/static
