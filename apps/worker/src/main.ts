@@ -1,3 +1,4 @@
+import { QUEUE } from '@aibot/shared';
 import { Worker } from 'bullmq';
 import IORedis from 'ioredis';
 import { closeDb } from '@aibot/db';
@@ -27,35 +28,35 @@ const log = (msg: string, extra?: unknown) =>
   console.log(JSON.stringify({ level: 'info', svc: 'worker', msg, ...(extra as object) }));
 
 const workers = [
-  new Worker('ch-inbound', async (job) => handleInbound(job.data), {
+  new Worker(QUEUE.inbound, async (job) => handleInbound(job.data), {
     connection,
     concurrency: 10,
   }),
-  new Worker('bot-reply', async (job) => handleReply(job.data), {
+  new Worker(QUEUE.reply, async (job) => handleReply(job.data), {
     connection,
     // تزامنٌ محدود: ردّان متوازيان في نفس المحادثة يتضاربان، والقفل
     // في BullMQ عبر jobId الثابت يمنع ذلك أصلاً.
     concurrency: 3,
   }),
-  new Worker('ch-outbound', async (job) => { await sendOutbound(job.data); }, {
+  new Worker(QUEUE.outbound, async (job) => { await sendOutbound(job.data); }, {
     connection,
     // حدّ معدّلٍ عامّ؛ الحدّ لكلّ مستأجر يُضاف بمجموعةِ معدّلٍ في المرحلة الرابعة
     concurrency: 5,
     limiter: { max: 10, duration: 1000 },
   }),
-  new Worker('kb-embed', async (job) => handleEmbed(job.data), {
+  new Worker(QUEUE.embed, async (job) => handleEmbed(job.data), {
     connection,
     concurrency: 1, // تضمينٌ واحدٌ في كلّ مرّة — تقدّمٌ مرئيّ لا سباق
   }),
-  new Worker('health-poll', async (job) => runHealthPoll(job.data), {
+  new Worker(QUEUE.health, async (job) => runHealthPoll(job.data), {
     connection,
     concurrency: 5,
   }),
-  new Worker('notify-push', async (job) => handleNotify(job.data), {
+  new Worker(QUEUE.notify, async (job) => handleNotify(job.data), {
     connection,
     concurrency: 5,
   }),
-  new Worker('kb-ingest', async (job) => handleIngest(job.data), {
+  new Worker(QUEUE.ingest, async (job) => handleIngest(job.data), {
     connection,
     concurrency: 2,
   }),
@@ -66,11 +67,11 @@ const workers = [
      (‏`waitUntilFinished`) فلا يُخزَّن أثرٌ ولا يُبثّ حدث.
      ومحاولةٌ واحدةٌ لا إعادة: نداءُ النموذج يُحاسَب، وإعادةُ محاولةٍ
      صامتةٌ تضاعف كلفةَ العميل على ضغطةٍ واحدة. */
-  new Worker('bot-dry', async (job) => runPlayground(job.data), {
+  new Worker(QUEUE.dry, async (job) => runPlayground(job.data), {
     connection,
     concurrency: 3,
   }),
-  new Worker('maintenance', async (job) => {
+  new Worker(QUEUE.maintenance, async (job) => {
     if (job.name === 'windows') {
       const n = await closeExpiredWindows();
       log('أُغلقت نوافذ منتهية', { n });
@@ -88,8 +89,8 @@ const workers = [
  */
 async function scheduleRepeatables(): Promise<void> {
   const { Queue } = await import('bullmq');
-  const health = new Queue('health-poll', { connection });
-  const maint = new Queue('maintenance', { connection });
+  const health = new Queue(QUEUE.health, { connection });
+  const maint = new Queue(QUEUE.maintenance, { connection });
 
   await health.add('poll', {}, {
     repeat: { every: 10 * 60 * 1000 }, jobId: 'health-poll', removeOnComplete: 10,
@@ -111,12 +112,33 @@ await scheduleRepeatables().catch((e) =>
 
 for (const w of workers) {
   w.on('completed', (job) => log('مهمّة تمّت', { queue: w.name, id: job.id }));
-  w.on('failed', (job, err) =>
+  w.on('failed', (job, err) => {
+    const finalAttempt = !job || (job.attemptsMade >= (job.opts?.attempts ?? 1));
     console.error(JSON.stringify({
       level: 'error', svc: 'worker', queue: w.name, id: job?.id,
-      attempts: job?.attemptsMade, msg: err?.message,
-    })),
-  );
+      tenantId: (job?.data as { tenantId?: string } | undefined)?.tenantId,
+      attempts: job?.attemptsMade, final: finalAttempt, msg: err?.message,
+    }));
+
+    /* ★ الفشل **النهائيّ** يُنتج حادثة — وكان يُكتب سطرَ سجلٍّ لا يقرؤه أحد.
+       ومهمّةُ `ch-inbound` الفاشلة نهائيّاً تعني **رسالةَ زبونٍ ضاعت**: ميتا
+       تلقّت 200 ولن تُعيد، والمجموعة الفاشلة تُقصّ عند 5000. فالحادثة هي
+       الأثر الوحيد الذي يبقى — وبدونها كان الفقد صامتاً تماماً. */
+    if (!finalAttempt) return;
+    const tenantId = (job?.data as { tenantId?: string } | undefined)?.tenantId;
+    void import('./incidents.js').then(({ raiseIncident }) => raiseIncident({
+      tenantId: tenantId ?? null,
+      kind: 'job_failed',
+      severity: w.name === 'ch-inbound' ? 'critical' : 'warn',
+      title: w.name === 'ch-inbound'
+        ? 'رسالةُ زبونٍ لم تُعالَج بعد كلّ المحاولات'
+        : `مهمّةٌ فشلت نهائيّاً في ${w.name}`,
+      detail: { queue: w.name, jobId: String(job?.id ?? ''), error: err?.message?.slice(0, 300) },
+      /* بصمةٌ بالطابور لا بالمهمّة: عشرُ رسائلَ ضاعت في انقطاعٍ واحد حادثةٌ
+         واحدة بعدّادٍ عشرة — لا عشرُ حوادثَ تُغرق الشاشة. */
+      causeKey: w.name,
+    })).catch(() => undefined);
+  });
 }
 
 /**

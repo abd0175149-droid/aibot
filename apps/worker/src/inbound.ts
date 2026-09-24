@@ -76,7 +76,7 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
 
       /* ④ النافذة: تُفتح أو تُمدَّد. ولا تُختم هنا —
          الختم عند أوّل صادرٍ داخلها، فرسالةٌ بلا ردٍّ لا تُفوتَر. */
-      await openOrExtendWindow(tx, job, conv.id, identity.contactId, caps.windowHours);
+      await openOrExtendWindow(tx, job, conv.id, identity.contactId, caps.windowHours, m.at);
 
       await tx
         .update(conversations)
@@ -244,6 +244,8 @@ async function openOrExtendWindow(
   conversationId: string,
   contactId: string,
   windowHours: number,
+  /** طابعُ رسالة الزبون كما أرسلته ميتا — لا لحظةُ معالجتنا لها. */
+  messageAt?: Date,
 ) {
   const open = await tx
     .select()
@@ -257,14 +259,34 @@ async function openOrExtendWindow(
   /* ⚠️ لا `sql` fragment في عمود timestamp: drizzle ينادي `.toISOString()`
      على القيمة فيرمي في وقت التشغيل («value.toISOString is not a function»).
      و`as never` كان يُخرس المدقّق فأخفى العطل حتّى أوّل رسالةٍ حقيقيّة. */
-  const expires = new Date(Date.now() + windowHours * 3600_000);
+  /* ★ النافذة تُحسب من **طابع الرسالة** لا من لحظة المعالجة.
+     نافذةُ ميتا تبدأ من طابع رسالة الزبون، والكود كان يبدأها من `Date.now()`.
+     في الحالة العاديّة الفرقُ ثوانٍ، لكن بعد انقطاعٍ طويل تعيد ميتا تسليم
+     الويبهوكات المتأخّرة فتُفتح نافذةٌ محلّيّةٌ أطولُ من الحقيقيّة بساعات:
+     الموظّف يرى «مفتوحة» فيرسل، وميتا ترفض بـ131047. */
+  const at = messageAt ?? new Date();
+  const expires = new Date(at.getTime() + windowHours * 3600_000);
 
   if (open[0]) {
+    /* ★ ونافذةٌ **انتهت ولم تُغلق بعد** لا تُمدَّد — تُغلق وتُفتح جديدة.
+       الإغلاق يجري بمهمّةٍ كلّ عشر دقائق، و`openOrExtendWindow` كانت تعتبر
+       أيّ صفٍّ بلا `closed_at` نافذةً حيّةً وتمدّده. فرسالةٌ تصل في تلك
+       الفجوة تُمدّد نافذةً مختومةً أصلاً: `billed_at` موجودٌ فلا فحصَ سقفٍ
+       ولا ختمٌ جديد، والنافذةُ الجديدة لا تُحتسب لا في السقف ولا في التقرير.
+       وقد ثبت هذا الشكل على الخادم: ما بين الانتهاء والدورة التالية ضائع. */
+    const cur = open[0];
+    if (new Date(cur.expiresAt).getTime() > at.getTime()) {
+      await tx
+        .update(conversationWindows)
+        .set({ expiresAt: expires, messagesIn: sql`${conversationWindows.messagesIn} + 1` })
+        .where(eq(conversationWindows.id, cur.id));
+      return;
+    }
     await tx
       .update(conversationWindows)
-      .set({ expiresAt: expires, messagesIn: sql`${conversationWindows.messagesIn} + 1` })
-      .where(eq(conversationWindows.id, open[0].id));
-    return;
+      .set({ closedAt: cur.expiresAt })
+      .where(eq(conversationWindows.id, cur.id));
+    // ثمّ تُفتح جديدةٌ أدناه — والقيد الفريد يضمن ألّا تتزاحم اثنتان
   }
 
   await tx

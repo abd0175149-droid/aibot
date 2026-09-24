@@ -87,8 +87,13 @@ export async function registerWebhooks(app: FastifyInstance) {
    *  ③ المعالجة خارج دورة الطلب: تُكتب في الطابور ثمّ يُردّ.
    *     رسالةٌ تُعالَج داخل الطلب تضيع مع أوّل إعادة تشغيل.
    */
-  const handle = async (req: FastifyRequest, kind: ChannelKind, publicId?: string) => {
-    const raw = rawOf(req, publicId);
+  /**
+   * ★ حمولةٌ واحدةٌ قد تحمل حسابات عدّة — فتُجزَّأ قبل حلّ المستأجر.
+   *   والتوقيع يُتحقَّق منه على **البايتات كما وصلت** مرّةً واحدةً قبل التجزئة:
+   *   الأجزاء مُصنَّعةٌ عندنا فلا توقيعَ لها، وتوقيعُ الأصل يغطّيها كلَّها.
+   */
+  const handleOne = async (req: FastifyRequest, kind: ChannelKind, body: unknown, publicId?: string) => {
+    const raw = { ...rawOf(req, publicId), body };
     const found = await resolveTenantChannel(kind, raw);
     if (!found) {
       // التمييز مقصود: مستأجرٌ موجود بلا قناةٍ موصولة ≠ معرّفٌ مجهول.
@@ -107,7 +112,7 @@ export async function registerWebhooks(app: FastifyInstance) {
       return;
     }
 
-    const parsed = adapter.parseWebhook(req.body);
+    const parsed = adapter.parseWebhook(body);
     const { enqueueInbound } = await import('./queues.js');
     await enqueueInbound({
       tenantId: found.tenantId,
@@ -115,6 +120,20 @@ export async function registerWebhooks(app: FastifyInstance) {
       kind,
       parsed,
     });
+  };
+
+  const handle = async (req: FastifyRequest, kind: ChannelKind, publicId?: string) => {
+    const adapter = getAdapter(kind);
+    const parts = adapter.splitByAccount?.(req.body) ?? [req.body];
+    if (parts.length > 1) {
+      req.log.info({ kind, accounts: parts.length }, 'حمولةٌ تحمل حساباتٍ عدّة — تُجزَّأ لكلّ مستأجر');
+    }
+    for (const part of parts) {
+      /* جزءٌ يفشل لا يُسقط البقيّة: كلٌّ منها رسائلُ مستأجرٍ مختلف. */
+      await handleOne(req, kind, part, publicId).catch((e) => {
+        req.log.error({ err: e, kind }, 'فشل جزءٌ من حمولة الويبهوك');
+      });
+    }
   };
 
   app.post<{ Params: { channel: string; publicId: string } }>(

@@ -130,18 +130,115 @@ export async function registerInbox(app: FastifyInstance) {
         );
       }
 
+      const message = parsed.data.text
+        ? { kind: 'text' as const, body: parsed.data.text }
+        : { kind: 'choices' as const, body: parsed.data.choices!.body, options: parsed.data.choices!.options };
+
+      /* ★ الرسالة تُحجز صفّاً **قبل** الطابور بحالة `queued`.
+         كان المسار يدفع المهمّة ويعيد 202، والصفُّ لا يُدرَج إلّا بعد نجاح
+         الإرسال. ففشلُ الإرسال — توكنٌ باطل، نافذةٌ أُغلقت بين الفحصَين،
+         رفضٌ من ميتا — يترك المحادثةَ بلا أثرٍ إطلاقاً: لا فقاعة ولا حالة ولا
+         حادثة، والواجهةُ قد أعلنت «وصل ردّك». الموظّف يظنّ أنّه ردّ والزبون
+         ينتظر، ولا أحد يعلم.
+         والصفُّ المحجوز يُصلح الاتّجاهين: الفقاعة تظهر فوراً بحالة «قيد
+         الإرسال»، وتصير `sent` أو `failed` برسالةٍ بشريّةٍ في مكانها. */
+      const row = await withTenant(getDb(), tenantId, async (tx) => {
+        const conv = (await tx.select({ channelId: conversations.channelId }).from(conversations)
+          .where(eq(conversations.id, req.params.id)).limit(1))[0];
+        if (!conv) throw new AppError(ErrorCode.VALIDATION, 'لا محادثةَ بهذا المعرّف', 404);
+        const [m] = await tx.insert(messages).values({
+          tenantId,
+          conversationId: req.params.id,
+          channelId: conv.channelId,
+          direction: 'out',
+          source: 'agent',
+          type: message.kind === 'choices' ? 'interactive' : 'text',
+          body: 'body' in message ? message.body : null,
+          payload: message as object,
+          status: 'queued',
+          userId: req.auth!.sub,
+        }).returning({ id: messages.id, createdAt: messages.createdAt });
+        return m!;
+      });
+
+      /* البثّ فوراً: الفقاعة تظهر عند كلّ من يشاهد المحادثة — بما فيهم من
+         أرسلها على جهازٍ آخر — قبل أن يُعرف مصيرُها. */
+      emitToTenant(tenantId, 'message:new', {
+        conversationId: req.params.id,
+        message: {
+          id: row.id,
+          direction: 'out',
+          source: 'agent',
+          type: message.kind === 'choices' ? 'interactive' : 'text',
+          body: 'body' in message ? message.body : null,
+          payload: message,
+          status: 'queued',
+          createdAt: row.createdAt?.toISOString() ?? new Date().toISOString(),
+        },
+      });
+
       await enqueueOutbound({
         tenantId,
         conversationId: req.params.id,
         source: 'agent',
         userId: req.auth!.sub,
         idempotencyKey: key,
-        message: parsed.data.text
-          ? { kind: 'text', body: parsed.data.text }
-          : { kind: 'choices', body: parsed.data.choices!.body, options: parsed.data.choices!.options },
+        messageId: row.id,
+        message,
       });
 
-      return reply.code(202).send({ queued: true });
+      return reply.code(202).send({ queued: true, messageId: row.id });
+    },
+  );
+
+  /**
+   * ★ إعادةُ محاولةِ رسالةٍ فشل إرسالها.
+   *
+   *   بلا هذا يكون «لم تصل» طريقاً مسدوداً: يكتب الموظّف الرسالة من جديد
+   *   بمفتاح تكرارٍ جديد، فإن كان العطل عابراً وصلت الرسالتان معاً. وإعادةُ
+   *   المحاولة على **الصفّ نفسه** تُنهي الاثنين: لا نسخةَ ثانية، والأثرُ
+   *   يبقى واحداً في الحوار.
+   */
+  app.post<{ Params: { id: string; messageId: string } }>(
+    '/conversations/:id/messages/:messageId/retry',
+    { preHandler: requireAuth() },
+    async (req, reply) => {
+      const tenantId = tenantOf(req);
+      if (!isUuid(req.params.messageId)) {
+        throw new AppError(ErrorCode.VALIDATION, 'لا رسالةَ بهذا المعرّف', 404);
+      }
+
+      const row = await withTenant(getDb(), tenantId, async (tx) => {
+        const [m] = await tx.update(messages)
+          .set({ status: 'queued', errorMessage: null })
+          .where(and(
+            eq(messages.id, req.params.messageId),
+            eq(messages.conversationId, req.params.id),
+            eq(messages.direction, 'out'),
+            eq(messages.status, 'failed'),
+          ))
+          .returning({ id: messages.id, payload: messages.payload, source: messages.source });
+        return m;
+      });
+
+      // صفرُ صفوفٍ لا يُبلَّغ عنه نجاحاً — ولا تُعاد رسالةٌ وصلت أصلاً
+      if (!row) {
+        throw new AppError(ErrorCode.VALIDATION, 'لا رسالةَ فاشلةٌ بهذا المعرّف في هذه المحادثة', 404);
+      }
+
+      emitToTenant(tenantId, 'message:status', {
+        conversationId: req.params.id, id: row.id, status: 'queued', errorMessage: null,
+      });
+
+      await enqueueOutbound({
+        tenantId,
+        conversationId: req.params.id,
+        source: row.source === 'agent' ? 'agent' : row.source === 'system' ? 'system' : 'bot',
+        userId: req.auth!.sub,
+        messageId: row.id,
+        message: row.payload,
+      });
+      return reply.code(202).send({ queued: true, messageId: row.id });
     },
   );
 

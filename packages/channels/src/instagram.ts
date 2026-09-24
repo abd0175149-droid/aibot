@@ -51,6 +51,17 @@ export class InstagramAdapter implements ChannelAdapter {
     return id ? { by: 'account', externalId: String(id) } : null;
   }
 
+  /**
+   * ★ كلُّ `entry` حسابٌ مستقلّ — فيُجزَّأ قبل حلّ المستأجر.
+   *   و`resolveKey` يبقى على `entry[0]` عن قصد: بعد التجزئة لا يكون في
+   *   الحمولة إلّا حسابٌ واحد، فالأوّل هو الوحيد.
+   */
+  splitByAccount(body: unknown): unknown[] {
+    const entries = (body as any)?.entry;
+    if (!Array.isArray(entries) || entries.length <= 1) return [body];
+    return entries.map((e) => ({ ...(body as object), entry: [e] }));
+  }
+
   /** نفس الترويسة ونفس الخوارزميّة — لكنّ السرّ سرُّ **تطبيق المنصّة**. */
   verifySignature(rawBody: Buffer, header: string | undefined, appSecret: string): boolean {
     if (!header || !appSecret) return false;

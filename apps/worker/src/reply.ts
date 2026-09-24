@@ -11,7 +11,7 @@ import {
 } from '@aibot/core';
 import { getProvider, computeCost, DEFAULT_CHAT_MODEL, AiError, type ToolCall } from '@aibot/ai';
 import type { OutboundMessage } from '@aibot/shared';
-import { sendOutbound, WindowClosedError, QuotaExceededError } from './outbound.js';
+import { sendOutbound, checkQuota, WindowClosedError, QuotaExceededError } from './outbound.js';
 import { RagKnowledge } from './retrieval.js';
 import { execTenantTool } from './tools.js';
 import { raiseIncident, resolveOpenOfKinds } from './incidents.js';
@@ -38,6 +38,38 @@ export async function handleReply(job: { conversationId: string }): Promise<void
     .limit(1));
   if (!head[0]) return;
   const tenantId = head[0].conv.tenantId;
+
+  /* ★ **الاستئناف قبل التخطيط** — وهو ما يجعل هذه المهمّة محتمِلةً لإعادة
+     المحاولة. كانت `handleReply` تُودع آثاراً جانبيّةً باهظة (نداءُ نموذجٍ
+     مدفوع · أدواتُ HTTP نُفِّذت فعلاً · `pendingAction` مُسح) ثمّ تُرسل. فأيّ
+     فشلِ إرسالٍ يُعيد المهمّة **من الصفر**: نداءٌ ثانٍ يُحاسَب، ورسائلُ نجحت
+     تُرسل مرّةً ثانية، وفي فرع التأكيد يُقرأ الزرّ ثانيةً و`pendingAction`
+     فارغٌ فيُقال لزبونٍ سُجِّل حجزُه «انتهت صلاحيّة هذا الطلب».
+     والصفوف المحجوزة (`queued`) هي ذاكرةُ ما خُطِّط ولم يُسلَّم: وجودُها يعني
+     أنّ التخطيط تمّ وأُودع، فلا يُعاد — يُستأنف التسليم وحده. */
+  const pending = await withTenant(db, tenantId, (tx) => tx
+    .select({ id: messages.id, payload: messages.payload, aiRunId: messages.aiRunId, source: messages.source })
+    .from(messages)
+    .where(and(
+      eq(messages.conversationId, job.conversationId),
+      eq(messages.direction, 'out'),
+      eq(messages.status, 'queued'),
+    ))
+    .orderBy(messages.createdAt));
+
+  if (pending.length) {
+    for (const m of pending) {
+      await safeSend({
+        tenantId,
+        conversationId: job.conversationId,
+        source: m.source === 'agent' ? 'agent' : m.source === 'system' ? 'system' : 'bot',
+        message: m.payload as OutboundMessage,
+        aiRunId: m.aiRunId ?? undefined,
+        messageId: m.id,
+      });
+    }
+    return;
+  }
 
   /**
    * ★ المعاملة تُخطِّط، ولا تُرسل.
@@ -92,13 +124,33 @@ export async function handleReply(job: { conversationId: string }): Promise<void
        ولماذا حتميّ لا عبر النموذج: الزبون ضغط زرّاً، فالفعل معروفٌ تماماً
        ولا شيء يُستنتَج. وإقحام النموذج هنا يعني احتمال أن يكذب على الزبون
        أو يبدّل الوسائط — ولا مقابلَ لذلك إطلاقاً. */
+    /* ★ الضغطة تُبحَث في **كلّ الواردات منذ آخر صادر** لا في آخرِ واردٍ وحده.
+       الزبون كثيراً ما يضغط «أكّد» ثمّ يكتب تفصيلاً خلال ثانيتين، ودمجُ
+       الرسائل يجعل النصَّ هو الأخير — فلا يُدخَل فرعُ التأكيد، ولا يُنفَّذ
+       الإجراء، ويرى النموذجُ «أكّد» في التاريخ فقد يقول «تمّ التسجيل» وهو لم
+       يُسجَّل. وهي فئةُ العطل نفسها التي وُلد منها المعالجُ الحتميّ أصلاً. */
+    const lastOutAt = (await tx
+      .select({ at: messages.createdAt })
+      .from(messages)
+      .where(and(eq(messages.conversationId, conv.id), eq(messages.direction, 'out')))
+      .orderBy(desc(messages.createdAt))
+      .limit(1))[0]?.at;
+
     const pressed = await tx
       .select({ payload: messages.payload })
       .from(messages)
-      .where(and(eq(messages.conversationId, conv.id), eq(messages.direction, 'in')))
+      .where(and(
+        eq(messages.conversationId, conv.id),
+        eq(messages.direction, 'in'),
+        ...(lastOutAt ? [sql`${messages.createdAt} > ${lastOutAt}`] : []),
+      ))
       .orderBy(desc(messages.createdAt))
-      .limit(1);
-    const press = String((pressed[0]?.payload as { buttonPayload?: string } | null)?.buttonPayload ?? '');
+      .limit(10);
+    // الأحدثُ أوّلاً: ضغطتان متتاليتان تعنيان الأخيرة
+    const press = String(
+      pressed.map((m) => (m.payload as { buttonPayload?: string } | null)?.buttonPayload)
+        .find((x) => x) ?? '',
+    );
 
     if (press.startsWith('cancel:')) {
       await tx.update(conversations).set({ pendingAction: null }).where(eq(conversations.id, conv.id));
@@ -179,6 +231,26 @@ export async function handleReply(job: { conversationId: string }): Promise<void
           },
         ],
       };
+    }
+
+    /* ★ السقفُ يُفحص **قبل** نداء النموذج — وكان يُفحص بعده.
+       `checkQuota` لا تُنادى إلّا في `outbound.ts` (الخطوة ③ من الإرسال)، أي
+       بعد أن نُودي النموذجُ ودُفعت كلفتُه وكُتب صفُّ `ai_runs`. فعند بلوغ
+       السقف تدفع المنصّة ثمنَ ردٍّ لكلّ رسالةٍ ثمّ تُهمله — والمحادثةُ لا
+       تُوسَم للموظّف فلا يعلم أحد.
+       والفحصُ هنا **لا يُغني** عن فحص الإرسال: ذاك هو الحارس الذي يختم
+       الفوترة ولا يُتجاوَز. وهذا يمنع الإنفاق قبل أن يقع. */
+    const gate = await checkQuota(db, tenantId).catch(() => null);
+    if (gate && !gate.allowed) {
+      await tx.update(conversations)
+        .set({ needsAttention: true })
+        .where(eq(conversations.id, conv.id));
+      return gate.policy === 'handoff_only' && cfg.failMessage
+        ? {
+          conversationId: conv.id,
+          sends: [{ source: 'system' as const, message: { kind: 'text' as const, body: cfg.failMessage } }],
+        }
+        : null;
     }
 
     if (!withinBusinessHours(cfg.businessHours as BusinessHours | null)) {
@@ -357,6 +429,17 @@ export async function handleReply(job: { conversationId: string }): Promise<void
         causeKey: e.code,
       }).catch(() => undefined);
     }
+    /* ★ إعادةُ المحاولة **تحترم `retryable`** — وكانت تتجاهله.
+       طبقةُ المزوّد تميّز بعنايةٍ بين عابرٍ ودائم (429 و5xx تُعاد، و400 و403
+       والحجب لا تُعاد)، وهذا السطر كان يرمي كلَّ شيء: مخطّطُ أداةٍ غير صالح
+       يُنتج 400 فيُعاد أربع مرّاتٍ بتراجعٍ أُسّيّ لكلّ رسالةٍ لكلّ زبون —
+       وأربعُ نداءاتٍ مدفوعةٍ لطلبٍ لن ينجح أبداً.
+       و`UnrecoverableError` تُنهي المهمّة فوراً وتضعها في `failed` مع
+       الحادثة المرفوعة أعلاه — فيبقى الأثر ويتوقّف النزف. */
+    if (e instanceof AiError && !e.retryable) {
+      const { UnrecoverableError } = await import('bullmq');
+      throw new UnrecoverableError(e.message);
+    }
     throw e; // إعادة المحاولة تتولّاها BullMQ — والحادثة لا تُلغي الفشل
   });
 
@@ -382,9 +465,55 @@ export async function handleReply(job: { conversationId: string }): Promise<void
 
   if (!plan) return;
 
-  /* ── الإرسال: بعد الإيداع، وبلا أيّ قفلٍ في اليد ── */
-  for (const s of plan.sends) {
-    await safeSend({ tenantId, conversationId: plan.conversationId, ...s });
+  /* ★ **البوّابة تُعاد قراءتها بعد التوليد** — وكانت تُقرأ مرّةً واحدة.
+     البوّابات الثلاث (بوتٌ مطفأ · مطفأٌ لهذه المحادثة · موظّفٌ تولّاها) تُقرأ
+     عند بدء المعاملة، والمعاملةُ نفسها تحمل نداء النموذج وحلقةَ الأدوات وقد
+     تستغرق دقائق. فموظّفٌ يتولّى المحادثة في تلك الأثناء لا يُفحَص، ويهبط
+     ردُّ البوت **بعد** ردّه على الزبون نفسه.
+     والقراءةُ الثانية خارج المعاملة رخيصة، وتقع قبل حجز الصفوف فلا تترك
+     أثراً يُنظَّف. */
+  const now2 = await withTenant(db, tenantId, (tx) => tx
+    .select({ botEnabled: conversations.botEnabled, pausedUntil: conversations.botPausedUntil })
+    .from(conversations).where(eq(conversations.id, job.conversationId)).limit(1));
+  const g = now2[0];
+  if (g && (!g.botEnabled || (g.pausedUntil && g.pausedUntil > new Date()))) {
+    console.log(JSON.stringify({
+      level: 'info', svc: 'worker', msg: 'تولّى موظّفٌ المحادثة أثناء التوليد — أُسقط ردّ البوت',
+      tenantId, conversationId: job.conversationId,
+    }));
+    return;
+  }
+
+  /* ★ حجزُ صفوف الخطّة — في معاملةٍ **قصيرةٍ مستقلّة** بعد إيداع التخطيط.
+     ولماذا لا داخل معاملة التخطيط: تلك تحمل نداءَ النموذج وحلقةَ الأدوات
+     وقد تستغرق دقائق، وإطالتُها بكتابةٍ إضافيّةٍ تزيد احتجازَ اتّصالٍ من
+     بِركةٍ عشريّة. وفجوةٌ بين الإيداعين لا تُنتج إلّا فقدَ خطّةٍ لم تُرسَل
+     — وهو ما كان يقع في **كلّ** الحالات قبل هذا. */
+  const rows = await withTenant(db, tenantId, async (tx) => {
+    const out: Array<{ id: string; s: SendPlan['sends'][number] }> = [];
+    for (const s of plan.sends) {
+      const [m] = await tx.insert(messages).values({
+        tenantId,
+        conversationId: plan.conversationId,
+        channelId: head[0]!.ch.id,
+        direction: 'out',
+        source: s.source,
+        type: s.message.kind === 'choices' ? 'interactive' : s.message.kind,
+        body: 'body' in s.message ? s.message.body : null,
+        payload: s.message as object,
+        status: 'queued',
+        aiRunId: s.aiRunId ?? null,
+      }).returning({ id: messages.id });
+      out.push({ id: m!.id, s });
+    }
+    return out;
+  });
+
+  /* ── التسليم: بعد الإيداع، وبلا أيّ قفلٍ في اليد ── */
+  for (const r of rows) {
+    await safeSend({
+      tenantId, conversationId: plan.conversationId, ...r.s, messageId: r.id,
+    });
   }
 }
 

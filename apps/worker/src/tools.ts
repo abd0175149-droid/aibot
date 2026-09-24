@@ -82,8 +82,13 @@ export async function execTenantTool(ctx: ExecCtx): Promise<{
     }
 
     case 'ask_confirmation': {
-      // ★ نمط الزرّ: الأداة تتحقّق وترسل أزراراً — والتنفيذ عند الضغط لا هنا.
+      /* ★ نمط الزرّ: الأداة تتحقّق وترسل أزراراً — والتنفيذ عند الضغط لا هنا.
+         والإجراءُ يُسجَّل معلَّقاً هنا، ولم يكن يُسجَّل: الأزرار تُرسل بمعرّف
+         `confirm:<action>` والمعالجُ الحتميّ يقرأ `pendingAction` فيجده
+         فارغاً فيردّ «انتهت صلاحيّة هذا الطلب» — على زرٍّ ضُغط للتوّ.
+         فكانت الأداة تَعِد بتأكيدٍ لا يقود إلى شيء، والزبون يدور في حلقة. */
       const action = String(args.action ?? 'confirm');
+      ctx.deferred.push({ key: action, args: (args.args ?? {}) as Record<string, unknown> });
       emits.push({
         kind: 'choices',
         body: String(args.summary ?? 'هل أؤكّد؟'),

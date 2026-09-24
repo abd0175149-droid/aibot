@@ -1,28 +1,10 @@
 import { Queue, QueueEvents } from 'bullmq';
 import IORedis from 'ioredis';
 import type { ChannelKind, ParsedWebhook } from '@aibot/channels';
-import { AppError, ErrorCode, type PlaygroundJob, type PlaygroundResult } from '@aibot/shared';
+import { AppError, ErrorCode, QUEUE, type PlaygroundJob, type PlaygroundResult } from '@aibot/shared';
 
-/**
- * الطوابير — الأسماء محايدةٌ للقناة عمداً (`ch:` لا `wa:`).
- * قناةٌ ثانية لا تضيف طابوراً؛ تضيف `channelId` في الحمولة.
- */
-/**
- * ⚠️ لا نقطتين في اسم الطابور **ولا في معرّف المهمّة**: BullMQ 5 يرفض الاثنين
- *    («Queue name cannot contain :» و«Custom Id cannot contain :»).
- *    كشفهما أوّل تشغيلٍ على الخادم، واحداً بعد الآخر — والثاني لم يظهر إلّا
- *    بعد إصلاح الأوّل، فالرسالة لم تصل إلى مرحلة الجدولة قبله.
- */
-export const QUEUE = {
-  inbound: 'ch-inbound',
-  reply: 'bot-reply',
-  outbound: 'ch-outbound',
-  embed: 'kb-embed',
-  health: 'health-poll',
-  notify: 'notify-push',
-  ingest: 'kb-ingest',
-  dry: 'bot-dry',
-} as const;
+/* ★ الأسماء من `@aibot/shared` — مصدرٌ واحدٌ يراه الطرفان. راجع التعليق هناك. */
+export { QUEUE } from '@aibot/shared';
 
 let conn: IORedis | null = null;
 const queues = new Map<string, Queue>();
@@ -52,48 +34,35 @@ export interface InboundJob {
   parsed: ParsedWebhook;
 }
 
+/**
+ * ★ عمقُ إعادة المحاولة هنا **أعمقُ من كلّ الطوابير** — ولسببٍ واحد:
+ *   بعد أن يردّ الويبهوك 200 على ميتا تصير هذه المهمّة **النسخة الوحيدة**
+ *   من رسالة الزبون. ميتا لن تُعيد ما أُقرّ به، ولا مصدرَ آخر تُقرأ منه.
+ *
+ *   وكانت `attempts: 3` بتراجعٍ من ثانية: تغطيةٌ قدرها ثلاث ثوانٍ. وأيّ
+ *   اضطرابٍ في القاعدة يتجاوزها — إعادةُ تشغيلٍ، ضغطُ ذاكرة، انقطاعُ شبكةٍ
+ *   داخل دوكر — يُنهي المحاولات وتسقط الرسالة في `failed` بلا حادثةٍ ولا
+ *   أداةِ إعادةِ دفع. وهو الدرس نفسه الذي رفع عمقَ `bot-reply` من محاولتين
+ *   إلى أربع بعد تمرين الشبكة، ولم يُطبَّق هنا — والأولى أن يُطبَّق هنا أشدّ.
+ *
+ *   ستٌّ بتراجعٍ أُسّيٍّ من ثانيتين: 2 · 4 · 8 · 16 · 32 ≈ دقيقةٌ من التغطية.
+ *   وما تجاوز الدقيقة عطلٌ يستحقّ حادثةً — وهي تُرفع أدناه في العامل.
+ */
 export async function enqueueInbound(job: InboundJob): Promise<void> {
   await q(QUEUE.inbound).add('inbound', job, {
-    attempts: 3,
-    backoff: { type: 'exponential', delay: 1000 },
+    attempts: 6,
+    backoff: { type: 'exponential', delay: 2000 },
     removeOnComplete: 1000,
     removeOnFail: 5000,
   });
 }
 
-/**
- * دمج الرسائل المتتالية بلا مؤقّتٍ في الذاكرة.
- *
- * `jobId` ثابتٌ لكلّ محادثة + تأخير 2000ms: رسالةٌ جديدة تستبدل المهمّة
- * المؤجَّلة نفسها بدل أن تُنشئ ثانية. فالعميل يكتب ثلاثة أسطر فيردّ البوت مرّةً.
- *
- * وهذا ما يجعل إعادة تشغيل الخادم غير مُضيِّعةٍ لردّ: المهمّة في ريدِس لا في
- * `setTimeout` يموت مع العمليّة.
- */
-export async function enqueueReply(conversationId: string, delayMs = 2000): Promise<void> {
-  const jobId = `conv-${conversationId}`;
-  const queue = q(QUEUE.reply);
-  const existing = await queue.getJob(jobId);
-  if (existing) {
-    const state = await existing.getState();
-    if (state === 'delayed' || state === 'waiting') await existing.remove();
-  }
-  await queue.add('reply', { conversationId }, {
-    jobId,
-    delay: delayMs,
-    attempts: 4,
-    /* ★ كان `backoff` ناقصاً هنا كما في `apps/worker/src/enqueue.ts`، وكشفه
-       تمرين المزوّد: بلا تراجعٍ تُعاد المحاولة **فوراً** فتُستهلك المحاولتان
-       على نفس اللحظة الفاشلة. ثمّ رفع تمرينُ الشبكة العددَ من اثنتين إلى
-       أربع: محاولتان بتراجعِ خمسٍ تغطّيان خمسَ ثوانٍ من انقطاعٍ لا غير،
-       وقد ماتت مهمّةٌ حقيقيّةٌ بسببها في التمرين. والقيمة نفسها في الموضعَين
-       عن قصد: مسارٌ واحد بسلوكَين هو عطلٌ ينتظر ساعته — والحارس في
-       `apps/worker/test/retry-policy.test.ts` يفشل إن تباعدا. */
-    backoff: { type: 'exponential', delay: 5000 },
-    removeOnComplete: 500,
-    removeOnFail: 2000,
-  });
-}
+/* ★ وكانت هنا نسخةٌ ثانية من `enqueueReply` **تحمل العطل الذي أُصلح في
+   العامل**: تحذف المهمّة في حالتَي `delayed`/`waiting` وحدهما، فتبقى
+   المكتملةُ حاجزةً للمعرّف — «ردٌّ واحدٌ لكلّ محادثةٍ في عمرها كلّه».
+   ولا مستدعيَ لها في الـAPI إطلاقاً، لكنّ وجودَها فخٌّ: أوّلُ مسارٍ يضيف
+   «أعد المحادثة إلى البوت» كان سيستوردها بثقة. فحُذفت — ومنتِجُ الردّ
+   الوحيد هو `apps/worker/src/enqueue.ts` ومعه `decideEnqueue`. */
 
 /**
  * ★ المهلة ليست احتياطاً — هي الفرق بين «٥٠٣» و«لا جواب أبداً».
@@ -236,6 +205,8 @@ export interface OutboundJob {
   userId?: string;
   aiRunId?: string;
   idempotencyKey?: string;
+  /** صفُّ الصادر المحجوز بحالة `queued` — راجع `SendJob` في العامل. */
+  messageId?: string;
 }
 
 /**

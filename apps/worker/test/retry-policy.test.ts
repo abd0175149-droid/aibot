@@ -37,10 +37,21 @@ export interface Offence { file: string; line: number; text: string }
  * ★ ونافذةٌ لا كائنٌ محلَّل: خيارات BullMQ تُكتب مفكوكةً (`...OPTS`) ومجمَّعةً
  *   وسطريّةً، ومحلّلٌ يفترض شكلاً واحداً يصير حارساً يمرّ دائماً.
  */
+/**
+ * ★ سطرُ تعليقٍ يذكر السياسة ليس سياسة.
+ *   أطلق الماسحُ إنذاراً على تعليقٍ يشرح **لماذا رُفع** العدد («وكانت
+ *   `attempts: 3` بتراجعٍ من ثانية…») — وحارسٌ يمنع شرحَ إصلاحه حارسٌ
+ *   يُدفَع صاحبُه إلى حذف الشرح، فيُفقد أثمنُ ما في الملفّ.
+ */
+function isComment(text: string): boolean {
+  return /^\s*(\/\/|\*|\/\*)/.test(text);
+}
+
 export function attemptsWithoutBackoff(src: string, file: string): Offence[] {
   const lines = src.split(/\r?\n/);
   const out: Offence[] = [];
   lines.forEach((text, i) => {
+    if (isComment(text)) return;
     if (!ATTEMPTS.test(text)) return;
     const window = lines.slice(Math.max(0, i - 10), i + 11).join('\n');
     if (BACKOFF.test(window)) return;
@@ -69,40 +80,46 @@ describe('إعادة المحاولة بلا تراجعٍ ليست إعادة م
     ).toEqual([]);
   });
 
-  it('★ سياسةُ ردِّ البوت واحدةٌ في الموضعَين — مسارٌ واحدٌ بسلوكَين عطلٌ ينتظر ساعته', () => {
+  /**
+   * ★ ثمّ تغيّر الغرضُ لأنّ العطلَ نفسه زال.
+   *
+   *   كان هنا حارسُ **تطابق**: نسختان من `enqueueReply` — واحدةٌ في العامل
+   *   وواحدةٌ في الـAPI — والحارسُ يمنع تباعدهما. وكان يشهد زوراً: النسختان
+   *   تتطابقان في الأرقام (`delay` · `backoff` · `attempts`) وتختلفان في
+   *   **القرار**، فنسخةُ الـAPI تحذف المهمّة في حالتَي `delayed`/`waiting`
+   *   وحدهما فتبقى المكتملةُ حاجزةً للمعرّف — «ردٌّ واحدٌ لكلّ محادثةٍ في
+   *   عمرها كلّه». أي أنّ الحارس كان يقارن ما لا يُصلح ويُغفل ما يكسر.
+   *
+   *   فحُذفت نسخةُ الـAPI (ولا مستدعيَ لها كان أصلاً)، وصار الحارسُ حارسَ
+   *   **وحدانيّة**: منتِجُ ردِّ البوت واحدٌ في المستودع كلِّه، ومعه قراره.
+   */
+  it('★ منتِجُ ردِّ البوت واحدٌ — ونسختان لقرارٍ واحد عطلٌ ينتظر ساعته', () => {
     const worker = read('apps/worker/src/enqueue.ts');
-    const api = read('apps/api/src/queues.ts');
-    for (const [name, src] of [['worker', worker], ['api', api]] as const) {
-      expect(src, `${name}: تأخيرُ الدمج 2000ms`).toMatch(/delay:\s*(2000|delayMs)/);
-      expect(src, `${name}: تراجعٌ أُسّيٌّ بخمس ثوانٍ`)
-        .toMatch(/backoff:\s*\{\s*type:\s*'exponential',\s*delay:\s*5000\s*\}/);
-      expect(src, `${name}: حدٌّ لمجموعة الفاشلة`).toMatch(/removeOnFail:\s*\d+/);
-    }
+    expect(worker, 'تأخيرُ الدمج 2000ms').toMatch(/delay:\s*(2000|delayMs)/);
+    expect(worker, 'تراجعٌ أُسّيٌّ بخمس ثوانٍ')
+      .toMatch(/backoff:\s*\{\s*type:\s*'exponential',\s*delay:\s*5000\s*\}/);
+    expect(worker, 'حدٌّ لمجموعة الفاشلة').toMatch(/removeOnFail:\s*\d+/);
 
-    /* ★ العددُ يُقارَن بأخيه لا برقمٍ مثبَّتٍ هنا.
-       كان الحارس يثبّت `attempts: 2` حرفيّاً، فلمّا رفعه تمرينُ الشبكة إلى
-       أربعٍ **فشل الحارس على الإصلاح نفسه**. وغرضُه لم يكن العددَ قطّ بل
-       **ألّا يتباعد الموضعان**: مسارٌ واحدٌ بسلوكَين هو العطل. فيبقى الغرض
-       محروساً ويتحرّر الرقم — وحارسُ «كلّ attempts يجاوره backoff» أعلاه
-       يمنع أن يعود العددُ بلا تراجع. */
-    /* ★ ويُقرأ من **كتلة ردّ البوت** لا من أوّل `attempts` في الملفّ:
-       `queues.ts` فيه طابورٌ آخر قبله بسياسةٍ أخرى (`attempts: 3`)، فقراءةٌ
-       ساذجةٌ تقارن سياسةَ طابورٍ بسياسةِ طابورٍ آخر وتُعلن تباعداً لا وجود له.
-       وقد وقع ذلك فعلاً: فشل الحارسُ على إصلاحٍ سليم. */
-    const replyAttempts = (src: string, marker: RegExp) => {
-      const at = src.search(marker);
-      return at < 0 ? undefined : /attempts:\s*(\d+)/.exec(src.slice(at))?.[1];
-    };
-    const w = replyAttempts(worker, /REPLY_OPTS\s*=/);
-    const a = replyAttempts(api, /\.add\(\s*'reply'/);
-    expect(w, 'عددُ المحاولات معلَنٌ في كتلة العامل').toBeDefined();
-    expect(a, 'عددُ المحاولات في الموضعَين واحد').toBe(w);
-    expect(Number(w), 'أكثرُ من محاولةٍ واحدة').toBeGreaterThan(1);
+    const attempts = /attempts:\s*(\d+)/.exec(worker.slice(worker.search(/REPLY_OPTS\s*=/)))?.[1];
+    expect(attempts, 'عددُ المحاولات معلَنٌ في كتلة العامل').toBeDefined();
+    expect(Number(attempts), 'أكثرُ من محاولةٍ واحدة').toBeGreaterThan(1);
+
+    /* ولا نسخةَ ثانية: القرارُ (`decideEnqueue`) يعيش في موضعٍ واحد. */
+    for (const rel of SOURCES) {
+      if (rel === 'apps/worker/src/enqueue.ts') continue;
+      expect(read(rel), `${rel}: نسخةٌ ثانية من منتِج الردّ`)
+        .not.toMatch(/export async function enqueueReply/);
+    }
+    expect(worker).toMatch(/decideEnqueue/);
   });
 
   it('الماسح يمسك الشكل فعلاً — وإلّا فهو اختبارٌ يمرّ دائماً', () => {
     const bad = "await q.add('reply', d, {\n  jobId,\n  attempts: 2,\n  removeOnComplete: 500,\n});";
     expect(attemptsWithoutBackoff(bad, 'x.ts')).toHaveLength(1);
+
+    // وتعليقٌ يذكر عدداً قديماً لا يُعدّ مخالفة — وإلّا مُنع شرحُ الإصلاح
+    expect(attemptsWithoutBackoff(' * وكانت `attempts: 3` بتراجعٍ من ثانية', 'x.ts')).toEqual([]);
+    expect(attemptsWithoutBackoff('// attempts: 9 سابقاً', 'x.ts')).toEqual([]);
 
     const fixed = "await q.add('reply', d, {\n  jobId,\n  attempts: 2,\n"
       + "  backoff: { type: 'exponential', delay: 5000 },\n});";

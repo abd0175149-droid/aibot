@@ -31,6 +31,22 @@ export interface SendJob {
   aiRunId?: string;
   /** مفتاح تكرار: ضغطتان على «إرسال» لا ترسلان رسالتين. */
   idempotencyKey?: string;
+  /**
+   * ★ صفُّ الصادر المحجوز مسبقاً بحالة `queued` — **صندوقُ الصادر**.
+   *
+   *   بدونه كان الصفّ يُدرَج **بعد** نجاح الإرسال وحده، ونتج عن ذلك عطلان:
+   *   ① ردُّ الموظّف يُعلَن «وصل» على 202 ثمّ يفشل الإرسال فلا يبقى له أثرٌ
+   *     إطلاقاً — لا فقاعة ولا حالة ولا حادثة. الموظّف يظنّ أنّه ردّ.
+   *   ② مهمّةُ ردِّ البوت غيرُ متحمّلةٍ لإعادة المحاولة: الخطّة تُودَع (نداءُ
+   *     نموذجٍ مدفوع، أدواتٌ نُفِّذت، `pendingAction` مُسح) ثمّ يُرسَل. ففشلُ
+   *     الإرسال يُعيد المهمّة من الصفر: نداءٌ ثانٍ مدفوع، ورسائلُ نجحت تُرسل
+   *     ثانيةً، وزبونٌ نُفِّذ حجزُه يُقال له «انتهت صلاحيّة هذا الطلب».
+   *
+   *   والحلّ واحدٌ للعطلَين: **تُحجز نيّةُ الإرسال صفّاً قبل التسليم**، ثمّ
+   *   يُحدَّث الصفّ نفسه إلى `sent` أو `failed`. فالإرسال يصير مرحلةً
+   *   مستقلّةً قابلةً للاستئناف، والفشلُ يترك أثراً يراه الموظّف.
+   */
+  messageId?: string;
 }
 
 export class WindowClosedError extends Error {
@@ -47,7 +63,45 @@ export class QuotaExceededError extends Error {
   }
 }
 
+/**
+ * يُعلّم الصفَّ المحجوز فاشلاً ويبثّ الحالة — فيرى الموظّف ما لم يصل.
+ * ويُبتلع خطؤه: فشلُ تعليم الفشل لا يجوز أن يُخفي الفشل الأصليّ.
+ */
+async function markFailed(job: SendJob, err: unknown): Promise<void> {
+  if (!job.messageId) return;
+  const message = err instanceof Error ? err.message.slice(0, 300) : 'تعذّر الإرسال';
+  await withTenant(getDb(), job.tenantId, (tx) => tx.update(messages)
+    .set({ status: 'failed', errorMessage: message })
+    .where(eq(messages.id, job.messageId!))).catch(() => undefined);
+  emitToTenant(job.tenantId, 'message:status', {
+    conversationId: job.conversationId,
+    id: job.messageId,
+    status: 'failed',
+    errorMessage: message,
+  });
+}
+
+/**
+ * ★ الغلاف: **كلُّ** طريقٍ للخروج من الإرسال يترك أثراً على الصفّ المحجوز.
+ *
+ *   نافذةٌ أُغلقت وسقفٌ بلغ وتوكنٌ باطل: ثلاثتها «لم تصل الرسالة» عند الموظّف،
+ *   وكانت ثلاثتها تختفي بلا فقاعةٍ ولا حالة. والرسالةُ البشريّةُ تُكتب على
+ *   الصفّ فيقرأها في مكانها من الحوار — لا في سجلٍّ لا يفتحه.
+ */
 export async function sendOutbound(job: SendJob): Promise<{ messageId: string; externalId: string }> {
+  try {
+    return await sendOutboundInner(job);
+  } catch (e) {
+    await markFailed(job, e instanceof WindowClosedError
+      ? new Error('أُغلقت نافذة الردّ الحرّ قبل الإرسال — لا يصل إلّا بقالبٍ معتمد')
+      : e instanceof QuotaExceededError
+        ? new Error('بلغ الحساب سقف الباقة — لم تُرسَل')
+        : e);
+    throw e;
+  }
+}
+
+async function sendOutboundInner(job: SendJob): Promise<{ messageId: string; externalId: string }> {
   const db = getDb();
 
   const ctx = await withTenant(db, job.tenantId, async (tx) => {
@@ -123,22 +177,34 @@ export async function sendOutbound(job: SendJob): Promise<{ messageId: string; e
   /* ⑥ التخزين والختم — في معاملةٍ واحدة. */
   const period = billingPeriod(new Date());
   const result = await withTenant(db, job.tenantId, async (tx) => {
-    const [row] = await tx.insert(messages).values({
-      tenantId: job.tenantId,
-      conversationId: job.conversationId,
-      channelId: ctx.ch.id,
-      externalId: sent.externalId,
-      direction: 'out',
-      source: job.source === 'bot' ? 'bot' : job.source === 'agent' ? 'agent' : 'system',
-      type: msg.kind === 'choices' ? 'interactive' : msg.kind,
-      body: 'body' in msg ? msg.body : null,
-      payload: msg as object,
-      status: 'sent',
-      userId: job.userId ?? null,
-      aiRunId: job.aiRunId ?? null,
-    }).onConflictDoNothing({ target: [messages.channelId, messages.externalId] }).returning();
+    /* ★ صفٌّ محجوز ⟹ **تحديث** لا إدراج: الرسالة موجودةٌ في الحوار منذ لحظة
+       القبول بحالة `queued`، وهنا تصير `sent` ويُختم عليها معرّفُ ميتا. */
+    const [row] = job.messageId
+      ? await tx.update(messages).set({
+        externalId: sent.externalId,
+        status: 'sent',
+        channelId: ctx.ch.id,
+        type: msg.kind === 'choices' ? 'interactive' : msg.kind,
+        body: 'body' in msg ? msg.body : null,
+        payload: msg as object,
+        errorMessage: null,
+      }).where(eq(messages.id, job.messageId)).returning()
+      : await tx.insert(messages).values({
+        tenantId: job.tenantId,
+        conversationId: job.conversationId,
+        channelId: ctx.ch.id,
+        externalId: sent.externalId,
+        direction: 'out',
+        source: job.source === 'bot' ? 'bot' : job.source === 'agent' ? 'agent' : 'system',
+        type: msg.kind === 'choices' ? 'interactive' : msg.kind,
+        body: 'body' in msg ? msg.body : null,
+        payload: msg as object,
+        status: 'sent',
+        userId: job.userId ?? null,
+        aiRunId: job.aiRunId ?? null,
+      }).onConflictDoNothing({ target: [messages.channelId, messages.externalId] }).returning();
 
-    const messageId = row?.id ?? '';
+    const messageId = row?.id ?? job.messageId ?? '';
 
     /* ختم الفوترة: **أوّل صادرٍ داخل النافذة وحده** يختمها. */
     await tx.update(conversationWindows).set({
@@ -163,7 +229,16 @@ export async function sendOutbound(job: SendJob): Promise<{ messageId: string; e
     /* ★ البثّ بعد الكتابة: ردّ البوت وردّ الموظّف يظهران لحظةَ إرسالهما
        بدل انتظار تحديثٍ يدويّ. والحدث خارج ما يُرجَع لأنّ من ينتظر النتيجة
        هو الطابور لا الشاشة. */
-    emitToTenant(job.tenantId, 'message:new', {
+    if (job.messageId) {
+      /* أُعلنت الرسالة عند القبول، فالخبرُ الآن **تبدُّلُ حالةٍ** لا ظهورُ
+         فقاعةٍ ثانية — وبثُّ `message:new` عليها يُنتج نسخةً مكرّرةً في الشاشة. */
+      emitToTenant(job.tenantId, 'message:status', {
+        conversationId: job.conversationId,
+        id: messageId,
+        status: 'sent',
+        errorMessage: null,
+      });
+    } else emitToTenant(job.tenantId, 'message:new', {
       conversationId: job.conversationId,
       message: {
         id: messageId,

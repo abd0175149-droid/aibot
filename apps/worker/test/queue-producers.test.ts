@@ -25,9 +25,15 @@ const PRODUCERS = [
   'apps/worker/src/main.ts',
 ];
 
+/* `maintenance` و`health-poll` يُنتَجان بمُجدوِلٍ في العامل نفسه — ويُقرآن
+   من `new Queue(...)` هناك، فلا استثناءَ يدويّ. */
+
 /** أسماءُ الطوابير المستهلَكة: `new Worker('name'`. */
-export function consumedQueues(src: string): string[] {
-  return [...src.matchAll(/new Worker\(\s*'([^']+)'/g)].map((m) => m[1]!);
+export function consumedQueues(src: string, queueMap: Record<string, string> = {}): string[] {
+  const lit = [...src.matchAll(/new Worker\(\s*'([^']+)'/g)].map((m) => m[1]!);
+  const viaConst = [...src.matchAll(/new Worker\(\s*QUEUE\.(\w+)/g)]
+    .map((m) => queueMap[m[1]!]).filter((x): x is string => Boolean(x));
+  return [...lit, ...viaConst];
 }
 
 /**
@@ -41,7 +47,7 @@ export function producedQueues(sources: string[], queueMap: Record<string, strin
   const out = new Set<string>();
   for (const src of sources) {
     for (const m of src.matchAll(/(?:\bq|new Queue)\(\s*'([^']+)'/g)) out.add(m[1]!);
-    for (const m of src.matchAll(/\bq\(\s*QUEUE\.(\w+)\s*\)/g)) {
+    for (const m of src.matchAll(/(?:q|new Queue)\(\s*QUEUE\.(\w+)/g)) {
       const name = queueMap[m[1]!];
       if (name) out.add(name);
     }
@@ -49,16 +55,16 @@ export function producedQueues(sources: string[], queueMap: Record<string, strin
   return out;
 }
 
-/** خريطة `QUEUE` كما هي مكتوبةٌ في `apps/api/src/queues.ts`. */
+/** خريطة `QUEUE` — من المصدر المشترك `packages/shared/src/queues.ts`. */
 export function queueMap(src: string): Record<string, string> {
   const block = /export const QUEUE = \{([\s\S]*?)\} as const;/.exec(src)?.[1] ?? '';
   return Object.fromEntries([...block.matchAll(/(\w+)\s*:\s*'([^']+)'/g)].map((m) => [m[1]!, m[2]!]));
 }
 
 describe('كلّ طابورٍ يُستهلَك يجب أن يُنتَج', () => {
-  const queuesSrc = read('apps/api/src/queues.ts');
+  const queuesSrc = read('packages/shared/src/queues.ts');
   const map = queueMap(queuesSrc);
-  const consumed = consumedQueues(read('apps/worker/src/main.ts'));
+  const consumed = consumedQueues(read('apps/worker/src/main.ts'), map);
   const produced = producedQueues(PRODUCERS.map(read), map);
 
   it('خريطة QUEUE تُقرأ فعلاً — وإلّا فالحارس يقارن فراغاً بفراغ', () => {
@@ -82,6 +88,7 @@ describe('كلّ طابورٍ يُستهلَك يجب أن يُنتَج', () => 
 
   it('الماسح يمسك الشكل فعلاً — وإلّا فهو اختبارٌ يمرّ دائماً', () => {
     expect(consumedQueues("new Worker('x', f); new Worker( 'y' , g)")).toEqual(['x', 'y']);
+    expect(consumedQueues('new Worker(QUEUE.reply, f)', { reply: 'bot-reply' })).toEqual(['bot-reply']);
     const m = { reply: 'bot-reply' };
     expect([...producedQueues(["q(QUEUE.reply)"], m)]).toEqual(['bot-reply']);
     expect([...producedQueues(["const t = q('bot-dry');"], m)]).toEqual(['bot-dry']);

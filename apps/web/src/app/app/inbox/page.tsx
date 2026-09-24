@@ -133,7 +133,7 @@ const FILTERS = [
 ] as const;
 
 const DELIVERY: Record<string, string> = {
-  queued: 'في الطابور', sent: '✓', delivered: '✓✓', read: '✓✓ قُرئت', failed: 'لم تصل',
+  queued: 'قيد الإرسال…', sent: '✓', delivered: '✓✓', read: '✓✓ قُرئت', failed: 'لم تصل',
 };
 
 const SOURCE: Record<string, { label: string; mark: string }> = {
@@ -385,6 +385,22 @@ function InboxScreen() {
     } catch { toast('تعذّر جلب الأقدم'); }
   }
 
+  /** إعادةُ إرسال رسالةٍ فشلت — على صفّها لا بنسخةٍ جديدة. */
+  async function retrySend(messageId: string) {
+    if (!active) return;
+    try {
+      await post(`/conversations/${active}/messages/${messageId}/retry`);
+      thread.setData((t) => (t ? {
+        ...t,
+        items: t.items.map((m) => (m.id === messageId
+          ? { ...m, status: 'queued', errorMessage: null }
+          : m)),
+      } : t));
+    } catch (err) {
+      toast(err instanceof ApiError ? err.message : 'تعذّرت إعادة المحاولة');
+    }
+  }
+
   async function send(e?: FormEvent) {
     e?.preventDefault();
     const text = draft.trim();
@@ -398,7 +414,10 @@ function InboxScreen() {
       await post(`/conversations/${active}/messages`, { text }, { 'idempotency-key': idempotencyKey() });
       setDraft('');
       setAtBottom(true);
-      toast('وصل ردّك — وتوقّف البوت عن هذه المحادثة وحدها');
+      /* ★ «وصل» كانت تُقال على 202 — أي على **قبولٍ في الطابور** لا على
+         وصول. والرسالة الآن تظهر في الحوار بحالتها الحقيقيّة، فالتوستة
+         تقول ما جرى فعلاً وتُحيل إلى الفقاعة. */
+      toast('أُرسل ردّك — تتبّع حالته في الحوار. وتوقّف البوت عن هذه المحادثة وحدها.');
       await thread.reload();
       await list.reload();
     } catch (err) {
@@ -748,6 +767,17 @@ function InboxScreen() {
                           {/* سببُ الفشل كان مجلوباً ولا يُعرض: «فشلت» بلا سبب */}
                           {m.status === 'failed' && m.errorMessage && (
                             <span className="ibx-err">{m.errorMessage}</span>
+                          )}
+                          {/* ★ «لم تصل» بلا مخرجٍ يدفع الموظّف إلى كتابتها من
+                              جديد بمفتاحٍ جديد — فتصل نسختان إن كان العطل
+                              عابراً. الإعادة على الصفّ نفسه تُنهي الاثنين. */}
+                          {m.direction === 'out' && m.status === 'failed' && !can.readOnly && (
+                            <button
+                              type="button" className="ibx-retry"
+                              onClick={() => void retrySend(m.id)}
+                            >
+                              أعِد المحاولة
+                            </button>
                           )}
                         </div>
                       </div>

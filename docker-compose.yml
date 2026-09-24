@@ -63,6 +63,8 @@ services:
       dockerfile: Dockerfile
       args:
         GIT_REV: ${GIT_REV:-unknown}
+    # مهلةُ إيقافٍ تسمح بإنهاء الطلبات الجارية قبل SIGKILL.
+    stop_grace_period: 30s
     restart: always
     command: ["node", "--import", "tsx", "apps/api/src/main.ts"]
     environment:
@@ -111,6 +113,11 @@ services:
       dockerfile: Dockerfile
       args:
         GIT_REV: ${GIT_REV:-unknown}
+    # ★ مهلةُ إيقافٍ تكفي مهمّةً جارية. الافتراضيّ عشرُ ثوانٍ، ونداءُ
+    #   النموذج وحده قد يبلغ ستّين، والإرسال إلى ميتا خمس عشرة. فكلُّ نشرةٍ
+    #   كانت تقتل ردّاً في منتصفه: يُرسَل إلى الزبون ثمّ يُقتل قبل أن يُعلَّم
+    #   مكتملاً، فيلتقطه فاحصُ العالقة ويُعيده — فيصل الزبونَ مرّتين.
+    stop_grace_period: 120s
     restart: always
     # نفس الصورة، أمرٌ مختلف — فلا تنسخ إعداداً ولا تُبنى صورتان.
     command: ["node", "--import", "tsx", "apps/worker/src/main.ts"]
@@ -142,6 +149,8 @@ services:
         GIT_REV: ${GIT_REV:-unknown}
         # يُمرَّر وقت البناء أيضاً — منه يُشتقّ `connect-src` في رؤوس الأمن
         PUBLIC_URL: ${PUBLIC_URL:-https://aibot.masaros.net}
+    # مهلةُ إيقافٍ تسمح بإنهاء الطلبات الجارية قبل SIGKILL.
+    stop_grace_period: 20s
     restart: always
     environment:
       NODE_ENV: production

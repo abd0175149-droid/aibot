@@ -101,13 +101,18 @@ describe('الساحة لا تُرسل شيئاً — والشكلُ هو الح
   it('العاملُ مسجَّلٌ فعلاً — وإلّا فالمسار يُنتظر جوابٌ لا يأتي', () => {
     /* ميزةٌ مبنيّةٌ وميّتة: منتِجٌ بلا عامل يعني طلباً يُعلَّق حتّى المهلة.
        (وقع هذا في `kb-ingest`: عاملٌ مسجَّلٌ بلا منتِج — والعكسُ أسوأ.) */
-    expect(MAIN).toContain("new Worker('bot-dry'");
+    /* الاسمُ يأتي من العقد المشترك `@aibot/shared` منذ أن وُحِّد، فلا يُطابَق
+       نصّاً حرفيّاً هنا — والمطابقةُ على الثابت هي ما يبقى صحيحاً بعد أيّ
+       إعادة تسمية. */
+    expect(MAIN).toMatch(/new Worker\(QUEUE\.dry/);
     expect(MAIN).toContain('runPlayground');
   });
 
   it('محاولةٌ واحدةٌ لا إعادة — النداء يُحاسَب', () => {
     const api = code(readFileSync(join(DIR, '..', '..', 'api', 'src', 'queues.ts'), 'utf8'));
-    expect(api).toContain("dry: 'bot-dry'");
+    const shared = code(readFileSync(
+      join(DIR, '..', '..', '..', 'packages', 'shared', 'src', 'queues.ts'), 'utf8'));
+    expect(shared).toContain("dry: 'bot-dry'");
     expect(api).toMatch(/attempts:\s*1/);
     // ولا نقطتين في اسم الطابور — BullMQ 5 يرفضه
     expect(api).not.toMatch(/'bot:dry'/);

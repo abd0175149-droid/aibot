@@ -1,5 +1,6 @@
 import { Queue } from 'bullmq';
 import IORedis from 'ioredis';
+import { QUEUE } from '@aibot/shared';
 
 let conn: IORedis | null = null;
 const queues = new Map<string, Queue>();
@@ -84,16 +85,32 @@ const REPLY_OPTS = {
  */
 export async function enqueueReply(conversationId: string, delayMs = REPLY_OPTS.delay): Promise<void> {
   const jobId = `conv-${conversationId}`;
-  const queue = q('bot-reply');
+  const queue = q(QUEUE.reply);
   const existing = await queue.getJob(jobId);
   const action = decideEnqueue(existing ? await existing.getState() : undefined);
 
   if (action === 'sidecar') {
     /* ردٌّ قيد التوليد لا يرى الرسالة التي وصلت للتوّ، فلو انتظرنا ضاعت.
        معرّفٌ مستقلّ يضمن ردّاً تالياً — ونقبل احتمال ردَّين متقاربَين،
-       فهو أهون بكثيرٍ من رسالةٍ بلا ردّ. */
+       فهو أهون بكثيرٍ من رسالةٍ بلا ردّ.
+
+       ★ ومعرّفٌ **ثابتٌ** لا `Date.now()`: كان كلُّ رسالةٍ تصل أثناء التوليد
+       تُنتج مهمّةً بمعرّفٍ فريد، فثلاثُ رسائلَ سريعةٍ تُنتج ثلاثَ مهامّ
+       تعمل بالتوازي (تزامنُ `bot-reply` ثلاثة، ولا قفلَ بين معرّفاتٍ مختلفة)
+       — ردودٌ متداخلةٌ ومتكرّرة ونداءاتُ نموذجٍ مضاعَفة. والمعرّفُ الثابت
+       يجعل الرسائلَ المتتالية تدمج في **مهمّةٍ جانبيّةٍ واحدة** كما تدمج
+       الرسائلُ العاديّة في المهمّة الأصليّة — وهو الغرض نفسه. */
+    const nextId = `${jobId}-next`;
+    const queued = await queue.getJob(nextId);
+    if (queued) {
+      const st = await queued.getState();
+      // مؤجَّلةٌ أو منتظرة: تُستبدل فتُدمَج. جاريةٌ: تُترك، وستلتقط ما بعدها.
+      if (st === 'delayed' || st === 'waiting') await queued.remove();
+      else if (st === 'active') return;
+      else await queued.remove(); // مكتملةٌ أو فاشلة: المعرّف محجوزٌ وإلّا أُهمل
+    }
     await queue.add('reply', { conversationId },
-      { ...REPLY_OPTS, jobId: `${jobId}-next-${Date.now()}`, delay: delayMs });
+      { ...REPLY_OPTS, jobId: nextId, delay: delayMs });
     return;
   }
 
