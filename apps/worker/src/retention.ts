@@ -1,5 +1,10 @@
 import { getDb, withPlatform, sql } from '@aibot/db';
 
+/** سطرٌ واحدٌ بصيغة السجلّ نفسِها في `main.ts` — بلا استيرادٍ دائريّ. */
+function log(msg: string, extra: Record<string, unknown> = {}): void {
+  console.log(JSON.stringify({ level: 'info', svc: 'worker', msg, ...extra }));
+}
+
 /**
  * ★★★ **الاحتفاظ — جداولٌ تنمو بلا سقف، ووعدٌ مكتوبٌ لا يُنفَّذ.**
  *
@@ -9,9 +14,9 @@ import { getDb, withPlatform, sql } from '@aibot/db';
  *   واحدٌ يحذف صفّاً — فالوعدُ مكتوبٌ والبيانُ باقٍ إلى الأبد.
  *
  *   وأربعةُ جداولٍ تكبر بلا حدّ على قرصٍ هو أصلاً فوق الثمانين بالمئة:
- *   `health_checks` (صفٌّ لكلّ قناةٍ كلَّ عشر دقائق)، و`ai_runs` (صفٌّ لكلّ
- *   نداءِ نموذج)، و`kb_retrievals` (صفٌّ لكلّ استرجاع)، و`channel_payload`
- *   (حمولةُ كلّ ويبهوك). وقرصٌ يمتلئ لا يُسقط خدمةً واحدة: تتوقّف القاعدةُ عن
+ *   `health_checks` (صفٌّ لكلّ قناةٍ كلَّ عشر دقائق)، و`notifications`، و
+ *   `ai_runs` (صفٌّ لكلّ نداءِ نموذج)، و`kb_retrievals` (صفٌّ لكلّ استرجاع).
+ *   وقرصٌ يمتلئ لا يُسقط خدمةً واحدة: تتوقّف القاعدةُ عن
  *   الكتابة، ويعجز دوكر عن بدء أيّ حاوية، ويفشل النسخُ الاحتياطيّ الذي كان
  *   سيُنقذ الموقف.
  *
@@ -29,12 +34,14 @@ const BATCH = 5_000;
 /**
  * سجلّاتُ المنصّة — ليست بيانات عميلٍ ولا يحكمها `retentionDays`.
  *
- * `health_checks` لا يُقرأ منه إلّا آخرُ صفوفٍ قليلة، و`channel_payload`
- * حمولةٌ خامٌّ تُحفظ للتشخيص وحده.
+ * `health_checks` لا يُقرأ منه إلّا آخرُ صفوفٍ قليلة، و`notifications` سجلٌّ
+ * يُراجَع لا سيلٌ يُقرأ مرّتين.
  */
 const PLATFORM_TABLES: Array<{ table: string; column: string; days: number }> = [
   { table: 'health_checks', column: 'checked_at', days: 30 },
-  { table: 'channel_payload', column: 'received_at', days: 30 },
+  /* ★ و`notifications` تكبر بلا سقفٍ أيضاً: صفٌّ لكلّ إشعار، وما قُرئ منها
+     لا يُقرأ مرّتين. والتسعون يوماً سخيّةٌ عمداً — هي سجلٌّ يُراجَع لا سيل. */
+  { table: 'notifications', column: 'created_at', days: 90 },
 ];
 
 /** بياناتُ العميل — مدّتُها من باقته، وهي الوعدُ المكتوب في صفحة الخصوصيّة. */
@@ -71,7 +78,13 @@ export async function runRetention(): Promise<RetentionResult[]> {
         DELETE FROM ${sql.identifier(t.table)} x USING doomed d WHERE x.ctid = d.ctid
       `);
       return (r as unknown as { rowCount?: number }).rowCount ?? 0;
-    }).catch(() => -1);
+    }).catch((e) => {
+      /* ⚠️ **ولا ابتلاعَ صامت.** أوّلُ نسخةٍ من هذا الملفّ ذكرت جدولاً لا
+         وجودَ له (`channel_payload`)، و`catch(() => -1)` كانت ستُخفي الخطأ خلف
+         رقمٍ غامضٍ كلَّ ستّ ساعاتٍ إلى الأبد — والسببُ لا يُقرأ من `-1`. */
+      log(`تعذّر الاحتفاظ في ${t.table}`, { err: String(e) });
+      return -1;
+    });
     out.push({ table: t.table, deleted: n });
   }
 
@@ -97,7 +110,10 @@ export async function runRetention(): Promise<RetentionResult[]> {
         DELETE FROM ${sql.identifier(t.table)} y USING doomed d WHERE y.ctid = d.ctid
       `);
       return (r as unknown as { rowCount?: number }).rowCount ?? 0;
-    }).catch(() => -1);
+    }).catch((e) => {
+      log(`تعذّر الاحتفاظ في ${t.table}`, { err: String(e) });
+      return -1;
+    });
     out.push({ table: t.table, deleted: n });
   }
 
