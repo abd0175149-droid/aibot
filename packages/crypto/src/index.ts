@@ -25,11 +25,31 @@ function loadKeys(): Map<number, Buffer> {
   const keys = new Map<number, Buffer>();
   const primary = process.env.MASTER_KEY;
   if (!primary) throw new Error('MASTER_KEY غير مضبوط — لا إقلاع بلا مفتاحٍ رئيس');
-  keys.set(currentKeyVersion(), decodeKey(primary, 'MASTER_KEY'));
-  // مفاتيح سابقة أثناء التدوير: MASTER_KEY_V1=… MASTER_KEY_V2=…
+  const current = currentKeyVersion();
+  keys.set(current, decodeKey(primary, 'MASTER_KEY'));
+
+  /* مفاتيح سابقة أثناء التدوير: MASTER_KEY_V1=… MASTER_KEY_V2=…
+
+     ⚠️ **ولا يطمس سابقٌ الرئيسَ أبداً.** كان `keys.set` هنا يكتب فوق ما وُضع
+        قبله، فمن ترك `MASTER_KEY_V1` مضبوطاً و`MASTER_KEY_VERSION=1` — وهي
+        الحالةُ الطبيعيّة **بعد** إتمام التدوير ونسيان حذف القديم — يجعل
+        المفتاحَ القديم هو مفتاحَ الإصدار الحاليّ. و`seal()` يقرأ الخريطةَ
+        نفسَها، فيُشفَّر كلُّ سرٍّ **جديد** بالمفتاح الذي يُفترض أنّنا تخلّصنا
+        منه، ويُوسَم بالإصدار الجديد. لا خطأ، ولا فرقٌ يُرى: يُفكّ ويُقرأ
+        بنجاح. ولا يظهر العطلُ إلّا يومَ يُحذف المفتاح القديم فعلاً — وعندها
+        تكون كلُّ الأسرار الجديدة قد شُفّرت به. صمتٌ يمتدّ شهوراً ثمّ فقدٌ تامّ. */
   for (const [k, v] of Object.entries(process.env)) {
     const m = /^MASTER_KEY_V(\d+)$/.exec(k);
-    if (m && v) keys.set(Number(m[1]), decodeKey(v, k));
+    if (!m || !v) continue;
+    const ver = Number(m[1]);
+    if (ver === current) {
+      throw new Error(
+        `${k} يحمل رقمَ الإصدار الحاليّ (${current}) — احذفه أو ارفع `
+        + 'MASTER_KEY_VERSION. مفتاحٌ سابقٌ بنفس الرقم يطمس الرئيسَ فيُشفَّر '
+        + 'الجديدُ بالقديم بصمت.',
+      );
+    }
+    keys.set(ver, decodeKey(v, k));
   }
   return keys;
 }

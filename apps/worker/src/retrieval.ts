@@ -1,6 +1,7 @@
 import IORedis from 'ioredis';
 import { kbChunks, kbRetrievals, sql, eq, and, type Tx } from '@aibot/db';
 import { getProvider, DEFAULT_EMBED_MODEL, EMBED_DIMS } from '@aibot/ai';
+import { platformAiKey } from './pricing.js';
 import {
   normalizeArabic, shouldSkipRetrieval, rrf, fitChunks,
   type KnowledgeChunk, type KnowledgeProvider,
@@ -42,7 +43,7 @@ export async function embedQuery(text: string): Promise<{ vec: number[]; cacheHi
     //    الخلط لا يُنتج خطأً، يُنتج ترتيباً أسوأ بصمت.
     taskType: 'RETRIEVAL_QUERY',
     dimensions: EMBED_DIMS,
-  }, process.env.PLATFORM_AI_KEY!);
+  }, platformAiKey());
 
   await cache().setex(key, EMBED_CACHE_TTL, JSON.stringify(vec)).catch(() => undefined);
   return { vec: vec!, cacheHit: false };

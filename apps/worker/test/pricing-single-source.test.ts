@@ -23,6 +23,19 @@ const CONSUMERS = [
   'apps/worker/src/playground.ts',
 ];
 
+/**
+ * ★ ملفّاتٌ تقرأ مفتاحَ **المنصّة** للتضمين — لا مفتاحَ المستأجر.
+ *
+ *   لا تمرّ من `resolveAiKey` (التضمينُ دائماً على حساب المنصّة)، فبقيت
+ *   خارج `CONSUMERS` أعلاه — ولهذا نجا فيها `process.env.PLATFORM_AI_KEY!`
+ *   بينما الحارسُ أخضرُ منذ دفعات. و`retrieval.ts` على **مسار الردّ الساخن**:
+ *   `embedQuery` تُنادى لكلّ ردٍّ فيه استرجاع.
+ */
+const PLATFORM_KEY_USERS = [
+  'apps/worker/src/embed.ts',
+  'apps/worker/src/retrieval.ts',
+];
+
 describe('السعرُ يُقرأ من موضعٍ واحد', () => {
   it('لا استعلامَ أسعارٍ خارج pricing.ts', () => {
     for (const rel of CONSUMERS) {
@@ -44,6 +57,16 @@ describe('السعرُ يُقرأ من موضعٍ واحد', () => {
     for (const rel of CONSUMERS) {
       expect(read(rel), `${rel} يمرّر مفتاحاً قد يكون undefined إلى المزوّد`)
         .not.toMatch(/PLATFORM_AI_KEY/);
+    }
+  });
+
+  it('★★ ولا في قارئي مفتاحِ المنصّة — وهما اللذان أفلتا', () => {
+    /* 🔴 علامةُ التعجّب تُخرس المدقّق وتُمرّر `undefined` إلى المزوّد، فيعود
+       401 بلا اسمِ سبب. وفي `retrieval.ts` هذا على مسار الردّ الساخن. */
+    for (const rel of PLATFORM_KEY_USERS) {
+      expect(read(rel), `${rel} يمرّر مفتاحاً قد يكون undefined إلى المزوّد`)
+        .not.toMatch(/process\.env\.PLATFORM_AI_KEY!/);
+      expect(read(rel), `${rel} لا يمرّ من الموضع الواحد`).toContain('platformAiKey()');
     }
   });
 

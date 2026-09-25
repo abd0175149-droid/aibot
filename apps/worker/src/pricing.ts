@@ -1,5 +1,6 @@
 import { prices, aiKeys, eq, and, desc, sql, type Tx, lte} from '@aibot/db';
 import { open as decrypt } from '@aibot/crypto';
+import { AiError } from '@aibot/ai';
 
 /**
  * ★ حلُّ المفتاح والسعر — **موضعٌ واحدٌ للحيّ وللساحة معاً**.
@@ -67,4 +68,28 @@ export async function priceAt(
       cachedInput: row.cachedInput === null ? null : Number(row.cachedInput),
     }
     : null;
+}
+
+/**
+ * ★★ **مفتاحُ المنصّة للتضمين — والغيابُ يُقال لا يُمرَّر.**
+ *
+ *   التضمينُ دائماً على حساب المنصّة لا العميل (نموذجٌ واحدٌ لكلّ المستأجرين،
+ *   وأبعادٌ ثابتةٌ في المخطّط)، فلا يمرّ من `resolveAiKey`. وكان يُقرأ في
+ *   موضعَين بـ`process.env.PLATFORM_AI_KEY!`: علامةُ التعجّب تُخرس المدقّق
+ *   وتُمرّر `undefined` إلى المزوّد، فيعود 401 بلا اسمِ سبب — والتشخيصُ يبدأ
+ *   من «لماذا رفض جوجل مفتاحَنا؟» بدل «لا مفتاحَ مضبوط».
+ *
+ * ⚠️ و`retryable: false`: مفتاحٌ غائبٌ لا يُصلحه تكرارٌ، وإعادةُ المحاولة
+ *    أربعَ مرّاتٍ على نقصِ إعدادٍ كلفةٌ بلا أمل. ومسارُ الردّ يقرأ هذا العلم.
+ */
+export function platformAiKey(): string {
+  const k = process.env.PLATFORM_AI_KEY;
+  if (!k) {
+    throw new AiError(
+      'NO_KEY',
+      'مفتاحُ المنصّة للتضمين (PLATFORM_AI_KEY) غير مضبوط — لا استرجاعَ ولا تضمين',
+      false,
+    );
+  }
+  return k;
 }

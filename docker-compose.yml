@@ -114,6 +114,17 @@ services:
       #    انسخه احتياطيّاً خارج الخادم. فقدانه = فقدان كلّ التوكنات بلا استرجاع.
       MASTER_KEY: ${MASTER_KEY:?اضبط MASTER_KEY — 32 بايت base64}
       MASTER_KEY_VERSION: ${MASTER_KEY_VERSION:-1}
+      # ★★ **مفاتيحُ التدوير تُمرَّر، وإلّا فالتدويرُ يُفسد كلَّ سرٍّ مخزَّن.**
+      #    `packages/crypto` يمسح البيئةَ بحثاً عن `MASTER_KEY_V<n>` ليفكّ ما
+      #    شُفّر بمفتاحٍ سابق أثناء التدوير. ولا `env_file:` في هذا الملفّ
+      #    إطلاقاً: ما لا يُذكر هنا لا يصل الحاويةَ مهما كان في `.env`.
+      #    فمن يتّبع الإجراءَ الموثَّق — يضبط `MASTER_KEY_V1` ويرفع الإصدار —
+      #    يجد كلَّ صفٍّ قديمٍ يرمي عند الفكّ، **و`.env` عنده صحيح**.
+      # ⚠️ وبلا `:-` قيمةٌ افتراضيّة: `${VAR}` غيرِ المضبوط يصل سلسلةً فارغة،
+      #    و`loadKeys` يتخطّى الفارغ (`if (m && v)`) فلا يُسجَّل مفتاحٌ كاذب.
+      MASTER_KEY_V1: ${MASTER_KEY_V1:-}
+      MASTER_KEY_V2: ${MASTER_KEY_V2:-}
+      MASTER_KEY_V3: ${MASTER_KEY_V3:-}
       # ثابتان: تغييرهما يُبطل كلّ اشتراكات الإشعارات القائمة بصمت.
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?}
@@ -140,6 +151,18 @@ services:
       TRUST_PROXY: ${TRUST_PROXY:-127.0.0.1}
       PLATFORM_AI_KEY: ${PLATFORM_AI_KEY:?مفتاح Gemini للمنصّة}
       EMBED_MODEL: ${EMBED_MODEL:-gemini-embedding-001}
+      # ★ `CHAT_MODEL` يُقرأ في `packages/ai` ويُوثَّق في `.env.example` ولم يكن
+      #   يُمرَّر — بينما `EMBED_MODEL` أخوه يُمرَّر. فمن يضبطه في `.env` يحصل
+      #   على النموذج المخبوز في الشيفرة بصمت، ويظنّ أنّه بدّله.
+      CHAT_MODEL: ${CHAT_MODEL:-gemini-2.5-flash}
+      # ★★ **حجمُ بِركة القاعدة ليس ضبطَ أداءٍ — هو ثابتٌ معماريّ.**
+      #    القاعدةُ المكتوبة في `reply.ts` («لا نداءَ شبكةٍ داخل معاملة»)
+      #    وتقسيمُ `handleReply` إلى ثلاثة أطوارٍ، كلاهما مبنيٌّ على أنّ
+      #    البِركة عشرةٌ وتزامنَ `ch-inbound` عشرة. وخفضُ هذا الرقم يُبطل
+      #    الحسابَ كلَّه ويُنتج `timeout` عند طلب اتّصالٍ في موضعٍ لا علاقةَ
+      #    له بالسبب. وكان مقبضاً غيرَ موثَّقٍ يُقرأ من البيئة ولا يُمرَّر.
+      PG_POOL_MAX: ${PG_POOL_MAX:-10}
+      REDIS_PING_TIMEOUT_MS: ${REDIS_PING_TIMEOUT_MS:-2000}
     ports:
       - "127.0.0.1:${API_PORT:-4100}:${API_PORT:-4100}"
     depends_on:
@@ -179,8 +202,24 @@ services:
       REDIS_URL: redis://redis:6379
       MASTER_KEY: ${MASTER_KEY:?}
       MASTER_KEY_VERSION: ${MASTER_KEY_VERSION:-1}
+      # ★★ **مفاتيحُ التدوير تُمرَّر، وإلّا فالتدويرُ يُفسد كلَّ سرٍّ مخزَّن.**
+      #    `packages/crypto` يمسح البيئةَ بحثاً عن `MASTER_KEY_V<n>` ليفكّ ما
+      #    شُفّر بمفتاحٍ سابق أثناء التدوير. ولا `env_file:` في هذا الملفّ
+      #    إطلاقاً: ما لا يُذكر هنا لا يصل الحاويةَ مهما كان في `.env`.
+      #    فمن يتّبع الإجراءَ الموثَّق — يضبط `MASTER_KEY_V1` ويرفع الإصدار —
+      #    يجد كلَّ صفٍّ قديمٍ يرمي عند الفكّ، **و`.env` عنده صحيح**.
+      # ⚠️ وبلا `:-` قيمةٌ افتراضيّة: `${VAR}` غيرِ المضبوط يصل سلسلةً فارغة،
+      #    و`loadKeys` يتخطّى الفارغ (`if (m && v)`) فلا يُسجَّل مفتاحٌ كاذب.
+      MASTER_KEY_V1: ${MASTER_KEY_V1:-}
+      MASTER_KEY_V2: ${MASTER_KEY_V2:-}
+      MASTER_KEY_V3: ${MASTER_KEY_V3:-}
       PLATFORM_AI_KEY: ${PLATFORM_AI_KEY:?}
       EMBED_MODEL: ${EMBED_MODEL:-gemini-embedding-001}
+      # ★ `CHAT_MODEL` يُقرأ في `packages/ai` ويُوثَّق في `.env.example` ولم يكن
+      #   يُمرَّر — بينما `EMBED_MODEL` أخوه يُمرَّر. فمن يضبطه في `.env` يحصل
+      #   على النموذج المخبوز في الشيفرة بصمت، ويظنّ أنّه بدّله.
+      CHAT_MODEL: ${CHAT_MODEL:-gemini-2.5-flash}
+      PG_POOL_MAX: ${PG_POOL_MAX:-10}
       VAPID_PUBLIC_KEY: ${VAPID_PUBLIC_KEY:?}
       VAPID_PRIVATE_KEY: ${VAPID_PRIVATE_KEY:?}
       PUBLIC_URL: ${PUBLIC_URL:-https://aibot.masaros.net}

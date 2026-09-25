@@ -6,6 +6,7 @@ import { getProvider, DEFAULT_EMBED_MODEL, EMBED_DIMS } from '@aibot/ai';
 import { estimateTokens } from '@aibot/core';
 import { sha256 } from '@aibot/crypto';
 import { raiseIncident } from './incidents.js';
+import { platformAiKey } from './pricing.js';
 
 /**
  * ★ خطّ التضمين: من نصٍّ إلى فكتور.
@@ -74,7 +75,7 @@ export async function handleEmbed(job: { tenantId: string; versionId: string }):
           model: DEFAULT_EMBED_MODEL,
           taskType: 'RETRIEVAL_DOCUMENT',
           dimensions: EMBED_DIMS,
-        }, process.env.PLATFORM_AI_KEY!);
+        }, platformAiKey());
         batch.forEach((p, j) => {
           fresh.set(sha256(`${p.heading ?? ''}\n${p.body}`).slice(0, 40), vecs[j]!);
         });
