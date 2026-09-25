@@ -343,7 +343,7 @@ describe('★ النشرُ يتراجع عند كلّ فشل — لا عند ب�
        للقنوات ولا إغلاقَ نوافذَ ولا إشارةَ «رسائلٌ بلا ردود» ولا تجميعَ
        إشعارات: كلُّ ما يُنبّه أنّ شيئاً تعطّل **هو نفسُه** ما تعطّل. */
     const w = readFileSync(join(REPO, 'apps', 'worker', 'src', 'main.ts'), 'utf8');
-    expect(w).toMatch(/if \(schedCount !== SCHED_EXPECTED\) {/);
+    expect(w).toContain('if (schedCount < SCHED_EXPECTED) {');
     expect(w, 'الخروجُ يجعل compose يُعيد التشغيل فتظهر الحاويةُ تتهاوى')
       .toMatch(/process\.exit\(1\)/);
     /* ★ والعدُّ **يُقرأ من ريدِس** لا يُحسب من النيّة: `add` قد يُرجع

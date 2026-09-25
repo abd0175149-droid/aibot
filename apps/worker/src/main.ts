@@ -8,6 +8,7 @@ import { handleEmbed } from './embed.js';
 import { sendOutbound } from './outbound.js';
 import { runHealthPoll, closeExpiredWindows, negativeSignals } from './health.js';
 import { handleNotify, flushDigest } from './notify.js';
+import { runRetention } from './retention.js';
 import { handleIngest } from './extract.js';
 import { runPlayground } from './playground.js';
 
@@ -77,6 +78,11 @@ const workers = [
       log('أُغلقت نوافذ منتهية', { n });
     } else if (job.name === 'signals') {
       await negativeSignals();
+    } else if (job.name === 'retention') {
+      const r = await runRetention();
+      /* يُسجَّل دائماً ولو كان صفراً: «لم يُحذف شيء» خبرٌ يُقرأ، و«لم يعمل
+         الاحتفاظ منذ أسبوع» هو ما لا يُرى بلا هذا السطر. */
+      log('احتفاظ', Object.fromEntries(r.map((x) => [x.table, x.deleted])));
     } else if (job.name === 'digest') {
       await flushDigest();
     }
@@ -101,6 +107,10 @@ const SCHED = [
   { q: QUEUE.maintenance, name: 'signals', jobId: 'negative-signals', every: 5 * 60_000 },
   // التجميع كلّ 15 دقيقة — الحرج يخترقه ويمرّ فوراً
   { q: QUEUE.maintenance, name: 'digest', jobId: 'digest', every: 15 * 60_000 },
+  /* ★ الاحتفاظ مرّةً كلّ ستّ ساعات: الحذفُ دفعاتٌ محدودة، وما يبقى
+     يُحذف في الدورة التالية — فلا حاجةَ إلى تواترٍ أعلى، والتواترُ العالي
+     يعني قفلَ صفوفٍ أكثر بلا فائدة. */
+  { q: QUEUE.maintenance, name: 'retention', jobId: 'retention', every: 6 * 60 * 60_000 },
 ] as const;
 
 export const SCHED_EXPECTED = SCHED.length;
@@ -141,7 +151,10 @@ const schedCount = await scheduleRepeatables().catch((e) => {
   return -1;
 });
 
-if (schedCount !== SCHED_EXPECTED) {
+/* ⚠️ `<` لا `!==`: عددٌ **أكبر** يعني مجدوِلاً قديماً بقي في ريدِس بعد إعادة
+   تسمية — وهو نفايةٌ تُنظَّف، لا سببٌ لمنع النشر. و`!==` كانت ستُسقط أوّلَ
+   نشرةٍ بعد أيّ تغييرِ اسم: انقطاعٌ نصنعه بأيدينا لأجل صفٍّ زائدٍ في ريدِس. */
+if (schedCount < SCHED_EXPECTED) {
   console.error(JSON.stringify({
     level: 'fatal', svc: 'worker', msg: 'المجدوِلات ناقصة — لا إقلاع',
     expected: SCHED_EXPECTED, got: schedCount,
@@ -150,7 +163,13 @@ if (schedCount !== SCHED_EXPECTED) {
 }
 
 for (const w of workers) {
-  w.on('completed', (job) => log('مهمّة تمّت', { queue: w.name, id: job.id }));
+  /* 🔴 سطرٌ لكلّ مهمّةٍ **تمّت** ليس تشخيصاً بل ضجيج: النجاحُ هو الحالةُ
+     الغالبة، فيُغرق السجلَّ بما لا يُقرأ ويدفن الإخفاقات بينه — ويملأ قرصاً
+     هو أصلاً على ٨٦٪. والفشلُ يبقى مسجَّلاً كاملاً أدناه: **الخبرُ هو ما
+     شذّ**. ويبقى الإحصاءُ متاحاً من عمق الطوابير في `/api/health/deep`. */
+  if (process.env.LOG_COMPLETED === '1') {
+    w.on('completed', (job) => log('مهمّة تمّت', { queue: w.name, id: job.id }));
+  }
   w.on('failed', (job, err) => {
     const finalAttempt = !job || (job.attemptsMade >= (job.opts?.attempts ?? 1));
     console.error(JSON.stringify({
