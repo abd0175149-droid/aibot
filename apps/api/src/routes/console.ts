@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import {
-  getDb, withPlatform, tenants, users, plans, subscriptions, tenantChannels,
+  getDb, withPlatform, tenants, users, sessions, plans, subscriptions, tenantChannels,
   conversationWindows, aiRuns, incidents, auditLog, botConfigs,
-  eq, and, desc, asc, sql,
+  eq, and, isNull, desc, asc, sql,
 } from '@aibot/db';
 import { AppError, ErrorCode } from '@aibot/shared';
 import { publicId, seal, sha256 } from '@aibot/crypto';
@@ -16,12 +16,20 @@ import { emitToPlatform } from '../realtime.js';
  * كلٌّ منه يمرّر **سبباً مكتوباً**، ويُسجَّل ما يستحقّ التسجيل في `audit_log`.
  * الوصول العابر للمستأجرين لا يكون صامتاً.
  */
+/** نفسُ حارس `team.ts`: معرّفٌ مشوّهٌ «لا شيءَ بهذا الاسم» لا «عطبٌ عندنا». */
+const UUID_RE = /^[0-9a-f-]{36}$/i;
+
 export async function registerConsole(app: FastifyInstance) {
   const owner = requireAuth({ console: true, role: ['platform_owner'] });
 
   /** الجدول مرتَّبٌ **بالمخاطرة** لا بالاسم: الأسوأ صحّةً أوّلاً ثمّ الأقرب لسقفه. */
   app.get('/console/tenants', { preHandler: owner }, async () => {
     const db = getDb();
+    /* ★ و`coalesce(bv.mode, 'full')` يُقنّع الغياب، فعميلٌ بلا نسخةٍ منشورةٍ
+       إطلاقاً كان يُوسَم في اللوحة «حقنٌ كامل» — يُقرأ «بوتُه يعمل» على تهيئةٍ لم
+       تبدأ. فـ`botSeeded` علَمٌ صريحٌ يُرى منه النقص.
+       و`ownerPending` («مالكٌ لم يدخل قطّ وكلمتُه مؤقّتة») هي بعينها علامةُ
+       معالجٍ أُغلق قبل أن تُنسخ الكلمة — وهي تُعرض مرّةً واحدةً ولا تُخزَّن. */
     return withPlatform(db, 'عرض جدول العملاء في لوحة المالك', async (tx) => {
       const rows = await tx.execute(sql`
         SELECT t.id, t.name, t.status, t.public_id AS "publicId",
@@ -30,7 +38,10 @@ export async function registerConsole(app: FastifyInstance) {
                coalesce(w.cost, 0)::float     AS "aiCost",
                coalesce(inc.open_critical, 0) AS "openCritical",
                coalesce(ch.worst, 'none')     AS "channelHealth",
-               coalesce(bv.mode, 'full')      AS "knowledgeMode"
+               coalesce(bv.mode, 'full')      AS "knowledgeMode",
+               (bv.mode IS NOT NULL)          AS "botSeeded",
+               ow.email                       AS "ownerEmail",
+               coalesce(ow.pending, false)    AS "ownerPending"
           FROM tenants t
           LEFT JOIN subscriptions s ON s.tenant_id = t.id AND s.status = 'active'
           LEFT JOIN plans p ON p.id = s.plan_id
@@ -51,6 +62,13 @@ export async function registerConsole(app: FastifyInstance) {
             SELECT bv.knowledge_mode AS mode FROM bot_configs bc
               JOIN bot_versions bv ON bv.id = bc.published_version_id
              WHERE bc.tenant_id = t.id) bv ON true
+          LEFT JOIN LATERAL (
+            SELECT u.email,
+                   (u.must_change_password AND u.last_login_at IS NULL) AS pending
+              FROM users u
+             WHERE u.tenant_id = t.id AND u.role = 'tenant_owner' AND u.is_active
+             ORDER BY u.created_at ASC
+             LIMIT 1) ow ON true
          WHERE t.status <> 'archived'
          ORDER BY inc.open_critical DESC NULLS LAST,
                   (coalesce(w.billed,0)::float / greatest((p.limits->>'windows')::int, 1)) DESC
@@ -74,6 +92,10 @@ export async function registerConsole(app: FastifyInstance) {
       }
       const db = getDb();
       const temp = publicId().slice(0, 12);
+      /* ⚠️ التجزئةُ **قبل** فتح المعاملة: argon2 نحو مئة مِلّي ثانية، وكان
+         يُنفَّذ داخل `withPlatform` فيحتجز واحداً من عشرة اتّصالاتٍ في البِركة
+         بلا عملِ قاعدةٍ أصلاً — ونفسُ القاعدة تمنع نداءَ الشبكة داخل معاملة. */
+      const ownerHash = await hashPassword(temp);
 
       return withPlatform(db, 'إنشاء مستأجرٍ جديد من لوحة المالك', async (tx) => {
         const [tenant] = await tx.insert(tenants).values({
@@ -85,7 +107,7 @@ export async function registerConsole(app: FastifyInstance) {
 
         await tx.insert(users).values({
           tenantId: tenant!.id, email: b.ownerEmail!.toLowerCase(),
-          passwordHash: await hashPassword(temp),
+          passwordHash: ownerHash,
           name: b.ownerName ?? b.name!, role: 'tenant_owner', mustChangePassword: true,
         });
 
@@ -172,6 +194,104 @@ export async function registerConsole(app: FastifyInstance) {
       };
     });
   });
+
+  /**
+   * ★ **إعادةُ كلمةِ مرورٍ مؤقّتةٍ لمالك عميل — البابُ الذي كان `ssh` وحده.**
+   *
+   *   `tempPassword` تُعرض **مرّةً واحدةً** في الخطوة الثانية من المعالج ولا
+   *   تُخزَّن نصّاً في أيّ مكان. ومعالجٌ يُغلق بنقرةٍ على الخلفيّة يترك مالكاً لا
+   *   يملك كلمته ولا بابَ استعادة: الانتحالُ قراءةٌ فقط عن قصد،
+   *   و`/team/:id/reset-password` مُقيَّدٌ بمستأجر التوكن. فكان المخرجُ الوحيد
+   *   `ops/set-password.ts` على الخادم.
+   *
+   * ★ ونفسُ حدود `/team/:id/reset-password` الثلاثة: كلمةٌ مولَّدةٌ يعرفها من
+   *   عيّنها ⇒ `mustChangePassword` مرفوعٌ دائماً، وكلُّ الجلسات تسقط في نفس
+   *   المعاملة (تعطيلٌ لا يطرد ليس تعطيلاً)، والأثرُ مسجَّلٌ باسم الفاعل.
+   */
+  app.post<{ Params: { id: string } }>(
+    '/console/tenants/:id/owner/reset-password',
+    { preHandler: owner },
+    async (req) => {
+      /* ⚠️ معرّفٌ مشوّهٌ يُردّ عليه ٤٠٤ لا ٥٠٠: `${id}` في `sql` يُحوَّل إلى
+         uuid في القاعدة، فخطأٌ مطبعيٌّ كان يرفع 22P02 ويقرأ المالكُ «عطبٌ
+         عندنا» عن خطئه هو. والفحصُ قبل argon2 فلا يُهدَر مئةُ مِلّي ولا اتّصال. */
+      if (!UUID_RE.test(req.params.id)) {
+        throw new AppError(ErrorCode.TENANT_NOT_FOUND, 'لا عميلَ بهذا المعرّف', 404);
+      }
+      const db = getDb();
+      const temp = publicId().slice(0, 12);
+      const hash = await hashPassword(temp);
+
+      const out = await withPlatform(db, 'إعادةُ كلمةِ مرورٍ مؤقّتةٍ لمالك عميل', async (tx) => {
+        const target = (await tx.select({ id: users.id, email: users.email }).from(users)
+          .where(and(
+            eq(users.tenantId, req.params.id),
+            eq(users.role, 'tenant_owner'),
+            eq(users.isActive, true),
+          ))
+          .orderBy(asc(users.createdAt)).limit(1))[0];
+        if (!target) throw new AppError(ErrorCode.VALIDATION, 'لا مالكَ نشطاً لهذا العميل', 404);
+
+        await tx.update(users)
+          .set({ passwordHash: hash, mustChangePassword: true })
+          .where(eq(users.id, target.id));
+
+        const revoked = await tx.update(sessions)
+          .set({ revokedAt: new Date() })
+          .where(and(eq(sessions.userId, target.id), isNull(sessions.revokedAt)))
+          .returning({ id: sessions.id });
+
+        await tx.insert(auditLog).values({
+          tenantId: req.params.id, actorUserId: req.auth!.sub,
+          action: 'tenant.owner_password_reset', entity: 'user', entityId: target.id, ip: req.ip,
+          diff: { email: target.email, generated: true, sessionsRevoked: revoked.length },
+        });
+        return { email: target.email, sessionsRevoked: revoked.length };
+      });
+
+      // تُعرض مرّةً واحدةً كما في المعالج — ولا تُخزَّن نصّاً في أيّ مكان
+      return { ...out, tempPassword: temp };
+    },
+  );
+
+  /**
+   * ★ **بيانا الويبهوك لعميلٍ موصولٍ سلفاً — وكانا يخرجان بـ`ssh` وحده.**
+   *
+   *   `verifyToken` يُستَرّ عمداً: `GET /channels` يُسقطه من الردّ، وهو في قائمة
+   *   الحجب في `packages/crypto`. فإن أغلق العميلُ معالجَه قبل الخطوة الخامسة
+   *   ضاع منه الـCallback URL وتوكنُ التحقّق، ولا يعودان إلّا بإعادة إدخال
+   *   التوكن الدائم وسرّ التطبيق — وهما ما لا يملكه مالكُ المنصّة.
+   *
+   * ⚠️ ولذلك مسارٌ مستقلٌّ يُطلب عند الحاجة، لا حقلٌ في قائمة العملاء: سرٌّ
+   *    يُشحن مع كلّ صفٍّ في كلّ فتحةٍ للوحة سرٌّ مُذاعٌ لا مُتاح.
+   */
+  app.get<{ Params: { id: string } }>(
+    '/console/tenants/:id/channel',
+    { preHandler: owner },
+    async (req) => {
+      if (!UUID_RE.test(req.params.id)) {
+        throw new AppError(ErrorCode.TENANT_NOT_FOUND, 'لا عميلَ بهذا المعرّف', 404);
+      }
+      return withPlatform(getDb(), 'قراءةُ بيانات ويبهوك عميلٍ لإعادة إعطائها له', async (tx) => {
+        const t = (await tx.select({ publicId: tenants.publicId }).from(tenants)
+          .where(eq(tenants.id, req.params.id)).limit(1))[0];
+        if (!t) throw new AppError(ErrorCode.TENANT_NOT_FOUND, 'لا عميلَ بهذا المعرّف', 404);
+
+        const rows = await tx.select({
+          kind: tenantChannels.kind,
+          status: tenantChannels.status,
+          verifyToken: tenantChannels.verifyToken,
+        }).from(tenantChannels).where(eq(tenantChannels.tenantId, req.params.id));
+
+        await tx.insert(auditLog).values({
+          tenantId: req.params.id, actorUserId: req.auth!.sub,
+          action: 'tenant.channel_secrets_read', entity: 'tenant', entityId: req.params.id,
+          ip: req.ip, diff: { channels: rows.length },
+        });
+        return { publicId: t.publicId, channels: rows };
+      });
+    },
+  );
 
   /** مفتاح إيقافٍ فوريّ لبوت عميل — الفعل الذي تحتاجه الثالثة فجراً. */
   app.post<{ Params: { id: string } }>('/console/tenants/:id/kill-bot', { preHandler: owner }, async (req) => {

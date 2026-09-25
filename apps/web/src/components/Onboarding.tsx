@@ -2,12 +2,11 @@
 
 import { useState } from 'react';
 import { post, ApiError } from '@/lib/api';
-/* ★ المعالجُ حيث يتعلّم المالكُ المفردات: تعليمُه «توكن» هنا يضمن أن
-   يُقرأ اسمُ الشاشة التالية اسماً لشيءٍ آخر. */
-import { READ_UNIT } from '@/lib/terms';
-import { PERSONA_TEMPLATES } from '@/lib/personas';
+/* ★ نموذجُ البذر مشتركٌ مع ورقة العميل في اللوحة: المسارُ نفسُه يُنادى من
+   موضعَين، ونسختان من نفس الحدود تتباعدان عند أوّل تعديل. */
+import { BotSeedForm } from '@/components/BotSeedForm';
 import {
-  Modal, Button, Field, Input, TextArea, Select, Stack, Row,
+  Modal, Button, Field, Input, Stack, Row,
   Pill, Note, CodeBlock, KV, KVRow, Iso,
 } from '@/components/ui';
 
@@ -26,7 +25,7 @@ import {
  * قيمة له، وقناةٌ سليمة بردودٍ بسيطة منتَجٌ يُعرض.
  */
 
-type Step = 1 | 2 | 3 | 4 | 5;
+type Step = 1 | 2 | 3 | 4;
 
 interface Created {
   tenant: { id: string; name: string; slug: string; publicId: string };
@@ -63,18 +62,18 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
   const [wabaId, setWabaId] = useState('');
   const [conn, setConn] = useState<Connected | null>(null);
 
-  // ③ الشخصيّة ④ المعرفة
-  const [tpl, setTpl] = useState(PERSONA_TEMPLATES[0]!.id);
-  const [persona, setPersona] = useState(PERSONA_TEMPLATES[0]!.persona);
-  const [knowledge, setKnowledge] = useState('');
+  /**
+   * ★ **إغلاقٌ يُنبّه لا يختفي.**
+   *
+   *   قبل الخطوة الأولى لا شيءَ كُتب فالإغلاق مجّانيّ. وبعدها صار في القاعدة
+   *   مستأجرٌ ومالكٌ و**كلمةٌ مؤقّتةٌ تُعرض مرّةً واحدةً ولا تُخزَّن نصّاً** — فنقرةٌ
+   *   على خلفيّة النافذة (والخلفيّةُ تُغلق) كانت تتركه نصفَ مهيَّأٍ ولا تقول ذلك.
+   */
+  const [leaving, setLeaving] = useState(false);
 
-  const template = PERSONA_TEMPLATES.find((t) => t.id === tpl)!;
-
-  function pickTemplate(id: string) {
-    setTpl(id);
-    const t = PERSONA_TEMPLATES.find((x) => x.id === id);
-    // لا نمسح تعديلات العميل بلا إذنه — نستبدل فقط إن لم يُعدّل بعد
-    if (t && (persona === template.persona || !persona.trim())) setPersona(t.persona);
+  function requestClose() {
+    if (!created) { onClose(); return; }
+    setLeaving(true);
   }
 
   async function createTenant() {
@@ -114,34 +113,18 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
     } finally { setBusy(false); }
   }
 
-  async function publish() {
-    if (!created) return;
-    setBusy(true); setErr(null);
-    try {
-      /* بذرٌ لا استبدال: الخادم يرفض إن كان للعميل نسخةٌ منشورةٌ أصلاً، فلا
-         يمسح معالجٌ فُتح بالخطأ شخصيّةَ عميلٍ يعمل. */
-      await post(`/console/tenants/${created.tenant.id}/bot/seed`, {
-        persona, knowledgeBase: knowledge,
-      });
-      setStep(5);
-    } catch (e) {
-      setErr(e instanceof ApiError ? e.message : 'تعذّر النشر');
-    } finally { setBusy(false); }
-  }
-
   const STEPS: Array<{ n: Step; label: string }> = [
     { n: 1, label: 'النشاط' },
     { n: 2, label: 'القناة' },
-    { n: 3, label: 'الشخصيّة' },
-    { n: 4, label: 'المعرفة' },
-    { n: 5, label: 'تمّ' },
+    { n: 3, label: 'البوت' },
+    { n: 4, label: 'تمّ' },
   ];
 
   return (
     <Modal
       wide
       title="عميلٌ جديد"
-      onClose={onClose}
+      onClose={requestClose}
       footer={(
         <>
           {step === 1 && (
@@ -161,16 +144,10 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
               <Button onClick={() => setStep(3)}>أكمِل بلا ربط</Button>
             </>
           )}
-          {step === 3 && <Button variant="primary" onClick={() => setStep(4)}>التالي</Button>}
-          {step === 4 && (
-            <Button variant="primary" busy={busy} onClick={publish}
-              disabled={knowledge.trim().length < 40}
-              reason="اكتب معرفةً أساسيّة أوّلاً — بوتٌ بلا معرفةٍ يقول «لا أعرف» فقط">
-              انشر وابدأ
-            </Button>
-          )}
-          {step === 5 && <Button variant="primary" onClick={onDone}>أنهِ</Button>}
-          {step > 1 && step < 5 && <Button onClick={() => setStep((s) => (s - 1) as Step)}>السابق</Button>}
+          {/* الخطوةُ الثالثة لا فعلَ لها في الرصيف: زرُّ «انشر وابدأ» داخل
+              النموذج نفسِه، فلا يُقسَّم فعلٌ واحدٌ على موضعَين. */}
+          {step === 4 && <Button variant="primary" onClick={onDone}>أنهِ</Button>}
+          {step > 1 && step < 4 && <Button onClick={() => setStep((s) => (s - 1) as Step)}>السابق</Button>}
         </>
       )}
     >
@@ -181,6 +158,24 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
               tone={s.n === step ? 'brand' : s.n < step ? 'ok' : 'neutral'} />
           ))}
         </Row>
+
+        {leaving && created && (
+          <Note tone="warn">
+            <b>تهيئةٌ لم تكتمل.</b> أُنشئ العميل «{created.tenant.name}» ومالكُه بالفعل
+            {!conn && <>، ولم تُربَط قناتُه بعد</>}
+            {step < 4 && <>، ولا نسخةَ بوتٍ منشورةً له — فلن يردّ على أحد</>}.
+            <p className="muted-p">
+              وهذه <b>آخرُ مرّةٍ</b> تظهر فيها كلمتُه المؤقّتة — لا تُخزَّن نصّاً في أيّ مكان.
+              وما بقي يُكمَل من ورقة العميل في اللوحة: ربطُ القناة، وبذرُ بوته، وتوليدُ كلمةٍ
+              مؤقّتةٍ جديدةٍ لمالكه.
+            </p>
+            <CodeBlock label="كلمة المرور المؤقّتة" text={created.tempPassword} />
+            <Row gap="sm">
+              <Button variant="primary" onClick={() => setLeaving(false)}>أكمِل التهيئة</Button>
+              <Button onClick={onClose}>أغلِق — وأكمّلها من ورقة العميل</Button>
+            </Row>
+          </Note>
+        )}
 
         {err && <Note tone="crit">{err}</Note>}
         {!!issues.length && (
@@ -243,7 +238,7 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
           </Stack>
         )}
 
-        {step === 3 && (
+        {step === 3 && created && (
           <Stack gap="sm">
             {conn && (
               <KV>
@@ -263,35 +258,14 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
                 </KVRow>
               </KV>
             )}
-            <Field id="o-tpl" label="القطاع" hint="القالب نقطة بداية — عدّله بحرّية.">
-              <Select id="o-tpl" value={tpl} onChange={pickTemplate}
-                options={PERSONA_TEMPLATES.map((t) => ({ value: t.id, label: `${t.label} — ${t.hint}` }))} />
-            </Field>
-            <Field id="o-persona" label="شخصيّة البوت" hint="ما لا يفعله البوت أهمّ من قدراته.">
-              <TextArea id="o-persona" rows={14} value={persona} onChange={setPersona}
-                count={{ used: Math.ceil(persona.length / 2.5), limit: 2000, unit: READ_UNIT }} />
-            </Field>
+            <BotSeedForm
+              endpoint={`/console/tenants/${created.tenant.id}/bot/seed`}
+              onDone={() => setStep(4)}
+            />
           </Stack>
         )}
 
-        {step === 4 && (
-          <Stack gap="sm">
-            <Note>
-              <b>أجِب عن هذه، ولا تكتب أكثر.</b> المعرفة المرتّبة تهزم المعرفة الكثيرة:
-              <ul>{template.knowledgePrompts.map((q) => <li key={q}>{q}</li>)}</ul>
-            </Note>
-            <Field id="o-kb" label="معرفة البوت" hint="استعمل عناوين (سطرٌ يبدأ بـ# أو ينتهي بنقطتين) — تُحسّن الدقّة كثيراً.">
-              <TextArea id="o-kb" rows={14} value={knowledge} onChange={setKnowledge}
-                count={{ used: Math.ceil(knowledge.length / 2.5), limit: 8000, unit: READ_UNIT }} />
-            </Field>
-            <p className="muted-p">
-              فوق ثمانية آلاف وحدةِ قراءة يتحوّل البوت تلقائيّاً إلى إرسال «الأساسيات والقيود وما يرتبط
-              بالسؤال» — فمعرفةٌ أكبر لا تعني فاتورةً أكبر. والملفّات تُرفع لاحقاً من شاشة البوت.
-            </p>
-          </Stack>
-        )}
-
-        {step === 5 && created && (
+        {step === 4 && created && (
           <Stack gap="md">
             <Note>
               {/* ★ «منشورٌ ويستقبل» كانت تُقال والبوتُ قد يكون مطفأً ولا قناةَ

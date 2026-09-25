@@ -5,16 +5,17 @@ import { useApi, useToast, fmt } from '@/lib/useApi';
 /* ★ نفسُ الاسم الذي يراه العميل. ومكالمةُ دعمٍ يقول فيها العميل «يقرأ
    نصّي كاملاً» والموظّفُ أمامه «حقنٌ كامل» تُنتج تشخيصاً لحالةٍ أخرى. */
 import { KB_MODE, kbModeLabel } from '@/lib/terms';
-import { post, ApiError } from '@/lib/api';
+import { get, post, ApiError } from '@/lib/api';
 import { useCan } from '@/lib/session';
 import { Onboarding } from '@/components/Onboarding';
 import { ChannelConnectForm } from '@/components/ChannelConnectForm';
+import { BotSeedForm } from '@/components/BotSeedForm';
 import {
   PageHead, Stack, Row, Meter, Pill, Tag, Dot, Note, Button, Table, DataView,
-  ErrorBox, Sheet, Dock, KV, KVRow, Field, Input, type Column, type Tone,
+  ErrorBox, Sheet, Dock, KV, KVRow, Field, Input, CodeBlock, type Column, type Tone,
 } from '@/components/ui';
 import { Bar } from './parts';
-import { Hero, MetricRow, Delta, Section } from '@/components/screen';
+import { Hero, MetricRow, Delta, Section, Fold } from '@/components/screen';
 
 /**
  * لوحة المالك — جدول العملاء.
@@ -54,6 +55,11 @@ interface TenantRow {
   openCritical: number;
   channelHealth: string;
   knowledgeMode: string;
+  /** هل للعميل نسخةُ بوتٍ منشورة — و`knowledgeMode` تُقنَّع بـ'full' عند غيابها فلا تُقرأ دليلاً. */
+  botSeeded: boolean;
+  ownerEmail: string | null;
+  /** مالكٌ بكلمةٍ مؤقّتةٍ لم يدخل قطّ — أثرُ معالجٍ أُغلق قبل أن تُنسخ الكلمة. */
+  ownerPending: boolean;
 }
 
 /** صفّ الهامش — من `GET /console/usage`؛ يشمل المستأجرين الفعّالين وحدهم. */
@@ -150,14 +156,29 @@ export default function TenantsPage() {
   const [openId, setOpenId] = useState<string | null>(null);
   /* ربطُ/تجديدُ قناةٍ لعميلٍ قائم — الفعل الذي كان يمرّ بـssh وسكربت. */
   const [connectFor, setConnectFor] = useState<string | null>(null);
+  /* بذرُ بوتٍ لعميلٍ بقي بلا نسخةٍ منشورة — الفعل الثاني الذي كان بلا بابٍ في اللوحة. */
+  const [seedFor, setSeedFor] = useState<string | null>(null);
+  /** كلمةٌ مؤقّتةٌ مولَّدةٌ للتوّ — تُعرض مرّةً واحدةً ثمّ تُنسى كما في المعالج. */
+  const [ownerTemp, setOwnerTemp] = useState<{ email: string; pass: string } | null>(null);
+  /** بيانا الويبهوك بعد قراءتهما أو بعد ربطٍ — و`verifyToken` سرٌّ في هذا المستودع. */
+  const [webhook, setWebhook] = useState<{ url: string; token: string | null } | null>(null);
+  /* علَمٌ مستقلٌّ للتوليد: `busy` يقود زرَّ إيقاف البوت، وأخطرُ زرٍّ في الشاشة
+     لا يُظهر «…» في أثناء فعلٍ لا علاقةَ له به. */
+  const [resetting, setResetting] = useState(false);
   const [killWord, setKillWord] = useState('');
   const [busy, setBusy] = useState(false);
 
   /* ★ مفتاحُ الهروب وإدارةُ التركيز صارا داخل `Sheet` — لا نسخةَ هنا. */
 
+  /**
+   * ★ وكلُّ ما قد يحمل سرَّ عميلٍ يُصفَّر هنا: كلمةٌ مؤقّتةٌ أو توكنُ تحقّقٍ يبقى
+   *   بعد إغلاق الورقة يظهر في **ورقة عميلٍ آخر** — وذاك أسوأ من غيابه.
+   */
   function closeSheet() {
     setOpenId(null);
     setKillWord('');
+    setOwnerTemp(null);
+    setWebhook(null);
   }
 
   /**
@@ -178,6 +199,46 @@ export default function TenantsPage() {
       toast(e instanceof ApiError ? e.message : 'تعذّر إيقاف البوت. أعِد المحاولة.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  /**
+   * ★ توليدُ كلمةٍ مؤقّتةٍ لمالك عميل — البابُ الذي كان `ops/set-password.ts` وحده.
+   *   والكلمةُ تُعرض مرّةً واحدةً ولا تُخزَّن نصّاً، وكلُّ جلسات المالك تسقط.
+   */
+  async function resetOwner(r: TenantRow) {
+    setResetting(true);
+    try {
+      const out = await post<{ email: string; tempPassword: string; sessionsRevoked: number }>(
+        `/console/tenants/${r.id}/owner/reset-password`,
+      );
+      setOwnerTemp({ email: out.email, pass: out.tempPassword });
+      toast(`أُسقطت ${out.sessionsRevoked} جلسةً — انسخ الكلمة الآن، فلا تُعاد إلى أيّ شاشة.`);
+      await tenants.reload();
+    } catch (e) {
+      /* نداءٌ فاشلٌ يصمت يجعل من ضغط يظنّ أنّ كلمةً وُلدت — فيقول للعميل سرّاً لا وجودَ له. */
+      toast(e instanceof ApiError ? e.message : 'تعذّر توليد كلمةٍ مؤقّتة. أعِد المحاولة.');
+    } finally { setResetting(false); }
+  }
+
+  /**
+   * ★ قراءةُ الـCallback URL وتوكن التحقّق لعميلٍ موصولٍ سلفاً.
+   *   `verifyToken` مُسقَطٌ عمداً من `GET /channels` ومحجوبٌ في السجلّ، فمعالجٌ
+   *   أُغلق قبل خطوته الأخيرة كان يُفقده بلا رجعةٍ إلّا بـ`ssh`.
+   */
+  async function readWebhook(r: TenantRow) {
+    try {
+      const out = await get<{
+        publicId: string;
+        channels: Array<{ kind: string; status: string; verifyToken: string | null }>;
+      }>(`/console/tenants/${r.id}/channel`);
+      const wa = out.channels.find((c) => c.kind === 'whatsapp_cloud') ?? out.channels[0];
+      setWebhook({
+        url: `${window.location.origin}/api/webhooks/whatsapp/${out.publicId}`,
+        token: wa?.verifyToken ?? null,
+      });
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'تعذّرت قراءة بيانات الويبهوك.');
     }
   }
 
@@ -309,7 +370,12 @@ export default function TenantsPage() {
                         كامل» بمعرفةٍ تكبر هو الإنذارُ المبكّر لانفجار الكلفة،
                         وبقيّةُ الأوضاع لا يُقرَّر عليها شيء — فلا تُنفق عموداً
                         على ثلاث كلماتٍ لا تُغيّر فعلاً. */}
-                    {r.knowledgeMode === 'full' && <Tag tone="violet" label={KB_MODE.full.label} mark={false} />}
+                    {/* ★ الوسمُ كان يُرسم لعميلٍ بلا نسخةٍ منشورةٍ إطلاقاً، لأنّ
+                        الاستعلام يُقنّع الغياب بـ'full' — فيُقرأ «بوتُه يعمل» على
+                        تهيئةٍ لم تبدأ. والحالةُ نفسُها تستحقّ شارةً لا إخفاءً. */}
+                    {!r.botSeeded
+                      ? <Pill tone="warn" label="بلا بوتٍ منشور" />
+                      : r.knowledgeMode === 'full' && <Tag tone="violet" label={KB_MODE.full.label} mark={false} />}
                   </span>
                 </span>
               ),
@@ -603,7 +669,7 @@ export default function TenantsPage() {
               <Sheet
                 open={Boolean(connectFor)}
                 title="اربط/جدّد قناة العميل"
-                onClose={() => setConnectFor(null)}
+                onClose={() => { setConnectFor(null); setWebhook(null); }}
                 hint="يُفحص التوكن عند ميتا قبل أن يُحفظ، والفعل يُسجَّل باسمك في سجلّ العميل."
               >
                 {connectFor && (
@@ -613,6 +679,25 @@ export default function TenantsPage() {
                     onDone={() => {
                       setConnectFor(null);
                       toast('فُحص التوكن عند ميتا وحُفظ — والقناة موصولة.');
+                      void tenants.reload();
+                    }}
+                  />
+                )}
+              </Sheet>
+
+              {/* ورقةُ بذر البوت — نفسُ نموذج المعالج بنفس الحدود. */}
+              <Sheet
+                open={Boolean(seedFor)}
+                title="ابذر أوّل نسخةِ بوتٍ لهذا العميل"
+                onClose={() => setSeedFor(null)}
+                hint="الخادم يرفض إن كان للعميل نسخةٌ منشورةٌ أصلاً — فلا يمحو فتحٌ بالخطأ شخصيّةَ عميلٍ يعمل."
+              >
+                {seedFor && (
+                  <BotSeedForm
+                    endpoint={`/console/tenants/${seedFor}/bot/seed`}
+                    onDone={() => {
+                      setSeedFor(null);
+                      toast('نُشرت أوّلُ نسخةِ بوتٍ لهذا العميل وشُغِّل.');
                       void tenants.reload();
                     }}
                   />
@@ -642,6 +727,13 @@ export default function TenantsPage() {
                         عميلٍ قائم لم يكن له مخرجٌ من اللوحة إطلاقاً. والانتحالُ قراءةٌ فقط
                         عن قصد، فلا يصلح بديلاً. */}
                     <Button size="lg" onClick={() => setConnectFor(sel.id)}>اربط/جدّد القناة…</Button>
+                    {/* ★ بذرُ بوتٍ لعميلٍ لم يكتمل معالجُه — `…/bot/seed` كان مبنيّاً
+                        ولا يناديه إلّا المعالجُ نفسُه. والشرطُ لا زينة: الخادم يردّ ٤٠٩
+                        على عميلٍ له نسخةٌ منشورة، وزرٌّ يفشل دائماً يكسر الثقة. */}
+                    {!sel.botSeeded && (
+                      <Button size="lg" onClick={() => setSeedFor(sel.id)} disabled={can.readOnly}
+                        reason="انتحالٌ نشط — قراءةٌ فقط.">ابذر بوته…</Button>
+                    )}
                     <a className="btn lg" href="/console/margin">لوحةُ الهامش ‹</a>
                     <Button size="lg" onClick={closeSheet}>أغلِق</Button>
                   </Row>
@@ -654,13 +746,71 @@ export default function TenantsPage() {
                       {STATUS_PILL[sel.status] && (
                         <Pill tone={STATUS_PILL[sel.status]!.tone} label={STATUS_PILL[sel.status]!.label} />
                       )}
-                      <Tag tone="violet" label={kbModeLabel(sel.knowledgeMode)} mark={false} />
+                      {sel.botSeeded
+                        ? <Tag tone="violet" label={kbModeLabel(sel.knowledgeMode)} mark={false} />
+                        : <Pill tone="warn" label="بلا بوتٍ منشور" />}
                       {Number(sel.openCritical ?? 0) > 0 && (
                         <Pill tone="crit" label={`${fmt.num(sel.openCritical)} حرجة مفتوحة`} />
                       )}
                     </Row>
 
                     {selHealth && <p className="cn-dim">{selHealth.why}</p>}
+
+                    {/* ★★ تهيئةٌ ناقصةٌ تُرى. زرٌّ صحيحٌ في ورقةٍ لا تقول إنّ التهيئة
+                        ناقصةٌ لا يُضغَط — والمعالجُ كان يُغلق بلا إنذارٍ ولا أثر. */}
+                    {(!sel.botSeeded || sel.ownerPending) && (
+                      <Note tone="warn">
+                        <b>تهيئةٌ لم تكتمل.</b>{' '}
+                        {!sel.botSeeded && 'لا نسخةَ بوتٍ منشورةً لهذا العميل — بوتُه لا يردّ ولو كانت قناتُه سليمة. '}
+                        {sel.ownerPending && 'ومالكُه لم يدخل قطّ وكلمتُه ما زالت مؤقّتة — وهي تُعرض مرّةً واحدةً في المعالج، فلو أُغلق قبل نسخها فُقدت. '}
+                        وما بقي يُكمَل من هذه الورقة: طيّةُ «أعِد كلمةَ مرور مالكه» تحت هذا السطر،
+                        {!sel.botSeeded && <> وزرُّ «ابذر بوته…» في أسفلها،</>} وزرُّ «اربط/جدّد القناة…».
+                      </Note>
+                    )}
+
+                    {/* ★ إعادةُ كلمةِ مالكه — البابُ الذي كان `ops/set-password.ts` وحده.
+                        وكلُّ جلساته تسقط، فهو فعلٌ يُنطق أثرُه قبل الضغط لا بعده. */}
+                    <details className="cn-gate">
+                      <summary>أعِد كلمةَ مرور مالكه — وتسقط كلُّ جلساته</summary>
+                      <p className="cn-dim">
+                        تُولَّد كلمةٌ مؤقّتةٌ تُعرض <b>مرّةً واحدة</b> ولا تُخزَّن نصّاً، ويُطرَد المالكُ
+                        من كلّ أجهزته في الحال، ويُسجَّل الفعلُ باسمك في سجلّه فيراه.
+                        {sel.ownerEmail && <> والبريد <span className="mono">{sel.ownerEmail}</span>.</>}
+                      </p>
+                      {ownerTemp
+                        ? <CodeBlock label={`كلمةٌ مؤقّتةٌ لـ${ownerTemp.email}`} text={ownerTemp.pass} />
+                        : (
+                          <Button variant="danger" busy={resetting} disabled={can.readOnly}
+                            reason="انتحالٌ نشط — قراءةٌ فقط، وكلُّ فعلٍ كاتبٍ مرفوضٌ في الخادم أصلاً."
+                            onClick={() => void resetOwner(sel)}>ولّد كلمةً مؤقّتة</Button>
+                        )}
+                    </details>
+
+                    {/* ★ وبيانا ميتا: الـCallback URL وتوكنُ التحقّق. الثاني مُسقَطٌ من
+                        `GET /channels` عمداً ومحجوبٌ في السجلّ، فمعالجٌ أُغلق قبل خطوته
+                        الأخيرة كان يُفقده بلا رجعةٍ إلّا بـ`ssh`. */}
+                    {/* ⚠️ و`Fold` لا `cn-gate`: الثانيةُ محاطةٌ بأحمر لأنّها بوّابةُ فعلٍ
+                        لا رجعةَ فيه (إيقافُ بوتٍ، إسقاطُ جلسات). وقراءةُ عنوانٍ ليست
+                        خطراً — وإطارٌ أحمرُ على فعلٍ آمنٍ يُبلّد الأحمرَ حيث يَلزم. */}
+                    <Fold summary="بيانا ميتا — الـCallback URL وتوكن التحقّق">
+                      {webhook
+                        ? (
+                          <Stack gap="sm">
+                            <CodeBlock label="Callback URL" text={webhook.url} />
+                            {webhook.token
+                              ? <CodeBlock label="Verify token" text={webhook.token} />
+                              : <p className="cn-dim">لا قناةَ محفوظةٌ لهذا العميل بعد.</p>}
+                            <p className="cn-dim">
+                              يُلصقان في WhatsApp ← Configuration، ثمّ يُفعّل الحقل{' '}
+                              <span className="mono">messages</span> — وبلاه لا تصل رسالةٌ واحدة
+                              وكلُّ شيءٍ آخر يبدو سليماً.
+                            </p>
+                          </Stack>
+                        )
+                        : (
+                          <Button onClick={() => void readWebhook(sel)}>اعرِضهما</Button>
+                        )}
+                    </Fold>
 
                     <div className="mg-bars">
                       <span className="mg-lbl">إيرادٌ شهريّ</span>
