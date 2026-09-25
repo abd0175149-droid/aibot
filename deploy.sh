@@ -209,14 +209,22 @@ else
     return "$rc"
   }
 
-  if ! git diff --quiet "$BEFORE" "$AFTER" -- pnpm-lock.yaml 2>/dev/null \
-     || [ ! -d node_modules ]; then
-    echo "  ℹ القفل تغيّر — تثبيت التبعيّات"
+  # ★★ **المقارنةُ بما هو مُثبَّتٌ فعلاً، لا بفرقٍ بين نسختَي git.**
+  #    كان الشرطُ يسأل «هل تغيّر القفلُ في هذه السحبة؟» لا «هل يطابق
+  #    المثبَّتُ القفلَ؟». فسحبةٌ فارغة — بعد نشرةٍ فشلت، أو سحبٍ يدويّ —
+  #    تتخطّى التثبيتَ و`node_modules` قديمة. ووقع هذا: بقيت `xlsx@0.18.5`
+  #    مثبَّتةً بينما القفلُ يقول 0.20.3، فأسقطت البوّابةُ نشرةً سليمة.
+  #    والبصمةُ تُكتب **بعد** نجاح التثبيت وحده، فتثبيتٌ فاشلٌ يُعاد.
+  LOCK_STAMP="node_modules/.aibot-lock-sha"
+  LOCK_NOW="$(sha256sum pnpm-lock.yaml | cut -d" " -f1)"
+  if [ ! -d node_modules ] || [ "$(cat "$LOCK_STAMP" 2>/dev/null)" != "$LOCK_NOW" ]; then
+    echo "  ℹ المثبَّت لا يطابق القفل — تثبيت التبعيّات"
     if ! gate_run "$GATE_INSTALL_TIMEOUT" "تثبيت التبعيّات" \
          npx --yes pnpm@9 install --frozen-lockfile; then
       echo "  ✘ فشل تثبيت التبعيّات — لا يُنشر. ولم يُلمس شيءٌ بعد."
       exit 1
     fi
+    printf '%s' "$LOCK_NOW" > "$LOCK_STAMP"
   fi
 
   # ① الأنواع: هذا ما لا يفحصه شيءٌ آخر في المسار كلِّه.

@@ -95,6 +95,22 @@ describe('بوّابةُ الجودة داخل deploy.sh', () => {
     expect((block.match(/exit 1/g) ?? []).length).toBeGreaterThanOrEqual(2);
   });
 
+  it('★★ والتبعيّاتُ تُقاس بما هو مُثبَّتٌ لا بفرقٍ بين نسختَي git', () => {
+    const at = sh.indexOf('say "بوّابة الجودة"');
+    const block = sh.slice(at, sh.indexOf('say "وسم الصور', at));
+    /* 🔴 `git diff "$BEFORE" "$AFTER" -- pnpm-lock.yaml` يسأل «هل تغيّر القفلُ
+       في هذه السحبة؟» لا «هل يطابق المثبَّتُ القفل؟». فسحبةٌ فارغة — بعد
+       نشرةٍ فشلت أو سحبٍ يدويّ — تتخطّى التثبيتَ و`node_modules` قديمة.
+       ووقع هذا: بقيت `xlsx@0.18.5` بينما القفلُ يقول 0.20.3. */
+    expect(block, 'الشرطُ على فرقِ git لا على المثبَّت').not.toMatch(/git diff[^\n]*pnpm-lock/);
+    expect(block).toContain('sha256sum pnpm-lock.yaml');
+    /* والبصمةُ تُكتب **بعد** نجاح التثبيت وحده — وإلّا تخطّى الفاشلُ نفسَه. */
+    const stamp = block.indexOf('> "$LOCK_STAMP"');
+    const fail = block.indexOf('فشل تثبيت التبعيّات');
+    expect(stamp).toBeGreaterThan(0);
+    expect(stamp, 'البصمةُ تُكتب قبل التحقّق من النجاح').toBeGreaterThan(fail);
+  });
+
   it('★★ والتبعيّاتُ تُثبَّت إن تغيّر القفل', () => {
     const at = sh.indexOf('say "بوّابة الجودة"');
     const block = sh.slice(at, sh.indexOf('say "وسم الصور', at));
