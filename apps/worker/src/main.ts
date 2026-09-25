@@ -197,6 +197,12 @@ for (const w of workers) {
       level: 'error', svc: 'worker', queue: w.name, id: job?.id,
       tenantId: (job?.data as { tenantId?: string } | undefined)?.tenantId,
       attempts: job?.attemptsMade, final: finalAttempt, msg: err?.message,
+      /* ★ **الأثر، لا الرسالةُ وحدها.** مهمّةٌ فشلت برسالةٍ عامّةٍ مثل
+         «The "string" argument must be of type string … Received an instance
+         of Date» لا تدلّ على موضعٍ واحد: بحثتُ عنها في سبعة مواضع محتملة قبل
+         أن أدرك أنّ السجلّ نفسه هو النقص. وأربعةُ إطاراتٍ تكفي لتسمية الملفّ
+         والسطر، ولا تُغرق سجلّاً على قرصٍ ضيّق. */
+      stack: err?.stack?.split('\n').slice(1, 5).map((l) => l.trim()),
     }));
 
     /* ★ الفشل **النهائيّ** يُنتج حادثة — وكان يُكتب سطرَ سجلٍّ لا يقرؤه أحد.
