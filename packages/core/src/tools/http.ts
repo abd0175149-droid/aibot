@@ -1,5 +1,7 @@
 import { lookup } from 'node:dns/promises';
-import { isIP } from 'node:net';
+import { lookup as dnsLookup } from 'node:dns';
+import { request as httpsRequest } from 'node:https';
+import { isIP, type LookupFunction } from 'node:net';
 
 /**
  * ★ مُنفّذ أدوات HTTP.
@@ -72,17 +74,86 @@ export function redactSecrets(text: string, masks: Iterable<string>): string {
   return out;
 }
 
+/**
+ * ★★★ **فرعُ IPv6 كان مقارنةَ بادئاتٍ نصّيّة — ومقارنةُ النصّ لا تفهم العنوان.**
+ *
+ *   `startsWith('fe80')` يترك `fe90::1` و`feb0::1` يمرّان وهما في `fe80::/10`.
+ *   و`::7f00:1` (رابعٌ متوافقٌ = 127.0.0.1) و`64:ff9b::7f00:1` (NAT64) و
+ *   `2002:7f00:1::` (‏6to4) كلُّها تصل الحلقةَ المحلّيّة وكلُّها كانت **مقبولة**.
+ *   وتحويلُ العنوان إلى ستّةَ عشرَ بايتاً يُنهي هذا الصنفَ كلَّه: القرارُ على
+ *   البتّات كما تفهمها الشبكة، لا على شكل الكتابة.
+ */
+function v6Bytes(ip: string): number[] | null {
+  let t = ip.toLowerCase();
+  const pct = t.indexOf('%');            // fe80::1%eth0
+  if (pct >= 0) t = t.slice(0, pct);
+
+  /* ذيلٌ رابعٌ في سادس (`::ffff:1.2.3.4`) يُحوَّل إلى مجموعتَين سداسيّتَين
+     قبل التوسيع، فلا يحتاج التوسيعُ أن يعرف شكلَين. */
+  const lastColon = t.lastIndexOf(':');
+  const tail4 = t.slice(lastColon + 1);
+  if (tail4.includes('.')) {
+    const q = tail4.split('.');
+    if (q.length !== 4) return null;
+    const n = q.map((x) => (/^\d{1,3}$/.test(x) ? Number(x) : -1));
+    if (n.some((x) => x < 0 || x > 255)) return null;
+    t = `${t.slice(0, lastColon + 1)}${(((n[0]! << 8) | n[1]!) >>> 0).toString(16)}`
+      + `:${(((n[2]! << 8) | n[3]!) >>> 0).toString(16)}`;
+  }
+
+  const halves = t.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 ? (halves[1] ? halves[1].split(':') : []) : [];
+  const fill = halves.length === 2 ? 8 - head.length - tail.length : 0;
+  if (fill < 0) return null;
+  const groups = [...head, ...Array<string>(fill).fill('0'), ...tail];
+  if (groups.length !== 8) return null;
+
+  const out: number[] = [];
+  for (const g of groups) {
+    if (!/^[0-9a-f]{1,4}$/.test(g)) return null;
+    const n = parseInt(g, 16);
+    out.push((n >> 8) & 0xff, n & 0xff);
+  }
+  return out;
+}
+
+function isPrivateIp6(ip: string): boolean {
+  const b = v6Bytes(ip);
+  /* ما لا يُفهَم يُرفَض: الرفضُ افتراضيٌّ في كلّ هذا الملفّ. */
+  if (!b) return true;
+  const b0 = b[0]!;
+  const b1 = b[1]!;
+
+  /* ثمانون بتاً أصفار: `::` و`::1` و`::a.b.c.d` (رابعٌ متوافق) و`::ffff:…`.
+     والأخيرُ يُقاس بقواعد الرابع، والبقيّةُ تُرفض جملةً — `::7f00:1` هي
+     127.0.0.1 عند مكدّساتٍ كثيرة. */
+  if (b.slice(0, 10).every((x) => x === 0)) {
+    if (b[10] === 0xff && b[11] === 0xff) {
+      return isPrivateIp(`${b[12]}.${b[13]}.${b[14]}.${b[15]}`);
+    }
+    return true;
+  }
+
+  if (b0 === 0xfe && (b1 & 0xc0) === 0x80) return true;   // fe80::/10 رابطٌ محلّيّ
+  if ((b0 & 0xfe) === 0xfc) return true;                  // fc00::/7 محلّيٌّ فريد
+  if (b0 === 0xff) return true;                           // ff00::/8 بثٌّ جماعيّ
+  // 64:ff9b::/96 و64:ff9b:1::/48 — NAT64: يُترجَم إلى عنوانٍ رابعٍ عند البوّابة
+  if (b0 === 0x00 && b1 === 0x64 && b[2] === 0xff && b[3] === 0x9b) return true;
+  // 2002::/16 — 6to4: الرابعُ في البايتات ٢..٥، فـ2002:7f00:1:: هي 127.0.0.1
+  if (b0 === 0x20 && b1 === 0x02) return true;
+  // 2001:0000::/32 — Teredo: نفقٌ يحمل رابعاً
+  if (b0 === 0x20 && b1 === 0x01 && b[2] === 0 && b[3] === 0) return true;
+  // 100::/64 — مدى الحجب
+  if (b0 === 0x01 && b1 === 0x00 && b.slice(2, 8).every((x) => x === 0)) return true;
+
+  return false;
+}
+
 /** شبكاتٌ خاصّة ومحجوزة — تُرفض **بعد** حلّ DNS لا قبله. */
 function isPrivateIp(ip: string): boolean {
-  if (isIP(ip) === 6) {
-    const v = ip.toLowerCase();
-    if (v === '::1' || v === '::' ) return true;
-    if (v.startsWith('fe80') || v.startsWith('fc') || v.startsWith('fd')) return true;
-    // ::ffff:10.0.0.1 — عنوانٌ رابعٌ متنكّرٌ في سادس
-    const m = /^::ffff:(\d+\.\d+\.\d+\.\d+)$/.exec(v);
-    if (m) return isPrivateIp(m[1]!);
-    return false;
-  }
+  if (isIP(ip) === 6) return isPrivateIp6(ip);
   const p = ip.split('.').map(Number);
   if (p.length !== 4 || p.some((n) => Number.isNaN(n))) return true;
   const [a, b] = p as [number, number, number, number];
@@ -103,7 +174,12 @@ export async function assertPublicUrl(raw: string): Promise<URL> {
   if (u.protocol !== 'https:') throw new Error('HTTPS فقط — لا يُسمح بغيره');
   if (u.port && !['', '443'].includes(u.port)) throw new Error('المنفذ 443 فقط');
 
-  const host = u.hostname;
+  /* ★★★ **والأقواسُ كانت تُبطل فرعَ العناوين الحرفيّة كلَّه.**
+     `new URL('https://[::1]/x').hostname` يُعيد `[::1]` بأقواسه، و
+     `isIP('[::1]')` صفر — فلا يدخل الفرعُ أصلاً ويهبط العنوانُ إلى مسار
+     حلّ DNS. وعلى صورة الإنتاج (alpine) يفشل الحلُّ فيُرفَض **بالمصادفة**،
+     وعلى مكدّسٍ يحلّ الحرفيَّ يمرّ. أي أنّ الفحصَ لم يكن يعمل قطّ. */
+  const host = u.hostname.replace(/^\[|\]$/g, '');
   if (isIP(host)) {
     if (isPrivateIp(host)) throw new Error(`عنوانٌ خاصّ مرفوض: ${host}`);
     return u;
@@ -177,6 +253,122 @@ export function jsonPath(data: unknown, path: string): unknown {
   return cur;
 }
 
+/**
+ * الترويساتُ التي نضعها نحن لا العميل — وهي وحدها ما يعبر تحويلاً إلى مضيفٍ آخر.
+ */
+const OWN_HEADERS = new Set(['accept', 'content-type']);
+
+/**
+ * ★★★ **الفحصُ كان قبل الاتّصال، والاتّصالُ يحلّ الاسمَ من جديد.**
+ *
+ *   `assertPublicUrl` يحلّ المضيفَ ويفحص كلَّ عنوانٍ يعود — ثمّ يُنادى الجلبُ
+ *   بالاسم، فيحلّه المكدّسُ **مرّةً ثانية**. ومضيفٌ يملكه المهاجم يردّ عنواناً
+ *   عامّاً في الحلّ الأوّل وعنواناً داخليّاً في الثاني (TTL يساوي صفراً): هذا
+ *   «إعادةُ ربط DNS»، والفحصُ يمرّ والاتّصالُ يقع على 127.0.0.1.
+ *
+ *   فالفحصُ انتقل إلى **لحظة الاتّصال**: `https.request` يقبل `lookup` خاصّاً،
+ *   وهو ما يُنادى فعلاً قبل فتح المقبس — فلا حلَّ ثانياً بلا فحص.
+ *
+ * ⚠️ و`node:https` لا مكتبةٌ خارجيّة: `fetch` لا يقبل `lookup` ولا وكيلَ
+ *    `node:https`، وتمريرُه عبر `undici` مستقلٍّ يربط المستودعَ بإصدارٍ يجب أن
+ *    يطابق نسخةَ Node المدمجة — وترقيةُ Node وحدها تُبطل التثبيت بصمت.
+ */
+export const guardedLookup: LookupFunction = (host, options, cb) => {
+  const fam = typeof options.family === 'string'
+    ? (options.family === 'IPv6' ? 6 : 4)
+    : (options.family ?? 0);
+  dnsLookup(host, { all: true, family: fam, hints: options.hints }, (err, addrs) => {
+    if (err) return cb(err, '');
+    if (!addrs.length) return cb(new Error(`تعذّر حلّ ${host}`), '');
+    const bad = addrs.find((x) => isPrivateIp(x.address));
+    if (bad) return cb(new Error(`${host} يحلّ إلى عنوانٍ خاصّ (${bad.address})`), '');
+    /* `all` يُطلب من `net`/`tls` فعلاً، فيُعاد الشكلُ الذي طُلب لا شكلٌ آخر. */
+    if (options.all) return (cb as unknown as (e: null, a: typeof addrs) => void)(null, addrs);
+    return cb(null, addrs[0]!.address, addrs[0]!.family);
+  });
+};
+
+interface RawResponse {
+  status: number;
+  location: string | null;
+  text: string;
+}
+
+/**
+ * ناقلٌ واحدٌ لكلّ نداءات أدوات العميل.
+ *
+ * ★ والسقفُ يُفرض **أثناء** القراءة لا بعدها: `fetch` كان يقرأ الجسمَ كاملاً
+ *   في الذاكرة ثمّ يقيسه، فمصدرٌ يردّ مئةَ ميجابايت يُقرأ كلُّه قبل أن يُرفَض.
+ */
+function send(
+  url: URL,
+  o: { method: string; headers: Record<string, string>; body?: string; timeoutMs: number },
+): Promise<RawResponse> {
+  return new Promise<RawResponse>((resolve, reject) => {
+    const req = httpsRequest(
+      url,
+      { method: o.method, headers: o.headers, lookup: guardedLookup, timeout: o.timeoutMs },
+      (res) => {
+        const chunks: Buffer[] = [];
+        let size = 0;
+        let over = false;
+        res.on('data', (c: Buffer) => {
+          if (over) return;
+          size += c.length;
+          if (size > LIMITS.maxBytes) { over = true; res.destroy(); return; }
+          chunks.push(c);
+        });
+        res.on('end', () => {
+          if (over) { reject(new Error('الاستجابة أكبر من 256 ك.ب')); return; }
+          const loc = res.headers.location;
+          resolve({
+            status: res.statusCode ?? 0,
+            location: typeof loc === 'string' ? loc : null,
+            text: Buffer.concat(chunks).toString('utf8'),
+          });
+        });
+        res.on('error', reject);
+      },
+    );
+    /* مهلةٌ على الطلب كلِّه: `timeout` في `https` مهلةُ خمولٍ على المقبس،
+       فمصدرٌ يرسل بايتاً كلَّ ثانيةٍ يبقى موصولاً إلى الأبد بلا هذا. */
+    const hard = setTimeout(() => { req.destroy(new Error(`انتهت المهلة (${o.timeoutMs}ms)`)); }, o.timeoutMs);
+    req.on('timeout', () => { req.destroy(new Error(`انتهت المهلة (${o.timeoutMs}ms)`)); });
+    req.on('error', (e) => { clearTimeout(hard); reject(e); });
+    req.on('close', () => { clearTimeout(hard); });
+    if (o.body !== undefined) req.write(o.body);
+    req.end();
+  });
+}
+
+/**
+ * ★★★ **سرُّ العميل كان يُرسَل إلى المضيف الذي يختاره المصدر.**
+ *
+ *   حلقةُ التحويل كانت تُعيد استعمال `headers` كما هي في كلّ قفزة — وفيها
+ *   `Authorization` بعد استبدال `{{secret.X}}` بالسرّ نفسِه. فمصدرٌ مخترَقٌ
+ *   (أو أداةٌ كتبها العميل تقصد مجمّعاً يحوّل) يردّ `302` إلى مضيفٍ يملكه
+ *   المهاجم فيصله توكنُ نظام العميل كاملاً في الترويسة الأولى.
+ *
+ *   والتحويلُ اليدويُّ هنا يُفقدنا حمايةَ `fetch` نفسِها: مواصفةُ Fetch تُسقط
+ *   `Authorization` عند تحويلٍ عابرٍ للأصل، ونحن نتجاوزها بـ`redirect: 'manual'`
+ *   ثمّ نُعيد الإرسالَ بأيدينا.
+ *
+ * ⚠️ والتجريدُ الصامتُ وحده لا يكفي: أداةٌ فقدت ترويسةَ مصادقتها تردّ ٤٠١
+ *    خمسَ مرّاتٍ فيُطفئها قاطعُ الدائرة بسببٍ لا يُقرأ. فالقفزةُ العابرةُ للمضيف
+ *    **تُرفض برسالةٍ تقول ما جرى** متى حملت الأداةُ ترويسةً من عندها أو جسماً،
+ *    والتجريدُ يبقى حزاماً ثانياً لِما لا يحمل شيئاً.
+ */
+export function ownHeadersOnly(h: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [k, v] of Object.entries(h)) if (OWN_HEADERS.has(k)) out[k] = v;
+  return out;
+}
+
+/** الترويساتُ التي كتبها العميل — وجودُها يمنع القفزَ إلى مضيفٍ آخر. */
+export function tenantHeaderNames(h: Record<string, string>): string[] {
+  return Object.keys(h).filter((k) => !OWN_HEADERS.has(k));
+}
+
 export async function execHttpTool(
   spec: HttpToolSpec,
   params: Record<string, unknown>,
@@ -212,59 +404,68 @@ export async function execHttpTool(
 
   const timeout = Math.min(spec.timeoutMs ?? LIMITS.timeoutMs, LIMITS.timeoutMs);
 
-  let res: Response;
+  let res: RawResponse;
   try {
-    res = await fetch(url, {
-      method: spec.method,
-      headers,
-      body,
-      // إعادة التوجيه يدويّة: وإلّا التفّ المهاجم على الفحص بتحويلٍ إلى 127.0.0.1
-      redirect: 'manual',
-      signal: AbortSignal.timeout(timeout),
-    });
+    res = await send(url, { method: spec.method, headers, body, timeoutMs: timeout });
 
     let hops = 0;
     while ([301, 302, 303, 307, 308].includes(res.status)) {
       if (++hops > LIMITS.maxRedirects) {
         return { ok: false, mapped: {}, error: 'إعادات توجيهٍ كثيرة', ms: Date.now() - started };
       }
-      const loc = res.headers.get('location');
-      if (!loc) break;
-      const next = await assertPublicUrl(new URL(loc, url).toString()); // يُفحص كلّ هدف
-      res = await fetch(next, {
-        method: res.status === 303 ? 'GET' : spec.method,
-        headers,
-        redirect: 'manual',
-        signal: AbortSignal.timeout(timeout),
+      if (!res.location) break;
+      const next = await assertPublicUrl(new URL(res.location, url).toString()); // يُفحص كلّ هدف
+
+      /* ★★★ قفزةٌ إلى **مضيفٍ آخر**: لا تعبرها ترويسةٌ من عند العميل ولا
+         جسمُه. وتُرفض صراحةً متى كان هناك ما يُجرَّد — فالتجريدُ الصامت يُنتج
+         ٤٠١ ثمّ إطفاءً آليّاً بسببٍ لا يُقرأ، وهو أسوأُ من رفضٍ مكتوب. */
+      const crossHost = next.host !== url.host;
+      if (crossHost && (tenantHeaderNames(headers).length || body !== undefined)) {
+        return {
+          ok: false,
+          status: res.status,
+          mapped: {},
+          error: red(
+            `المصدرُ حوّل الطلبَ من ${url.host} إلى ${next.host}، ولا تُرسَل ترويساتُ أداتك `
+            + 'ولا جسمُها إلى مضيفٍ لم تكتبه أنت. اجعل عنوانَ الأداة يقصد المضيفَ '
+            + 'النهائيَّ مباشرةً.',
+          ),
+          ms: Date.now() - started,
+        };
+      }
+
+      /* و٣٠٧/٣٠٨ تعنيان «أعِد الطلبَ كما هو»، فالجسمُ يُعاد معهما — وكان يسقط
+         صامتاً فيصل نظامَ العميل طلبُ كتابةٍ بجسمٍ فارغ. و٣٠١/٣٠٢ تتحوّلان
+         إلى `GET` في الممارسة كما ٣٠٣. */
+      const keep = [307, 308].includes(res.status);
+      res = await send(next, {
+        method: keep ? spec.method : 'GET',
+        headers: crossHost ? ownHeadersOnly(headers) : headers,
+        body: keep ? body : undefined,
+        timeoutMs: timeout,
       });
       url = next;
     }
   } catch (e) {
-    const msg = (e as Error).name === 'TimeoutError' ? `انتهت المهلة (${timeout}ms)` : (e as Error).message;
+    /* ⚠️ والسببُ الحقيقيّ قد يسكن `cause`: أخطاءُ الاتّصال تُلَفّ. فبلا فضِّه
+       تصل العميلَ رسالةٌ لاتينيّةٌ عامّة — وتُكتب كذلك في `disabledReason`
+       حين يُطفئ قاطعُ الدائرة أداتَه، فيقرأ المالك سبباً لا يعني شيئاً. */
+    const cause = (e as { cause?: { message?: string } }).cause;
+    const msg = cause?.message ?? (e as Error).message;
     return { ok: false, mapped: {}, error: red(msg), ms: Date.now() - started };
   }
 
-  const declared = Number(res.headers.get('content-length') ?? 0);
-  if (declared > LIMITS.maxBytes) {
-    return { ok: false, status: res.status, mapped: {}, error: 'الاستجابة أكبر من 256 ك.ب', ms: Date.now() - started };
-  }
-
-  const buf = Buffer.from(await res.arrayBuffer());
-  if (buf.length > LIMITS.maxBytes) {
-    return { ok: false, status: res.status, mapped: {}, error: 'الاستجابة أكبر من 256 ك.ب', ms: Date.now() - started };
-  }
-
-  const text = buf.toString('utf8');
+  const { text } = res;
   let json: unknown;
   try { json = JSON.parse(text); } catch { json = { raw: text.slice(0, 2000) }; }
 
   const mapped = responseMap ? applyResponseMap(json, responseMap) : (json as Record<string, unknown>);
 
   return {
-    ok: res.ok,
+    ok: res.status >= 200 && res.status < 300,
     status: res.status,
     mapped,
-    error: res.ok ? undefined : `المصدر ردّ ${res.status}`,
+    error: res.status >= 200 && res.status < 300 ? undefined : `المصدر ردّ ${res.status}`,
     ms: Date.now() - started,
     ...(opts.debug
       ? {
