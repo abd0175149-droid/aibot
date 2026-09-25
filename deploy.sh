@@ -48,6 +48,13 @@ rollback() {
   #    «Conflict. The container name is already in use». أفشل ثلاث نشرات،
   #    وأفشل التراجعَ نفسه مرّةً فكادت الخدمة تبقى ساقطة.
   #    الحذف الصريح ثمّ الإنشاء لا يمرّ باسمٍ وسيط إطلاقاً.
+  # ★★ سجلُّ ما فشل يُحفظ **قبل** حذف الحاويات — و`rm -sf` يمحوه معها.
+  #    وبلا ذلك يقول النشرُ «فشل» ولا يقول لماذا: شكوتُ من هذا بنفسي حين
+  #    سقطت بوّابةُ العامل ولم أجد سطراً واحداً يشرح السبب.
+  for s in $SERVICES; do
+    docker compose logs --no-color --tail 200 "$s" > "${BACKUP_DIR}/fail-${STAMP}-${s}.log" 2>&1 || true
+  done
+  echo "سجلّاتُ الفشل: ${BACKUP_DIR}/fail-${STAMP}-*.log"
   docker compose rm -sf $SERVICES 2>/dev/null || true
   docker compose up -d --no-build $SERVICES || true
   echo "النسخة الاحتياطيّة: ${BACKUP_DIR}/db-${STAMP}.sql.gz"
