@@ -7,6 +7,12 @@ import { useCan } from '@/lib/session';
 import { ToolBuilder, EMPTY_DRAFT, type ToolDraft } from '@/components/ToolBuilder';
 import { KnowledgeFiles, type KbSource } from '@/components/KnowledgeFiles';
 import { BotBehavior } from '@/components/BotBehavior';
+/* ★ المصطلحُ يُستورَد ولا يُكتب: كان هذا الملفُّ يُعرّف «وحدة قراءة»
+   وأسماءَ الأوضاع، وثلاثُ شاشاتٍ أخرى تُعيد كتابتها بصيغٍ مختلفة. */
+import {
+  KB_MODE as MODE, KB_MODE_TERM, READ_UNIT as UNIT, decideKbMode as decideMode,
+  MODE_THRESHOLD, RAG_THRESHOLD, PERSONA_LIMIT,
+} from '@/lib/terms';
 import {
   PageHead, Tabs, Card, Grid, Stack, Row, Stat, Pill, Tag, Note, Button, Field, TextArea,
   Skeleton, Empty, ErrorBox, DataView, DiffView, Sheet, Dock,
@@ -167,40 +173,7 @@ type TabId = (typeof TABS)[number]['id'];
 const isTabId = (v: string | null): v is TabId =>
   v !== null && TABS.some((t) => t.id === v);
 
-/**
- * ★ **«توكن» لا تُكتب في واجهة صاحب مطعم.** الوحدة المعروضة «وحدة قراءة»،
- *   وهي نفسها التي يحسبها الخادم — تغيّر الاسمُ لا الرقم.
- */
-const UNIT = 'وحدة قراءة';
 
-/** العتبتان مكتوبتان في `decideKnowledgeMode` — ومعروضتان هنا بعينهما. */
-const MODE_THRESHOLD = 8_000;
-const RAG_THRESHOLD = 40_000;
-/** الحدّ الموصى به لطول الشخصيّة: تُقرأ مع كلّ سؤال. */
-const PERSONA_LIMIT = 800;
-
-/**
- * الأوضاع الثلاثة بلغةٍ تقول **ما يحدث** لا ما اسمه.
- * (‏`decideKnowledgeMode` في `packages/core/src/knowledge.ts`.)
- */
-const MODE: Record<string, { label: string; how: string }> = {
-  full: {
-    label: 'يقرأ نصَّك كاملاً',
-    how: 'دون العتبة الأولى، يُرسَل نصُّ معرفتك كاملاً مع كلّ سؤالٍ يصل.',
-  },
-  hybrid: {
-    label: 'أساسيّات + استرجاع',
-    how: 'فوق العتبة الأولى، لا يُرسَل إليه إلّا الأساسيّات وما يرتبط بالسؤال — أوفرُ وأدقّ.',
-  },
-  rag: {
-    label: 'استرجاعٌ كامل',
-    how: 'فوق العتبة الثانية، لا يُرسَل إلّا ما يرتبط بالسؤال — فمعرفةٌ بعشرة أضعافٍ لا تكلّفك عشرة أضعاف.',
-  },
-};
-
-/** مرآةُ `decideKnowledgeMode` — حرفاً بحرف، والعتبتان أعلاه. */
-const decideMode = (units: number): 'full' | 'hybrid' | 'rag' =>
-  (units < MODE_THRESHOLD ? 'full' : units <= RAG_THRESHOLD ? 'hybrid' : 'rag');
 
 /**
  * ★ اسمُ النموذج **سلسلةُ آلة**، وكان يُعرض خاماً بالمونو لصاحب مطعم في
@@ -1043,7 +1016,7 @@ export default function BotPage() {
                     <Tag tone="crit" label={amountText(kbDelta.removed, LINE_DEL)} mark={false} />
                   )}
                   {draftMode !== liveMode && (
-                    <Tag tone="cool" label={`وضع القراءة يتغيّر إلى: ${MODE[draftMode]!.label}`} />
+                    <Tag tone="cool" label={`${KB_MODE_TERM} يتغيّر إلى: ${MODE[draftMode]!.label}`} />
                   )}
                 </span>
               </div>
@@ -1237,7 +1210,7 @@ export default function BotPage() {
                           {fileSources.length === 0
                             ? 'لا ملفّات — نصُّك وحده معرفتُه'
                             : liveMode === 'full'
-                              ? 'في وضع «يقرأ نصَّك كاملاً» لا تدخل ردودَه — يُرسَل نصُّك وحده'
+                              ? `في وضع «${MODE.full.label}» لا تدخل ردودَه — يُرسَل نصُّك وحده`
                               : liveMode
                                 ? 'منها يستخرج بوتك ما يرتبط بالسؤال'
                                 : 'تدخل معرفته عند أوّل نشرٍ يتجاوز العتبة الأولى'}

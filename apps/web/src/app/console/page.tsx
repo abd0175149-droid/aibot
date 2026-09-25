@@ -2,6 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useApi, useToast, fmt } from '@/lib/useApi';
+/* ★ نفسُ الاسم الذي يراه العميل. ومكالمةُ دعمٍ يقول فيها العميل «يقرأ
+   نصّي كاملاً» والموظّفُ أمامه «حقنٌ كامل» تُنتج تشخيصاً لحالةٍ أخرى. */
+import { KB_MODE, kbModeLabel } from '@/lib/terms';
 import { post, ApiError } from '@/lib/api';
 import { useCan } from '@/lib/session';
 import { Onboarding } from '@/components/Onboarding';
@@ -110,9 +113,6 @@ const HEALTH: Record<string, { tone: Tone; label: string; rank: number; why: str
   },
 };
 
-const KB_MODE: Record<string, string> = {
-  full: 'حقنٌ كامل', hybrid: 'أساسيات + استرجاع', rag: 'استرجاعٌ كامل',
-};
 
 /* حالةُ المستأجر شارةً — و«تجريبيّ» ليس تحذيراً: ألوان الحالة محجوزةٌ للمعنى
    (سليم/تحذير/حرج) فلا تُنفَق على تصنيفٍ إداريّ. والموقوف حرجٌ فعلاً. */
@@ -309,7 +309,7 @@ export default function TenantsPage() {
                         كامل» بمعرفةٍ تكبر هو الإنذارُ المبكّر لانفجار الكلفة،
                         وبقيّةُ الأوضاع لا يُقرَّر عليها شيء — فلا تُنفق عموداً
                         على ثلاث كلماتٍ لا تُغيّر فعلاً. */}
-                    {r.knowledgeMode === 'full' && <Tag tone="violet" label="حقنٌ كامل" mark={false} />}
+                    {r.knowledgeMode === 'full' && <Tag tone="violet" label={KB_MODE.full.label} mark={false} />}
                   </span>
                 </span>
               ),
@@ -587,7 +587,7 @@ export default function TenantsPage() {
               </Section>
 
               <Note>
-                <b>وسمُ «حقنٌ كامل» بجانب الاسم ليس زينة.</b> عميلٌ على هذا الوضع
+                <b>وسمُ «{KB_MODE.full.label}» بجانب الاسم ليس زينة.</b> عميلٌ على هذا الوضع
                 (<code>full</code>) بمعرفةٍ تكبر هو الإنذارُ المبكّر لانفجار الكلفة — تراه هنا
                 قبل أن تراه في الفاتورة. وبقيّةُ الأوضاع لا يُقرَّر عليها شيءٌ فلا تُنفق وسماً.
               </Note>
@@ -654,7 +654,7 @@ export default function TenantsPage() {
                       {STATUS_PILL[sel.status] && (
                         <Pill tone={STATUS_PILL[sel.status]!.tone} label={STATUS_PILL[sel.status]!.label} />
                       )}
-                      <Tag tone="violet" label={KB_MODE[sel.knowledgeMode] ?? sel.knowledgeMode} mark={false} />
+                      <Tag tone="violet" label={kbModeLabel(sel.knowledgeMode)} mark={false} />
                       {Number(sel.openCritical ?? 0) > 0 && (
                         <Pill tone="crit" label={`${fmt.num(sel.openCritical)} حرجة مفتوحة`} />
                       )}

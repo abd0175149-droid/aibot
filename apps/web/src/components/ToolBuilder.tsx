@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { post, patch, ApiError } from '@/lib/api';
+import { READ_UNIT_PL, secs } from '@/lib/terms';
 import {
   Modal, Button, Field, Input, TextArea, Select, Toggle, Note,
   Stack, Row, Pill, CodeBlock, KV, KVRow,
@@ -167,7 +168,7 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
       if (!id) return;
       let sampleParams: Record<string, unknown> = {};
       try { sampleParams = JSON.parse(sample || '{}') as Record<string, unknown>; } catch {
-        setErr('العيّنة ليست JSON صالحاً.');
+        setErr('العيّنة ليست بصيغةٍ صالحة — راجِع الأقواس والفواصل.');
         return;
       }
       const r = await post<TestResult>(`/bot/tools/${id}/test`, { sampleParams });
@@ -331,7 +332,7 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
         {step === 4 && (
           <Stack gap="sm">
             <p className="muted-p">
-              الحقول التي يراها البوت من الجواب. ما لا تذكره هنا لا يراه — وهذا يقلّل التوكنز
+              الحقول التي يراها البوت من الجواب. ما لا تذكره هنا لا يراه — وهذا يقلّل {READ_UNIT_PL}
               ويمنع تسريب حقولٍ لا تريدها.
             </p>
             {/* ونفسُ السبب هنا: مجموعةٌ مسمّاةٌ لكلّ حقل، فلا يُضغط حذفُ غيره */}
@@ -376,8 +377,8 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
               <Stack gap="sm">
                 <Row gap="sm">
                   <Pill tone={test.ok ? 'ok' : 'crit'} label={test.ok ? 'نجح النداء' : 'فشل النداء'} />
-                  {test.status !== undefined && <Pill tone="neutral" label={`HTTP ${test.status}`} />}
-                  {test.ms !== undefined && <Pill tone="neutral" label={`${test.ms}ms`} />}
+                  {test.status !== undefined && <Pill tone="neutral" label={`رمزُ ردّ الخادم ${test.status}`} />}
+                  {test.ms !== undefined && <Pill tone="neutral" label={`ردّ في ${secs(test.ms)} ث`} />}
                 </Row>
                 {test.error && <Note tone="crit">{test.error}</Note>}
                 {test.debug?.url && <CodeBlock label="العنوان الذي نودي فعلاً" text={test.debug.url} />}

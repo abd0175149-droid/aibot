@@ -2,6 +2,9 @@
 
 import { useState } from 'react';
 import { post, ApiError } from '@/lib/api';
+/* ★ المعالجُ حيث يتعلّم المالكُ المفردات: تعليمُه «توكن» هنا يضمن أن
+   يُقرأ اسمُ الشاشة التالية اسماً لشيءٍ آخر. */
+import { READ_UNIT } from '@/lib/terms';
 import { PERSONA_TEMPLATES } from '@/lib/personas';
 import {
   Modal, Button, Field, Input, TextArea, Select, Stack, Row,
@@ -266,7 +269,7 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
             </Field>
             <Field id="o-persona" label="شخصيّة البوت" hint="ما لا يفعله البوت أهمّ من قدراته.">
               <TextArea id="o-persona" rows={14} value={persona} onChange={setPersona}
-                count={{ used: Math.ceil(persona.length / 2.5), limit: 2000, unit: 'توكن' }} />
+                count={{ used: Math.ceil(persona.length / 2.5), limit: 2000, unit: READ_UNIT }} />
             </Field>
           </Stack>
         )}
@@ -279,10 +282,10 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
             </Note>
             <Field id="o-kb" label="معرفة البوت" hint="استعمل عناوين (سطرٌ يبدأ بـ# أو ينتهي بنقطتين) — تُحسّن الدقّة كثيراً.">
               <TextArea id="o-kb" rows={14} value={knowledge} onChange={setKnowledge}
-                count={{ used: Math.ceil(knowledge.length / 2.5), limit: 8000, unit: 'توكن' }} />
+                count={{ used: Math.ceil(knowledge.length / 2.5), limit: 8000, unit: READ_UNIT }} />
             </Field>
             <p className="muted-p">
-              فوق 8 آلاف توكن يتحوّل البوت تلقائيّاً إلى إرسال «الأساسيات والقيود وما يرتبط
+              فوق ثمانية آلاف وحدةِ قراءة يتحوّل البوت تلقائيّاً إلى إرسال «الأساسيات والقيود وما يرتبط
               بالسؤال» — فمعرفةٌ أكبر لا تعني فاتورةً أكبر. والملفّات تُرفع لاحقاً من شاشة البوت.
             </p>
           </Stack>

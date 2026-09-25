@@ -8,6 +8,11 @@ import type {
 } from '@aibot/shared';
 import { useApi, useToast, fmt } from '@/lib/useApi';
 import { post, ApiError } from '@/lib/api';
+/* المصطلحُ يُستورَد: كانت هذه الشاشةُ تكتب «توكن» في ستّة عشر موضعاً
+   وتُعرّف خريطةَ أسماءِ أوضاعٍ ثانيةً بصياغةٍ أخرى. */
+import {
+  KB_MODE, KB_MODE_TERM, READ_UNIT, READ_UNIT_ACC, READ_UNIT_PL, secs,
+} from '@/lib/terms';
 import {
   PageHead, Stack, Row, Pill, Tag, Note, Button, Sheet, Empty, Skeleton, ErrorBox,
   KV, KVRow, Iso, Field, TextArea,
@@ -69,11 +74,6 @@ interface Turn {
   error: string | null;
 }
 
-const MODE_LABEL: Record<'full' | 'hybrid' | 'rag', string> = {
-  full: 'حقنٌ كامل',
-  hybrid: 'هجين',
-  rag: 'استرجاع',
-};
 
 export default function PlaygroundPage() {
   const sum = useApi<Summary>('/playground');
@@ -250,8 +250,8 @@ export default function PlaygroundPage() {
               <span className="sc-ctx">
                 النموذج <Iso text={use === 'draft' ? data.draft?.model ?? '—' : data.published?.model ?? '—'} /> ·
                 {use === 'draft'
-                  ? <> ستُنشَر بوضع <Tag line mark={false} label={MODE_LABEL[data.draft?.modeAfterPublish ?? 'full']} /></>
-                  : <> وضعُ المعرفة <Tag line mark={false} label={MODE_LABEL[data.published?.knowledgeMode ?? 'full']} /></>}
+                  ? <> ستُنشَر بوضع <Tag line mark={false} label={KB_MODE[data.draft?.modeAfterPublish ?? 'full'].label} /></>
+                  : <> {KB_MODE_TERM} <Tag line mark={false} label={KB_MODE[data.published?.knowledgeMode ?? 'full'].label} /></>}
               </span>
             )}
           />
@@ -262,7 +262,7 @@ export default function PlaygroundPage() {
               ? 'تُحقن كاملةً في الجرّب — فلا تُضمَّن مسوّدةٌ قبل نشرها'
               : 'ما يقرأه البوت ليُجيب'}
             value={fmt.num(kbTokens)}
-            unit="توكن"
+            unit={READ_UNIT}
             mid={(
               <span className="sc-ctx">
                 {data.knowledge.sources
@@ -296,9 +296,9 @@ export default function PlaygroundPage() {
 
           <MetricRow
             k="ما أنفقته الساحة — هذا الشهر"
-            note="نداءاتٌ حقيقيّةٌ تُحاسَب عليك بالتوكنز، ولا تُفوتِر نافذة"
+            note="نداءاتٌ حقيقيّةٌ تُحاسَب عليك، ولا تُفوتِر نافذةً من باقتك"
             value={fmt.num(data.spend.tokens)}
-            unit="توكن"
+            unit={READ_UNIT}
             mid={(
               <span className="sc-ctx">
                 <span className="num">{fmt.num(data.spend.runs)}</span> تجربةً ·
@@ -317,14 +317,14 @@ export default function PlaygroundPage() {
           لا يستهلك منها شيئاً.
         </Note>
         <Note tone="warn">
-          <b>والتوكنز تُحاسَب.</b> النداءُ على النموذج حقيقيٌّ — وإلّا لم يكن جرّباً. وكلُّ
+          <b>ووحداتُ القراءة تُحاسَب.</b> النداءُ على النموذج حقيقيٌّ — وإلّا لم يكن جرّباً. وكلُّ
           تجربةٍ تُسجَّل موسومةً بأنّها جرّب، فتراها في استهلاكك منفصلةً عن ردودِ زبائنك.
         </Note>
         {last?.notes.map((n) => <Note key={n}>{n}</Note>)}
       </Fold>
 
       {/* ★ الرصيف: ما تُجرّبه وفعلُ الشاشة الأوّل معاً في مدى الإبهام. */}
-      <ScreenDock hint="جرّبٌ جافّ: لا يُرسَل شيءٌ لزبون. والتوكنز تُحاسَب لأنّ النداء حقيقيّ.">
+      <ScreenDock hint={`جرّبٌ جافّ: لا يُرسَل شيءٌ لزبون. و${READ_UNIT_PL} تُحاسَب لأنّ النداء حقيقيّ.`}>
         {/* ★ غلافٌ واحدٌ للمرشِّح والمُنشئ: `.dock > *` يمنع النموَّ عن أبنائه
             المباشرين، فكان الرقاقاتُ والحقلُ يتنافسان على عرض الشريط الأفقيّ
             على الحاسوب — والحقلُ هو من ينهار (‏`min-width: 0`). */}
@@ -387,7 +387,7 @@ export default function PlaygroundPage() {
         kind="menu"
         title="أسئلة جاهزة"
         onClose={() => setPresetsOpen(false)}
-        hint="الضغطُ يُشغّل التجربة فوراً — وكلُّ تجربةٍ نداءٌ يُحاسَب بالتوكنز."
+        hint={`الضغطُ يُشغّل التجربة فوراً — وكلُّ تجربةٍ نداءٌ يُحاسَب بـ${READ_UNIT_PL}.`}
         footer={<Button variant="quiet" onClick={() => setPresetsOpen(false)}>أغلِق</Button>}
       >
         <div className="opts">
@@ -533,7 +533,7 @@ function heroOf({ data, use, last, kbTokens }: {
       return {
         sev: 'bad',
         value: '0',
-        label: 'توكناً من المعرفة عند بوتك',
+        label: `${READ_UNIT_ACC} من المعرفة عند بوتك`,
         ctx: <>بلا معرفةٍ يُجيب من شخصيّته وحدها — وهذا أوّلُ سببٍ لـ«لا أعرف» في وجه زبون.</>,
       };
     }
@@ -541,13 +541,13 @@ function heroOf({ data, use, last, kbTokens }: {
       sev: 'plain',
       value: fmt.num(kbTokens),
       label: use === 'draft'
-        ? 'توكناً من معرفتك تُحقن مع كلّ ردّ'
-        : 'توكناً في معرفة نسختك المنشورة',
+        ? `${READ_UNIT_ACC} من معرفتك تُحقن مع كلّ ردّ`
+        : `${READ_UNIT_ACC} في معرفة نسختك المنشورة`,
       ctx: (
         <>
           الشخصيّةُ والأساسيّاتُ والقيودُ بادئةٌ ثابتةٌ تُخزَّن بخصم ·
           {data.liveAvg
-            ? <> ووسطيُّ ردٍّ حقيقيٍّ عندك <span className="num">{fmt.num(data.liveAvg.tokens)}</span> توكناً بـ<span className="num">{fmt.money(data.liveAvg.usd)}</span></>
+            ? <> ووسطيُّ ردٍّ حقيقيٍّ عندك <span className="num">{fmt.num(data.liveAvg.tokens)}</span> {READ_UNIT_ACC} بـ<span className="num">{fmt.money(data.liveAvg.usd)}</span></>
             : <> ولا ردَّ حقيقيّاً بعد لتُقاس عليه — جرّب سؤالاً لتعرف كلفتَه</>}
         </>
       ),
@@ -565,7 +565,7 @@ function heroOf({ data, use, last, kbTokens }: {
       return {
         sev: 'bad',
         value: fmt.num(k.layers.core),
-        label: 'توكناً من معرفتك كانت في السياق — وقال «لا أعرف»',
+        label: `${READ_UNIT_ACC} من معرفتك كانت في السياق — وقال «لا أعرف»`,
         ctx: (
           <>
             المعرفةُ كلُّها محقونةٌ في هذا الوضع، فالنقصُ في محتواها لا في استرجاعها ·
@@ -598,17 +598,17 @@ function heroOf({ data, use, last, kbTokens }: {
   return {
     sev: vs && last.cost.totalTokens > vs * 1.5 ? 'warn' : 'plain',
     value: fmt.num(last.cost.totalTokens),
-    label: 'توكناً كلّفه هذا الردّ',
+    label: `${READ_UNIT_ACC} كلّفه هذا الردّ`,
     ctx: (
       <>
         {last.cost.priced
           ? <><span className="num">{fmt.money(last.cost.usd)}</span> لهذا الردّ · وألفُ ردٍّ مثلِه <span className="num">{fmt.money(last.cost.usd * 1000)}</span></>
           : <>لا سعرَ مسجَّلٌ لهذا النموذج — فالكلفةُ تُحسب صفراً</>}
         {vs
-          ? <> · ووسطيُّ ردٍّ حقيقيٍّ عندك <span className="num">{fmt.num(vs)}</span> توكناً</>
+          ? <> · ووسطيُّ ردٍّ حقيقيٍّ عندك <span className="num">{fmt.num(vs)}</span> {READ_UNIT_ACC}</>
           : null}
         {last.cost.cachedTokens
-          ? <> · منها <span className="num">{fmt.num(last.cost.cachedTokens)}</span> من الكاش بخصم</>
+          ? <> · منها <span className="num">{fmt.num(last.cost.cachedTokens)}</span> مخزَّنةٌ من قبل بخصم</>
           : null}
       </>
     ),
@@ -720,7 +720,7 @@ function Why({ trace, onWrong }: { trace: PlaygroundTrace; onWrong: () => void }
           المعرفةُ التي أسندت الردّ
           <span className="pg-blk-c">
             {k.mode === 'full'
-              ? 'حقنٌ كامل'
+              ? KB_MODE.full.label
               : <><span className="num">{fmt.num(k.chunks.length)}</span> من <span className="num">{fmt.num(k.chunksTotal)}</span> مقطعاً</>}
           </span>
         </h3>
@@ -734,7 +734,7 @@ function Why({ trace, onWrong }: { trace: PlaygroundTrace; onWrong: () => void }
 
         {k.mode === 'full' ? (
           <p className="muted-p">
-            المعرفةُ كلُّها في السياق (<span className="num">{fmt.num(k.layers.core)}</span> توكناً) —
+            المعرفةُ كلُّها في السياق (<span className="num">{fmt.num(k.layers.core)}</span> {READ_UNIT_ACC}) —
             فلا استرجاعَ ولا بحثَ ولا درجات. وحين تكبر معرفتك يتحوّل بوتك إلى الاسترجاع،
             فتظهر هنا المقاطعُ ودرجاتُها.
           </p>
@@ -799,21 +799,21 @@ function Why({ trace, onWrong }: { trace: PlaygroundTrace; onWrong: () => void }
         </h3>
         <KV>
           <KVRow k="سياقٌ ثابت (يُخزَّن بخصم)">
-            <span className="num">{fmt.num(k.stablePrefixTokens)}</span> توكن
+            <span className="num">{fmt.num(k.stablePrefixTokens)}</span> {READ_UNIT}
           </KVRow>
           <KVRow k="سياقٌ متغيّر (يُفوتَر كاملاً)">
-            <span className="num">{fmt.num(k.variableTokens)}</span> توكن
+            <span className="num">{fmt.num(k.variableTokens)}</span> {READ_UNIT}
           </KVRow>
           <KVRow k="إدخال">
-            <span className="num">{fmt.num(c.promptTokens)}</span> توكن
-            {c.cachedTokens ? <> · منها <span className="num">{fmt.num(c.cachedTokens)}</span> من الكاش</> : null}
+            <span className="num">{fmt.num(c.promptTokens)}</span> {READ_UNIT}
+            {c.cachedTokens ? <> · منها <span className="num">{fmt.num(c.cachedTokens)}</span> مخزَّنةٌ من قبل</> : null}
           </KVRow>
           <KVRow k="إخراج">
-            <span className="num">{fmt.num(c.outputTokens)}</span> توكن
+            <span className="num">{fmt.num(c.outputTokens)}</span> {READ_UNIT}
             {c.thoughtsTokens ? <> · وتفكيرٌ <span className="num">{fmt.num(c.thoughtsTokens)}</span></> : null}
           </KVRow>
           <KVRow k="المجموع">
-            <span className="num">{fmt.num(c.totalTokens)}</span> توكن
+            <span className="num">{fmt.num(c.totalTokens)}</span> {READ_UNIT}
           </KVRow>
           <KVRow k="بكم">
             {c.priced
@@ -855,7 +855,7 @@ function Chunk({ c }: { c: PlaygroundChunk }) {
             درجة <span className="num">{c.score.toFixed(3)}</span>
           </span>
         )}
-        <span className="pg-chunk-t"><span className="num">{fmt.num(c.tokens)}</span> توكن</span>
+        <span className="pg-chunk-t"><span className="num">{fmt.num(c.tokens)}</span> {READ_UNIT}</span>
       </div>
       <p className="pg-chunk-b" dir="auto">{c.preview}…</p>
     </div>
@@ -869,7 +869,7 @@ function ToolCall({ t }: { t: PlaygroundToolCall }) {
       <div className="pg-tool-h">
         <Tag tone={failed ? 'crit' : t.ran ? 'ok' : 'cool'} label={t.name} />
         <span className="pg-tool-m">
-          <span className="num">{fmt.num(t.ms)}</span> مِلّي
+          <span className="num">{secs(t.ms)}</span> ث
         </span>
         {!t.ran && <Tag line mark={false} label="مُثِّلت ولم تُنفَّذ" />}
       </div>

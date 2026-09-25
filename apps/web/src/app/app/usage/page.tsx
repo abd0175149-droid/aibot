@@ -7,6 +7,7 @@ import { useApi, useToast, fmt } from '@/lib/useApi';
 import { download, get, ApiError } from '@/lib/api';
 import { SupportLink } from '@/components/support';
 import { planTalkLabel, planTalkSubject, planTalkBody } from '@/lib/support';
+import { READ_UNIT_PL } from '@/lib/terms';
 import {
   PageHead, Stack, Row, Pill, Tag, Note, Meter, Button, Sheet, Table, Empty,
   Skeleton, ErrorBox, KV, KVRow, type Column, type Tone,
@@ -437,16 +438,16 @@ export default function UsagePage() {
           />
 
           <MetricRow
-            k="توكناتُ الذكاء"
+            k={`${READ_UNIT_PL} لدى النموذج`}
             note="حسابٌ ثانٍ مستقلٌّ عن النوافذ، وله سقفُه"
             value={(data.aiTokens / 1e6).toFixed(1)}
-            unit="M"
+            unit="مليون"
             mid={data.aiTokensLimit
               ? (
                 <>
                   <span className="sc-mw"><Meter pct={tokPct} /></span>
                   <span className="sc-ctx">
-                    من <span className="num">{`${(data.aiTokensLimit / 1e6).toFixed(0)}M`}</span> ·
+                    من <span className="num">{(data.aiTokensLimit / 1e6).toFixed(0)}</span> مليون ·
                     {' '}<span className="num">{fmt.pct(tokPct)}</span>
                   </span>
                 </>

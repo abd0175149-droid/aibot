@@ -3,6 +3,7 @@
 import { useRef, useState } from 'react';
 import { api, del, ApiError } from '@/lib/api';
 import { fmt } from '@/lib/useApi';
+import { READ_UNIT } from '@/lib/terms';
 import {
   Button, Row, Stack, Pill, Note, Modal, Sheet, Meter, Skeleton, Empty, Table, type Column,
 } from '@/components/ui';
@@ -215,7 +216,7 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
     },
     {
       key: 'size',
-      head: 'حجمه (وحدة قراءة)',
+      head: `حجمه (${READ_UNIT})`,
       num: true,
       /* الوحدةُ في رأس العمود لا في كلّ خليّة: عشرُ خلايا تكرّر «وحدة قراءة»
          تكسر تراصفَ الأرقام الذي وُضع العمودُ الرقميُّ من أجله. */
@@ -353,7 +354,7 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
                 tone={STATUS[preview.status]?.tone ?? 'warn'}
                 label={STATUS[preview.status]?.label ?? preview.status}
               />
-              <Pill tone="neutral" label={`${fmt.num(fileUnits(preview.charCount))} وحدة قراءة`} />
+              <Pill tone="neutral" label={`${fmt.num(fileUnits(preview.charCount))} ${READ_UNIT}`} />
             </Row>
             {preview.error && <Note tone="crit">{preview.error}</Note>}
             {!preview.preview.trim() && (
