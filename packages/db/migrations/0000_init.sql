@@ -42,3 +42,16 @@ DO $$ BEGIN
     CREATE ROLE aibot_platform NOLOGIN BYPASSRLS;
   END IF;
 END $$;
+
+-- ── سجلّ الترحيلات — أثرٌ لا بوّابة ───────────────────────────────
+-- النشرُ يُطبّق كلَّ الترحيلات في كلّ مرّة **عن قصد**: لا جدولَ هجراتٍ يتباعد
+-- بين بيئتَين. وهذا الجدولُ لا يغيّر ذلك — يسجّل ولا يمنع.
+-- والعطلُ الذي يمنعه: لا أحد يعرف أيَّ محتوى من `0002` تحمله قاعدةٌ بعينها،
+-- ولا من أيّ نسخةٍ جاء، ولا متى — والمخرَجُ الذي قال «تمّ» انقضى.
+-- و`meta/_journal.json` ليس أثراً: فيه مدخلةٌ واحدةٌ والمجلّد فيه عشرةُ ملفّات.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  filename   text PRIMARY KEY,
+  sha256     text NOT NULL,
+  git_rev    text,
+  applied_at timestamptz NOT NULL DEFAULT now()
+);

@@ -253,6 +253,43 @@ describe('★ النشرُ يتراجع عند كلّ فشل — لا عند ب�
     expect(disarms.filter((d) => d === 'trap - ERR'), 'نزعٌ يترك EXIT مُسلَّحة').toEqual([]);
   });
 
+  it('★★★ والترحيلُ **قبل** الاستبدال — وإلّا عملت شيفرةٌ جديدةٌ على مخطّطٍ قديم', () => {
+    /* ثوانٍ يقرأ فيها الكودُ الجديدُ عموداً لم يُضَف بعد: «column does not
+       exist» ليست `AppError` فلا حادثةَ ولا أثر — أخطاءٌ خامّةٌ في وجه كلّ
+       عميل. وقد وقع فعلاً: طُبّقت أعمدةُ العامل الثاني يدويّاً قبل النشر
+       تفادياً له، وهذا اعترافٌ بالعطل لا حلٌّ له. */
+    const iMig = src.indexOf('for f in packages/db/migrations/');
+    const iUp = src.search(/^docker compose up -d \$SERVICES$/m);
+    const iRole = src.indexOf('ALTER ROLE aibot_app');
+    expect(iMig).toBeGreaterThan(0);
+    expect(iUp).toBeGreaterThan(0);
+    expect(iMig, 'الترحيل بعد استبدال الحاويات').toBeLessThan(iUp);
+    expect(iRole, 'ضبطُ الدور قبل الترحيل الذي يُنشئُه').toBeGreaterThan(iMig);
+    expect(iRole).toBeLessThan(iUp);
+  });
+
+  it('★★★ وكلُّ ملفّ ترحيلٍ وحدةٌ ذرّيّة', () => {
+    /* `0002` يحذف السياسةَ ثمّ يُنشئُها. وفي معاملتَين مستقلّتَين توجد
+       لحظةٌ يكون الجدول فيها RLS-مفعّلاً **بلا سياسة**: `SELECT` من `aibot_app`
+       يُرجع صفراً بلا خطأ — وهو بعينه العطلُ الذي بُنيت بوّابتا العزل لمنعه. */
+    expect(src).toContain('--single-transaction');
+    const migDir = join(REPO, 'packages', 'db', 'migrations');
+    const bad = readdirSync(migDir).filter((f) => f.endsWith('.sql')
+      && /CONCURRENTLY/i.test(readFileSync(join(migDir, f), 'utf8')));
+    expect(bad, '`CONCURRENTLY` لا تعمل داخل معاملة').toEqual([]);
+  });
+
+  it('★★ ومهلةُ قفلٍ — فاستعلامٌ طويلٌ واحدٌ لا يجمّد النشرة كلّها', () => {
+    expect(src).toMatch(/PGOPTIONS='-c lock_timeout=\d+s'/);
+  });
+
+  it('★★ وللترحيل أثرٌ — والمخرَجُ الذي قال «تمّ» ينقضي', () => {
+    expect(src).toContain('INSERT INTO schema_migrations');
+    expect(src, 'وبصمةُ الملفّ').toContain('sha256sum');
+    const init = readFileSync(join(REPO, 'packages', 'db', 'migrations', '0000_init.sql'), 'utf8');
+    expect(init).toContain('CREATE TABLE IF NOT EXISTS schema_migrations');
+  });
+
   it('★★★ ولا خروجَ غيرُ صفريٍّ بعد نقطة اللا رجوع خارج حماية التسليح', () => {
     /* هذا هو الحارسُ الحقيقيّ: بوّابةٌ جديدةٌ تُضاف غداً بـ`exit 1` بعد
        الاستبدال تسقط هنا ما لم تكن تحت مصيدةٍ مُسلَّحة. */

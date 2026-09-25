@@ -16,8 +16,23 @@ export function rlsMigrationSql(): string {
   ];
   for (const t of TENANT_SCOPED) {
     parts.push(
-      `ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY;`,
-      `ALTER TABLE ${t} FORCE ROW LEVEL SECURITY;`,
+      /* ★ مشروطتان: `ALTER TABLE` يأخذ ACCESS EXCLUSIVE **قبل** أن يكتشف
+         أنّ لا شيءَ ليُغيَّر، وطلبُه يصطفّ أمام القرّاء التاليين فيجمّد الجدول
+         لا يزاحمه فقط. وبلا الشرط تُنفَّذ عبارتان لكلّ جدولٍ في كلّ نشرة
+         (خمسون قفلاً حصريّاً) ولا واحدةٌ منها تُغيّر شيئاً. */
+      `DO $$ BEGIN`,
+      `  IF NOT (SELECT relrowsecurity AND relforcerowsecurity`,
+      `            FROM pg_class WHERE oid = '${t}'::regclass) THEN`,
+      `    ALTER TABLE ${t} ENABLE ROW LEVEL SECURITY;`,
+      `    ALTER TABLE ${t} FORCE ROW LEVEL SECURITY;`,
+      `  END IF;`,
+      `END $$;`,
+      /* ⚠️ وأمّا السياسةُ نفسُها فتُحذف وتُعاد **بلا شرط** عن قصد: شرطٌ على
+         وجود اسمٍ اسمُه `tenant_isolation` يعني أنّ تغييرَ **تعبير** السياسة لا
+         يسري أبداً على قاعدةٍ قائمة — فتبقى القديمةُ تحرس بتعبيرٍ عتيق، وهو
+         عطلُ عزلٍ صامتٌ أسوأُ من قفلٍ زائد. والنافذةُ بين الحذف والإنشاء
+         (‏RLS مفعّلٌ بلا سياسة = صفرُ صفوفٍ بصمت) مغلقةٌ بـ`--single-transaction`
+         في `deploy.sh`. */
       `DROP POLICY IF EXISTS tenant_isolation ON ${t};`,
       `CREATE POLICY tenant_isolation ON ${t}`,
       `  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)`,

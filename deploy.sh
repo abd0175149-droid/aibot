@@ -165,29 +165,63 @@ arm_rollback
 say "البناء"
 docker compose build --build-arg GIT_REV="$GIT_REV" $SERVICES
 
-# ── 4. الاستبدال — التطبيق وحده، لا db ولا redis ────────────────
-# إعادة إنشاء القاعدة وريدِس في كلّ نشرٍ خطرٌ مجّانيّ على حالة الإنتاج.
-say "الاستبدال"
-docker compose rm -sf $SERVICES 2>/dev/null || true
-docker compose up -d $SERVICES
-
-# ── 5. الترحيل — الخطأ يُظهَر لا يُبتلع ─────────────────────────
+# ── 4. الترحيل — **قبل** الاستبدال، وكلُّ ملفٍّ وحدةٌ ذرّيّة ─────
+# 🔴 كان الترتيبُ معكوساً: استبدالٌ ثمّ ترحيل. والعطل ليس نظريّاً — لمستُه
+#    بيدي وأنا أضيف أعمدةَ العامل الثاني: بين `up -d` والترحيل تعمل شيفرةٌ
+#    **جديدة** على مخطّطٍ **قديم**، فكلُّ نداءٍ يقرأ عموداً جديداً يسقط بـ
+#    «column does not exist» — وهو ليس `AppError` فلا حادثةَ ولا أثر، ثوانيَ
+#    من أخطاءٍ خامّةٍ في وجه كلّ عميل. واضطُررتُ إلى تطبيق الأعمدة يدويّاً قبل
+#    النشر لتفاديه، وهذا اعترافٌ بالعطل لا حلٌّ له.
+#    وترحيلاتُ هذا المستودع كلُّها إضافيّة (‏`ADD COLUMN IF NOT EXISTS` ·
+#    `CREATE INDEX IF NOT EXISTS` · `CREATE OR REPLACE`)، فتشغيلُها تحت
+#    الشيفرة القديمة لا يراه أحد — والوحيدُ الذي يحذف هو `DROP POLICY` في
+#    `0002`، ويُعاد إنشاؤها في نفس المعاملة.
 say "الترحيل"
+MIG_LOG="${BACKUP_DIR}/migrate-${STAMP}.log"
 for f in packages/db/migrations/*.sql; do
-  echo "  → $(basename "$f")"
-  if ! docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "${DB_USER}" \
-        -d "${DB_NAME:-aibot}" -f - < "$f"; then
-    fail "فشل الترحيل $(basename "$f") — ما قالته القاعدة أعلاه"
+  b="$(basename "$f")"
+  echo "  → ${b}"
+  # 🔴 `--single-transaction`: بلاها الملفُّ ليس وحدة، فيتوقّف في منتصفه ويبقى
+  #    المخطّطُ نصفَ مُرحَّل. وأخطرُ موضعٍ `0002`: `DROP POLICY` ثمّ
+  #    `CREATE POLICY` في معاملتَين مستقلّتَين ⟶ لحظةٌ يكون الجدول فيها
+  #    RLS-مفعّلاً **بلا سياسة**، فـ`SELECT` من `aibot_app` يُرجع صفراً
+  #    **بصمت** — وهو بعينه العطلُ الذي بُنيت بوّابتا العزل لمنعه.
+  # 🔴 `lock_timeout`: `ALTER TABLE` يطلب ACCESS EXCLUSIVE، وطلبُه يصطفّ
+  #    **أمام** القرّاء التاليين — فاستعلامٌ طويلٌ واحد يجمّد الجدول للنشرة
+  #    كلِّها والبِركةُ عشرةُ اتّصالات. وفشلٌ سريعٌ **قبل** الاستبدال أرحم من
+  #    تجميدٍ صامت: القديمُ ما زال يعمل ولم تُستبدل حاويةٌ بعد.
+  # ⚠️ و`< "$f"` صريحةٌ لا أنبوب: `exec -T` يبتلع stdin المنادي — القاعدةُ
+  #    نفسُها التي يحرسها `ops-scripts.test.ts`.
+  if ! docker compose exec -T -e PGOPTIONS='-c lock_timeout=5s' db \
+        psql -v ON_ERROR_STOP=1 --single-transaction -U "${DB_USER}" \
+        -d "${DB_NAME:-aibot}" -f - < "$f" 2>&1 | tee -a "$MIG_LOG"; then
+    fail "فشل الترحيل ${b} — ولم تُستبدل حاويةٌ بعد، فالقديمُ يخدم. ${MIG_LOG}"
     exit 1
   fi
+  # ★ أثرٌ لا بوّابة: النشرُ يُطبّق الكلَّ في كلّ مرّة **عن قصد** (لا جدولَ
+  #   هجراتٍ يتباعد بين بيئتَين)، وهذا يسجّل ولا يمنع. والعطلُ الذي يمنعه:
+  #   لا أحد يعرف أيَّ محتوى من `0002` تحمله قاعدةٌ بعينها، ولا من أيّ نسخةٍ
+  #   جاء، ولا متى — والمخرَجُ الذي قال «تمّ» انقضى.
+  SUM="$(sha256sum "$f" | cut -d' ' -f1)"
+  # ⚠️ العبارةُ في متغيّرٍ فالنداءُ سطرٌ منطقيٌّ **واحد**: نصٌّ يمتدّ أسطراً
+  #    يقطع السطرَ المنطقيّ فلا تُرى `< /dev/null` ملحقةً به — لا بعين الحارس
+  #    ولا بعين من يقرأ. والقاعدةُ أنّ كلّ `exec -T` يُعلن مصدر stdin.
+  MIG_SQL="INSERT INTO schema_migrations (filename, sha256, git_rev) VALUES ('${b}','${SUM}','${GIT_REV}') ON CONFLICT (filename) DO UPDATE SET sha256=EXCLUDED.sha256, git_rev=EXCLUDED.git_rev, applied_at=now();"
+  docker compose exec -T db psql -q -v ON_ERROR_STOP=1 -U "${DB_USER}" -d "${DB_NAME:-aibot}" -c "$MIG_SQL" < /dev/null > /dev/null 2>&1 || true
 done
 
-# ── 5ب. كلمة سرّ دور التطبيق ──
+# ── 4ب. كلمة سرّ دور التطبيق ──
 # تُضبط بعد الترحيل لأنّ الدور يُنشأ فيه. ومتَماثِلة: تكرارها لا يضرّ.
 docker compose exec -T db psql -v ON_ERROR_STOP=1 -U "${DB_USER}" \
   -d "${DB_NAME:-aibot}" -c "ALTER ROLE aibot_app LOGIN PASSWORD '${APP_DB_PASSWORD}';" \
   < /dev/null > /dev/null
 echo "  ✔ دور التطبيق مضبوط (غير سوبريوزر — سياسات RLS تسري عليه)"
+
+# ── 5. الاستبدال — التطبيق وحده، لا db ولا redis ────────────────
+# إعادة إنشاء القاعدة وريدِس في كلّ نشرٍ خطرٌ مجّانيّ على حالة الإنتاج.
+say "الاستبدال"
+docker compose rm -sf $SERVICES 2>/dev/null || true
+docker compose up -d $SERVICES
 
 # ── 6. بوّابة الصحّة — هي التي تقرّر النجاح، لا نهاية السكربت ───
 say "بوّابة الصحّة"
