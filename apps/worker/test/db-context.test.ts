@@ -238,19 +238,52 @@ describe('لا نداءَ نموذجٍ داخل معاملة — البِركة�
  *   فيُسلسل التاريخ — أو `.toISOString()` صراحةً إن لزم `sql` خامّة.
  */
 describe('لا تاريخَ خامٌّ داخل قالب sql — السائقُ يطلب نصّاً', () => {
-  /** أسماءٌ تحمل تاريخاً بالعُرف: `*At`, `since`, `until`, `expires*`. */
-  const DATEISH = /\$\{\s*(?:[A-Za-z_$][\w$]*\.)?(?:[a-z][\w$]*(?:At|Date)|since|until|from|to|now|cutoff)\s*\}/;
+  /**
+   * ⚠️ **الماسحُ لا يُخمّن الأسماء — يُنكر القيمَ الآمنة.**
+   *
+   *   أوّلُ نسخةٍ من هذا الحارس بحثت عن أسماءٍ «تبدو تاريخاً» (`*At`، `since`،
+   *   `until`). ومرّ عليها `sql`${prices.effectiveFrom} <= ${at}`` لأنّ
+   *   الاسمَ `at` حرفان لا ينتهيان بـ`At`. فاجتاز العطلُ الثاني الحارسَ الذي
+   *   كُتب للعطل الأوّل — والاثنان عطلٌ واحد.
+   *
+   *   فالقاعدةُ انقلبت: **كلُّ** معاملٍ في مقارنةٍ مرفوضٌ إلّا ما يُثبت أنّه
+   *   نصٌّ أو رقمٌ أو تعبيرُ SQL: `'…'` أو رقمٌ حرفيّ أو `.toISOString()` أو
+   *   `String(…)` أو `sql.…`. وإنكارُ الآمن أضيقُ من تخمينِ الخطِر.
+   */
+  const SAFE_ARG = /^(?:'[^']*'|\d[\d_.]*|`[^`]*`|[^}]*\.toISOString\(\)|String\([^}]*\)|Number\([^}]*\)|sql\.[^}]*|[^}]*::\w+)$/;
 
-  it('كلُّ مقارنةٍ زمنيّةٍ في sql تُسلسَل أو تستعمل مُعامِلاً مطبوعاً', () => {
+  /**
+   * يُثبت أنّ المعامل نصٌّ أو رقمٌ أو تعبيرُ SQL — بحلّ تعريفه في الملفّ نفسِه.
+   * ولا يُخمّن من الاسم: أوّلُ نسخةٍ خمّنت، فمرّ `${at}` لأنّه حرفان.
+   */
+  function provablySafe(arg: string, src: string): boolean {
+    const a = arg.trim();
+    if (SAFE_ARG.test(a)) return true;
+    /* الجذرُ: `at(r.lo)` ⟶ `at`، و`x.toISOString()` عولج أعلاه. */
+    const root = /^([A-Za-z_$][\w$]*)/.exec(a)?.[1];
+    if (!root) return false;
+    /* تعريفٌ في الملفّ نفسِه يُثبت النوع: قالبٌ نصّيّ، أو نصّ، أو شظيّةُ SQL.
+       والنمطُ يُبنى بالتسلسل لا بقالبٍ نصّيّ: العلامةُ الخلفيّة داخل قالبٍ
+       نصّيٍّ تحتاج هروباً يضيع في كلّ نقلٍ آليٍّ لهذا الملفّ. */
+    const BT = String.fromCharCode(96);
+    const decl = new RegExp(
+      '(?:const|let|var)\\s+' + root + '\\s*(?::[^=]*)?=\\s*('
+      + BT + '|\'|"|\\([^)]*\\)\\s*=>\\s*sql' + BT + '|sql' + BT + '|String\\(|\\[)',
+    );
+    return decl.test(src);
+  }
+
+  it('كلُّ مقارنةٍ في sql تستعمل مُعامِلاً مطبوعاً أو قيمةً مُثبَتةَ النوع', () => {
     const offences: string[] = [];
     for (const { file, src } of sources()) {
-      for (const m of src.matchAll(/sql`[^`]*`/g)) {
-        const tpl = m[0];
-        // تعبيرٌ يقارن عموداً بقيمةٍ تبدو تاريخاً، بلا toISOString
-        if (!/[<>]=?\s*\$\{/.test(tpl)) continue;
-        if (!DATEISH.test(tpl)) continue;
-        if (tpl.includes('toISOString()')) continue;
-        offences.push(`${file}: ${tpl.slice(0, 80)}`);
+      /* ⚠️ التعليقاتُ تُعمّى أوّلاً: هذا الملفّ وملفّاتٌ يحرسها تشرح العطلَ
+         بكتابة شكله حرفيّاً — فبلا تعمية يمسك الحارسُ شرحَه ويُبلّغ عن نفسه. */
+      const bare = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+      for (const m of bare.matchAll(/sql`[^`]*`/g)) {
+        for (const c of m[0].matchAll(/[<>]=?\s*\$\{([^}]*)\}/g)) {
+          if (provablySafe(c[1]!, bare)) continue;
+          offences.push(`${file}: ${c[0].trim()}`);
+        }
       }
     }
     expect(
@@ -260,16 +293,18 @@ describe('لا تاريخَ خامٌّ داخل قالب sql — السائقُ 
     ).toEqual([]);
   });
 
-  it('الماسحُ يمسك الشكل فعلاً — وإلّا فهو اختبارٌ يمرّ دائماً', () => {
-    /* نُعيد شكلَ العطل نفسِه الذي وقع، ونتأكّد أنّ التعبير يُطابقه. */
-    const bad = 'sql`${messages.createdAt} > ${lastOutAt}`';
-    expect(/[<>]=?\s*\$\{/.test(bad) && DATEISH.test(bad) && !bad.includes('toISOString()')).toBe(true);
+  it('الماسحُ يمسك **كِلا** شكلَي العطل — وإلّا فهو اختبارٌ يمرّ دائماً', () => {
+    const arg = (t: string): string[] =>
+      [...t.matchAll(/[<>]=?\s*\$\{([^}]*)\}/g)].map((m) => m[1]!.trim());
 
-    const good = 'sql`${incidents.lastSeenAt} >= ${since.toISOString()}`';
-    expect(good.includes('toISOString()')).toBe(true);
+    /* ① الشكلُ الأوّل الذي وقع: اسمٌ ينتهي بـ`At`. */
+    expect(arg('sql`${messages.createdAt} > ${lastOutAt}`').every((a) => SAFE_ARG.test(a))).toBe(false);
+    /* ② والثاني الذي مرّ من الحارس الأوّل: اسمٌ من حرفين. */
+    expect(arg('sql`${prices.effectiveFrom} <= ${at}`').every((a) => SAFE_ARG.test(a))).toBe(false);
 
-    // ومقارنةٌ لا تاريخَ فيها لا تُحسب — وإلّا امتلأ الحارسُ بإنذارٍ كاذب
-    const neutral = "sql`${incidents.status} <> 'resolved'`";
-    expect(/[<>]=?\s*\$\{/.test(neutral)).toBe(false);
+    /* والآمنُ يمرّ — وإلّا امتلأ الحارسُ بإنذارٍ كاذبٍ فتُعطَّل قراءتُه. */
+    expect(arg('sql`${incidents.lastSeenAt} >= ${since.toISOString()}`').every((a) => SAFE_ARG.test(a))).toBe(true);
+    expect(arg("sql`${t.severity} <> 'critical'`").length).toBe(0);
+    expect(arg('sql`${w.cost} + ${String(cost)}::numeric`').length).toBe(0);
   });
 });

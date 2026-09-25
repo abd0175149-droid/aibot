@@ -1,4 +1,4 @@
-import { prices, aiKeys, eq, and, desc, sql, type Tx } from '@aibot/db';
+import { prices, aiKeys, eq, and, desc, sql, type Tx, lte} from '@aibot/db';
 import { open as decrypt } from '@aibot/crypto';
 
 /**
@@ -52,7 +52,12 @@ export async function priceAt(
   const row = (await tx.select().from(prices).where(and(
     eq(prices.provider, provider),
     eq(prices.model, model),
-    sql`${prices.effectiveFrom} <= ${at}`,
+    /* 🔴 **`lte()` لا `sql` خامّة** — وهذا هو العطلُ نفسُه الذي أسقط الردّ.
+       قالبُ `sql` يُمرّر كائن `Date` معاملاً خامّاً إلى postgres.js، وهو يطلب
+       نصّاً أو Buffer فيرمي «Received an instance of Date». والنداءُ يقع
+       **بعد** نداء النموذج في مسار الردّ: فالكلفةُ تُدفع للمزوّد ثمّ تتراجع
+       المعاملة، فلا صفَّ `ai_runs` ولا ردَّ للزبون — إنفاقٌ بلا أثرٍ ولا نتيجة. */
+    lte(prices.effectiveFrom, at),
   )).orderBy(desc(prices.effectiveFrom)).limit(1))[0];
 
   return row
