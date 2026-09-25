@@ -22,7 +22,13 @@ export interface HttpToolResult {
   mapped: Record<string, unknown>;
   error?: string;
   ms: number;
-  /** للعرض في زرّ «تجربة» بالواجهة — لا يدخل سياق النموذج أبداً. */
+  /**
+   * للعرض في زرّ «تجربة» بالواجهة — لا يدخل سياق النموذج أبداً.
+   *
+   * ★ وكلُّ حقلٍ فيه **محجوبُ الأسرار** قبل أن يخرج: القيمُ هنا هي القيمُ
+   *   **المُستبدَلة** — أي أنّ `{{secret.X}}` صارت السرَّ نفسَه. انظر
+   *   `redactSecrets`.
+   */
   debug?: { url: string; requestBody?: string; responseSnippet: string };
 }
 
@@ -31,6 +37,40 @@ export const LIMITS = {
   maxBytes: 256 * 1024,
   maxRedirects: 3,
 } as const;
+
+/** ما يُكتب بدل السرّ. */
+export const MASKED = '•••';
+
+/**
+ * ★ **مخرَجُ التشخيص كان يُعيد الأسرار إلى الشاشة.**
+ *
+ *   `debug.url` و`debug.requestBody` يُبنيان **بعد** `renderUrl`
+ *   و`renderTemplate` — أي أنّ `{{secret.API_TOKEN}}` فيهما صارت التوكنَ
+ *   نفسَه. والواجهة تطبعهما في كتلةٍ قابلةٍ للنسخ («العنوان الذي نودي
+ *   فعلاً»)، فتوكنُ نظام العميل يظهر على شاشةٍ قد تُصوَّر أو تُشارَك، ويسكن
+ *   ذاكرةَ المتصفّح.
+ *
+ *   والحجبُ هنا لا في الواجهة: الواجهةُ ليست الحدَّ الأمنيّ — نفسُ الحمولة
+ *   تُقرأ من أدوات المتصفّح ومن أيّ مُنادٍ آخر لنفس المسار.
+ *
+ * ⚠️ والقيمةُ تُحجب بصيغتها الخام **وبصيغتها المُشفَّرة للعنوان**: `renderUrl`
+ *    يمرّ كلَّ قيمةٍ على `encodeURIComponent`، فسرٌّ فيه `/` أو `+` يظهر في
+ *    العنوان بشكلٍ لا يطابق النصَّ الأصليّ.
+ */
+export function redactSecrets(text: string, masks: Iterable<string>): string {
+  let out = text;
+  for (const raw of masks) {
+    const v = typeof raw === 'string' ? raw.trim() : '';
+    /* ★ وأقلُّ من ستّة محارف لا يُحجب: قيمةٌ مثل «1» أو «ar» تُشطب من كلّ
+       موضعٍ في الاستجابة فيصير التشخيصُ بلا معنى — وهو الغرضُ منه. */
+    if (v.length < 6) continue;
+    for (const form of new Set([v, encodeURIComponent(v)])) {
+      /* `split/join` لا `RegExp`: السرُّ نصٌّ حرفيٌّ قد يحمل `.` و`+` و`?`. */
+      if (out.includes(form)) out = out.split(form).join(MASKED);
+    }
+  }
+  return out;
+}
 
 /** شبكاتٌ خاصّة ومحجوزة — تُرفض **بعد** حلّ DNS لا قبله. */
 function isPrivateIp(ip: string): boolean {
@@ -142,16 +182,25 @@ export async function execHttpTool(
   params: Record<string, unknown>,
   secrets: Record<string, string>,
   responseMap: Record<string, string> | null,
-  opts: { debug?: boolean } = {},
+  /**
+   * ★ `mask`: قيمٌ إضافيّةٌ تُحجب من التشخيص ومن رسائل الخطأ.
+   *   الأسرارُ المُهرَّبة عبر `secrets` تُحجب آليّاً؛ و`mask` لبيانات الاعتماد
+   *   **الحرفيّة** المكتوبة في الصفّ نفسِه (مفتاحٌ في مُعامِل عنوان)، وهي
+   *   الحالةُ الأكثرُ شيوعاً عند من كتب الأداة بسرعة.
+   */
+  opts: { debug?: boolean; mask?: readonly string[] } = {},
 ): Promise<HttpToolResult> {
   const started = Date.now();
+  const masks = [...Object.values(secrets), ...(opts.mask ?? [])];
+  /* رسائلُ الخطأ تُحجب أيضاً: `fetch` يضع العنوانَ كاملاً في بعض أخطائه. */
+  const red = (t: string) => redactSecrets(t, masks);
   const urlStr = renderUrl(spec.url, params, secrets);
 
   let url: URL;
   try {
     url = await assertPublicUrl(urlStr);
   } catch (e) {
-    return { ok: false, mapped: {}, error: (e as Error).message, ms: Date.now() - started };
+    return { ok: false, mapped: {}, error: red((e as Error).message), ms: Date.now() - started };
   }
 
   const headers: Record<string, string> = { accept: 'application/json' };
@@ -192,7 +241,7 @@ export async function execHttpTool(
     }
   } catch (e) {
     const msg = (e as Error).name === 'TimeoutError' ? `انتهت المهلة (${timeout}ms)` : (e as Error).message;
-    return { ok: false, mapped: {}, error: msg, ms: Date.now() - started };
+    return { ok: false, mapped: {}, error: red(msg), ms: Date.now() - started };
   }
 
   const declared = Number(res.headers.get('content-length') ?? 0);
@@ -217,6 +266,14 @@ export async function execHttpTool(
     mapped,
     error: res.ok ? undefined : `المصدر ردّ ${res.status}`,
     ms: Date.now() - started,
-    ...(opts.debug ? { debug: { url: url.toString(), requestBody: body, responseSnippet: text.slice(0, 1000) } } : {}),
+    ...(opts.debug
+      ? {
+        debug: {
+          url: red(url.toString()),
+          requestBody: body === undefined ? undefined : red(body),
+          responseSnippet: red(text.slice(0, 1000)),
+        },
+      }
+      : {}),
   };
 }

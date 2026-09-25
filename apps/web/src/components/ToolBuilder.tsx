@@ -57,7 +57,16 @@ interface TestResult {
   ms?: number;
   mapped?: unknown;
   error?: string;
-  debug?: { url?: string; body?: string; snippet?: string };
+  /**
+   * ★ **أسماءُ الحقول كانت لا تطابق الخادم، فلم يُعرض جوابُ المصدر قطّ.**
+   *
+   *   الخادم يُعيد `requestBody` و`responseSnippet`، والشاشةُ كانت تقرأ
+   *   `body` و`snippet` — فكتلةُ «أوّل ما ردّه» كانت `undefined` دائماً،
+   *   وهي أوّلُ ما يحتاجه من يبني أداةً لا تعمل.
+   *
+   *   وكلُّ حقلٍ هنا **محجوبُ الأسرار من الخادم** — لا تُعِد بناءه هنا.
+   */
+  debug?: { url?: string; requestBody?: string; responseSnippet?: string };
 }
 
 export function ToolBuilder({ initial, onClose, onSaved }: {
@@ -293,7 +302,11 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
                   placeholder={'{"phone":"{{__contact_phone}}","details":"{{details}}"}'} />
               </Field>
             )}
-            <Field id="t-auth" label="ترويسة الصلاحيّة" hint="اتركها فارغةً إن كان العنوان عامّاً.">
+            <Field
+              id="t-auth"
+              label="ترويسة الصلاحيّة"
+              hint="اتركها فارغةً إن كان العنوان عامّاً. وإن كتبتَ التوكن هنا مباشرةً نُشفّره ونضع مرجعاً إليه."
+            >
               <Input id="t-auth" value={d.authHeader} dir="ltr" onChange={(v) => set('authHeader', v)}
                 placeholder="Bearer {{secret.API_TOKEN}}" />
             </Field>
@@ -368,7 +381,12 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
                 </Row>
                 {test.error && <Note tone="crit">{test.error}</Note>}
                 {test.debug?.url && <CodeBlock label="العنوان الذي نودي فعلاً" text={test.debug.url} />}
-                {test.debug?.snippet && <CodeBlock label="أوّل ما ردّه" text={test.debug.snippet} />}
+                {test.debug?.requestBody && <CodeBlock label="الجسم الذي أُرسل" text={test.debug.requestBody} />}
+                {test.debug?.responseSnippet && <CodeBlock label="أوّل ما ردّه" text={test.debug.responseSnippet} />}
+                <Note>
+                  الأسرارُ محجوبةٌ (<span dir="ltr">•••</span>) في هذه الكتل — يُحجبها الخادم قبل أن
+                  تصل الشاشة.
+                </Note>
                 <KV>
                   <KVRow k="ما سيراه البوت">
                     <CodeBlock text={JSON.stringify(test.mapped ?? null, null, 2)} />

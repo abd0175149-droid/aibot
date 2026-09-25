@@ -6,11 +6,12 @@ import {
 import {
   AppError, ErrorCode, BotBehaviorPatch, BotToolUpsert, BotToolPatch,
 } from '@aibot/shared';
-import { seal } from '@aibot/crypto';
+import { seal, open } from '@aibot/crypto';
 import { DEFAULT_CHAT_MODEL } from '@aibot/ai';
 import { decideKnowledgeMode, estimateTokens, linkHostsFrom, execHttpTool, assertPublicUrl, type HttpToolSpec } from '@aibot/core';
 import { requireAuth, tenantOf } from '../auth.js';
 import { enforceRate } from '../ratelimit.js';
+import { migrateLiteralSecrets, maskHttp, credentialValues } from '../tool-secrets.js';
 import { enqueueEmbed, enqueueIngest } from '../queues.js';
 import { mkdir, writeFile, unlink } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -488,12 +489,27 @@ export async function registerBot(app: FastifyInstance) {
 
   /* ───────────────────────── الأدوات ───────────────────────── */
 
-  app.get('/bot/tools', { preHandler: requireAuth() }, async (req) => {
+  /**
+   * ★ **قائمةُ الأدوات كانت مفتوحةً لكلّ موظّف.**
+   *
+   *   `requireAuth()` بلا `settings` تعني أنّ كلّ من يملك توكناً صالحاً
+   *   للمستأجر — بما فيهم `tenant_agent` — يقرأ عمودَ `http` كاملاً: العنوان
+   *   والترويسات، أي **توكنَ نظام العميل** إن كُتب حرفيّاً. والشاشةُ الوحيدةُ
+   *   التي تنادي هذا المسار محجوبةٌ في التنقّل بـ`needs: 'settings'` أصلاً،
+   *   فالفتحُ لم يشترِ شيئاً.
+   */
+  app.get('/bot/tools', { preHandler: auth }, async (req) => {
     const tenantId = tenantOf(req);
     return withTenant(getDb(), tenantId, async (tx) => {
       const rows = await tx.select().from(botTools).where(eq(botTools.tenantId, tenantId));
       // لا يُعاد سرٌّ للواجهة أبداً — حتّى وجوده يُعرض كعلمٍ لا كقيمة
-      return rows.map(({ secretsEnc, ...rest }) => ({ ...rest, hasSecrets: Boolean(secretsEnc) }));
+      return rows.map(({ secretsEnc, ...rest }) => ({
+        ...rest,
+        /* ★ وما بقي حرفيّاً في `http` من صفوفٍ قديمةٍ يُحجب في المخرَج:
+           الترحيلُ يُصلح الصفَّ عند أوّل حفظ، وهذا يحمي ما لم يُحفظ بعد. */
+        http: maskHttp(rest.http),
+        hasSecrets: Boolean(secretsEnc),
+      }));
     });
   });
 
@@ -514,15 +530,21 @@ export async function registerBot(app: FastifyInstance) {
     if (b.http?.url) await assertPublicUrl(String(b.http.url)).catch((e) => {
       throw new AppError(ErrorCode.TOOL_BLOCKED, (e as Error).message, 400);
     });
+    /* ★ **ترحيلٌ لا رفض**: من كتب التوكن حرفيّاً في ترويسة المصادقة يُنقل
+       توكنُه إلى الخزنة المشفَّرة وتُستبدل الترويسةُ بمرجعٍ إليه. والرفضُ كان
+       سيحبس المالك — أداةٌ معطوبةٌ لا تُصحَّح إلّا بحفظ، والحفظُ مرفوض. */
+    const mig = migrateLiteralSecrets(b.http ?? null);
+
     return withTenant(getDb(), tenantId, async (tx) => {
-      const sealed = b.secrets ? seal(JSON.stringify(b.secrets)) : null;
+      const secrets = { ...(b.secrets ?? {}), ...(mig?.secrets ?? {}) };
+      const sealed = Object.keys(secrets).length ? seal(JSON.stringify(secrets)) : null;
       const [row] = await tx.insert(botTools).values({
         tenantId,
         key: String(b.key), titleAr: String(b.titleAr), description: String(b.description),
         kind: 'http',
         requiresCapabilities: Array.isArray(b.requiresCapabilities) ? b.requiresCapabilities : [],
         paramsSchema: b.paramsSchema ?? { type: 'object', properties: {} },
-        http: b.http ?? null,
+        http: mig?.http ?? b.http ?? null,
         responseMap: b.responseMap ?? null,
         secretsEnc: sealed?.enc ?? null,
         keyVersion: sealed?.keyVersion ?? 1,
@@ -540,7 +562,7 @@ export async function registerBot(app: FastifyInstance) {
         enabled: b.enabled === true,
       }).returning();
       const { secretsEnc, ...safe } = row!;
-      return safe;
+      return { ...safe, http: maskHttp(safe.http), hasSecrets: Boolean(secretsEnc) };
     });
   });
 
@@ -576,14 +598,17 @@ export async function registerBot(app: FastifyInstance) {
       if (!tool) throw new AppError(ErrorCode.VALIDATION, 'أداةٌ غير موجودة', 404);
 
       const secrets: Record<string, string> = tool.secretsEnc
-        ? JSON.parse((await import('@aibot/crypto')).open(tool.secretsEnc, tool.keyVersion))
+        ? JSON.parse(open(tool.secretsEnc, tool.keyVersion))
         : {};
       const res = await execHttpTool(
         tool.http as HttpToolSpec,
         req.body?.sampleParams ?? {},
         secrets,
         (tool.responseMap ?? null) as Record<string, string> | null,
-        { debug: true },
+        /* ★ **`debug` يُعيد القيمَ بعد الاستبدال** — أي السرَّ نفسَه في
+           «العنوان الذي نودي فعلاً». والحجبُ يجري في `execHttpTool`: أسرارُ
+           الخزنة آليّاً، وما كُتب حرفيّاً في الصفّ بـ`mask`. */
+        { debug: true, mask: credentialValues(tool.http) },
       );
       // الترويسات لا تُعاد — فيها السرّ الذي حقنّاه للتوّ
       return { ok: res.ok, status: res.status, mapped: res.mapped, error: res.error, ms: res.ms, debug: res.debug };
@@ -619,6 +644,8 @@ export async function registerBot(app: FastifyInstance) {
           throw new AppError(ErrorCode.TOOL_BLOCKED, (e as Error).message, 400);
         });
       }
+      const mig = migrateLiteralSecrets(b.http);
+
       return withTenant(getDb(), tenantId, async (tx) => {
         const cur = (await tx.select().from(botTools).where(eq(botTools.id, req.params.id)).limit(1))[0];
         if (!cur) throw new AppError(ErrorCode.VALIDATION, 'أداةٌ غير موجودة', 404);
@@ -627,15 +654,25 @@ export async function registerBot(app: FastifyInstance) {
         if (b.titleAr !== undefined) patch.titleAr = String(b.titleAr);
         if (b.description !== undefined) patch.description = String(b.description);
         if (b.paramsSchema !== undefined) patch.paramsSchema = b.paramsSchema;
-        if (b.http !== undefined) patch.http = b.http;
+        if (b.http !== undefined) patch.http = mig?.http ?? b.http;
         if (b.responseMap !== undefined) patch.responseMap = b.responseMap;
         if (b.requiresCapabilities !== undefined) {
           patch.requiresCapabilities = Array.isArray(b.requiresCapabilities) ? b.requiresCapabilities : [];
         }
         if (b.confirmRequired !== undefined) patch.confirmRequired = Boolean(b.confirmRequired);
         if (b.confirmTemplate !== undefined) patch.confirmTemplate = b.confirmTemplate ?? null;
-        if (b.secrets !== undefined) {
-          const sealed = Object.keys(b.secrets ?? {}).length ? seal(JSON.stringify(b.secrets)) : null;
+        /* ★ **دمجٌ لا استبدال عند الترحيل.**
+           الباني يرسل `secrets: { API_TOKEN }` وحدَه متى كُتب في حقل السرّ.
+           فلو استُبدلت الخزنةُ كلُّها بما أرسله لَمُحي `h_authorization` الذي
+           رحّلناه في حفظةٍ سابقة — وتصير الترويسةُ مرجعاً إلى سرٍّ غيرِ موجود،
+           فيستبدله `renderTemplate` بنصٍّ فارغ: الأداةُ ترسل مصادقةً خاوية
+           وتُخفق عند كلّ زبون، ولا شيءَ في الشاشة يقول لماذا. */
+        if (b.secrets !== undefined || mig) {
+          const base: Record<string, string> = b.secrets !== undefined
+            ? (b.secrets ?? {})
+            : (cur.secretsEnc ? JSON.parse(open(cur.secretsEnc, cur.keyVersion)) : {});
+          const merged = { ...base, ...(mig?.secrets ?? {}) };
+          const sealed = Object.keys(merged).length ? seal(JSON.stringify(merged)) : null;
           patch.secretsEnc = sealed?.enc ?? null;
           patch.keyVersion = sealed?.keyVersion ?? cur.keyVersion;
         }
@@ -649,7 +686,7 @@ export async function registerBot(app: FastifyInstance) {
         const [row] = await tx.update(botTools).set(patch)
           .where(eq(botTools.id, req.params.id)).returning();
         const { secretsEnc, ...safe } = row!;
-        return { ...safe, hasSecrets: Boolean(secretsEnc) };
+        return { ...safe, http: maskHttp(safe.http), hasSecrets: Boolean(secretsEnc) };
       });
     },
   );
