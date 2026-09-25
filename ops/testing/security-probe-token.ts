@@ -41,6 +41,10 @@ async function main(): Promise<void> {
 
   const claims = {
     sub: u.id, tid: u.tenantId, role: u.role, sid: 'probe-no-session',
+    /* ★ السكربتُ يقيس هل يفرض الخادمُ الصلاحيّاتِ على توكنٍ صالحٍ تماماً.
+       فتوكنٌ بلا `mfa` يُرفض عند بوّابة العامل الثاني، فتُقرأ نتائجُ فحص
+       اللوحة نجاحاتٍ كاذبة: قِيسَت البوّابةُ لا المصفوفةُ التي كُتب لها. */
+    ...(u.role === 'platform_owner' ? { mfa: 'ok' as const } : {}),
     exp: Math.floor(Date.now() / 1000) + ttl,
     ...(process.env.IMP_TENANT ? { imp: process.env.IMP_TENANT } : {}),
   };

@@ -73,14 +73,21 @@ export function attachRealtime(app: FastifyInstance): void {
 
     // الانضمام التلقائيّ لغرفة المستأجر — لا ينضمّ العميل بنفسه لأيّ غرفة
     if (claims.tid) socket.join(`t:${claims.tid}`);
-    if (claims.role === 'platform_owner') socket.join('platform');
+    /* ★ وانضمامٌ تلقائيٌّ بكلمة سرٍّ وحدها كان يُبقي سيلَ أحداث المنصّة
+       مفتوحاً بينما اللوحةُ ترفض — فيُقرأ الأمرُ عطلاً في اللوحة لا حجباً. */
+    if (claims.role === 'platform_owner' && claims.mfa === 'ok') socket.join('platform');
 
     socket.on('join', (room: unknown, ack?: (ok: boolean) => void) => {
       const target = String(room ?? '');
       // إعادة التحقّق عند كلّ انضمام — لا عند الاتّصال وحده
       const allowed =
         (claims.tid && target === `t:${claims.tid}`) ||
-        (claims.role === 'platform_owner' && (target === 'platform' || target.startsWith('t:')));
+        /* ★★★ وهذه أوسعُ قراءةٍ عابرةٍ للمستأجرين في المنصّة كلِّها: بادئةُ
+           `t:` تعني غرفةَ **أيّ** مستأجر، وحمولةُ `message:new` تحمل نصَّ
+           الرسالة كاملاً. فحجبُ اللوحة وحدها مع تركِ هذه مفتوحةً إصلاحٌ على
+           الورق: نفسُ البيانات تصل من الباب الثاني حيّةً. */
+        (claims.role === 'platform_owner' && claims.mfa === 'ok'
+          && (target === 'platform' || target.startsWith('t:')));
       if (!allowed) return ack?.(false);
       socket.join(target);
       ack?.(true);

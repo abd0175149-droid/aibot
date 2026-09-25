@@ -108,6 +108,22 @@ export function loginRules(email: string, ip: string | undefined): RateRule[] {
   return rules;
 }
 
+/**
+ * ★★★ **حدُّ الرمز يفشل مقفلاً — عكسَ بقيّة هذا الملفّ عن قصد.**
+ *
+ *   كلُّ ما هنا يفشل **مفتوحاً**: ريدِسٌ متعثّرٌ يجب ألّا يُقفل المنصّةَ على
+ *   عملائها. لكنّ الرمزَ ستُّ خاناتٍ — مليونُ احتمالٍ فقط — وفشلٌ مفتوحٌ
+ *   هناك يعني **تخميناً بلا سقف** للعامل الثاني ما دام ريدِس ساقطاً. أي أنّ
+ *   العاملَ الثاني يُلغى بعطلٍ في خدمةٍ أخرى.
+ *
+ * ⚠️ والانقلابُ آمنٌ لأنّ مداه محصور: هذه القاعدةُ لا تُطبَّق إلّا في
+ *    منتصف دخول مالك المنصّة، فأسوأُ أثرِها تعطيلُ دخولِ **شخصٍ واحد** ريثما
+ *    يعود ريدِس — لا حجبُ عميل.
+ */
+export function mfaRules(jti: string): RateRule[] {
+  return [{ key: `rl:mfa:${jti}`, limit: 5, windowSec: 300 }];
+}
+
 /* ───────────────────────── مخزنُ ريدِس ───────────────────────── */
 
 let conn: IORedis | null = null;
@@ -162,4 +178,24 @@ export async function enforceRate(
   if (v.ok) return;
   onLimit?.(v);
   throw new AppError(ErrorCode.RATE_LIMITED, message, 429);
+}
+
+/**
+ * ★ نسخةٌ تفشل **مقفلة**: مخزنٌ لا يجيب يُقرأ «تجاوزتَ» لا «تفضّل».
+ *
+ * ⚠️ ودالّةٌ مستقلّةٌ لا علَمٌ في `enforceRate`: حارسٌ قائمٌ يثبّت الفشلَ
+ *    المفتوحَ لمسار الدخول، وتبديلُ سلوكِ الدالّة المشتركة يكسره — أو أسوأ،
+ *    يُبدّل الموقفَ في كلّ مكانٍ بلا أن ينتبه أحد.
+ */
+export async function enforceRateStrict(
+  rules: RateRule[],
+  message: string,
+  store: RateStore = redisRateStore,
+): Promise<void> {
+  for (const r of rules) {
+    const hit = await store.hit(r.key, r.windowSec);
+    if (hit === null || hit > r.limit) {
+      throw new AppError(ErrorCode.RATE_LIMITED, message, 429);
+    }
+  }
 }

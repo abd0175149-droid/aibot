@@ -2,7 +2,10 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { TENANT_SCOPED, GLOBAL_TABLES } from '@aibot/db';
-import { PERMISSIONS, signAccess, verifyAccess, requireAuth, tenantOf } from '../src/auth.js';
+import {
+  PERMISSIONS, signAccess, verifyAccess, requireAuth, tenantOf,
+  signChallenge, verifyChallenge,
+} from '../src/auth.js';
 import type { FastifyRequest } from 'fastify';
 
 /**
@@ -230,5 +233,108 @@ describe('★ ٤٠٤ على صفرِ صفوفٍ — لا «تمّ» على فع�
     const iDel = bot.indexOf('delete(knowledgeSources)');
     expect(i404).toBeGreaterThan(-1);
     expect(iDel).toBeGreaterThan(i404);
+  });
+});
+
+/* ───────────── ⑤ لوحةُ المالك لا تُفتح بكلمة سرٍّ وحدها ───────────── */
+
+/**
+ * ★★★ **حسابٌ واحدٌ بعاملٍ واحدٍ كان يفتح المنصّة كلَّها.**
+ *
+ *   كلمةُ سرِّ `platform_owner` تفتح: قائمةَ كلّ العملاء، وتوكنَ انتحالٍ داخل
+ *   أيٍّ منهم، ومقبضاً يسمع غرفةَ **كلّ** مستأجر (`t:*`) — أي نصَّ كلّ رسالةِ
+ *   زبونٍ في المنصّة، حيّاً. وليس في المستودع كلِّه أثرٌ لعاملٍ ثانٍ.
+ *
+ * ⚠️ والغيابُ يُقرأ رفضاً: كلُّ توكنٍ صدر قبل النشرة بلا `mfa`، فلو كان الغيابُ
+ *    يعني «مسموح» لبقيت اللوحةُ مفتوحةً دورةَ تجديدٍ كاملةً بعد النشر.
+ */
+describe('⑤ اللوحةُ تحتاج عاملاً ثانياً — مفروضٌ في الكود', () => {
+  const owner = { sub: 'owner', tid: null, role: 'platform_owner' as const, sid: 's' };
+
+  it('★★★ توكنُ مالكٍ بلا `mfa` يُرفض عن اللوحة', async () => {
+    const r = await run(requireAuth({ console: true }), 'GET', signAccess(owner));
+    expect(r.status).toBe(403);
+    expect((r as { message?: string }).message).toMatch(/المصادقة الثنائيّة/);
+  });
+
+  it('★ ومعها يمرّ', async () => {
+    const r = await run(requireAuth({ console: true }), 'GET', signAccess({ ...owner, mfa: 'ok' }));
+    expect(r.status).toBe(200);
+  });
+
+  it('★★ والمطالبةُ ليست صلاحيّة — دورٌ لا يملك اللوحة يبقى ممنوعاً', () => {
+    return run(
+      requireAuth({ console: true }),
+      'GET',
+      signAccess({ sub: 'u', tid: 't-1', role: 'tenant_owner', mfa: 'ok', sid: 's' }),
+    ).then((r) => {
+      expect(r.status).toBe(403);
+      expect((r as { message?: string }).message).toMatch(/لوحة المالك محجوبة/);
+    });
+  });
+
+  it('★★ وتوكنُ التحدّي لا يُقرأ توكنَ وصول — ولا العكس', () => {
+    /* الاثنان موقَّعان بنفس السرّ. فبلا فحص النوع يصير اجتيازُ كلمة السرّ
+       وحدَها بطاقةَ دخولٍ كاملة — وهو بعينه ما تُغلقه هذه الدفعة. */
+    const ch = signChallenge('owner');
+    expect(verifyAccess(ch)).toBeNull();
+    expect(verifyChallenge(signAccess({ ...owner, mfa: 'ok' }))).toBeNull();
+    expect(verifyChallenge(ch)?.sub).toBe('owner');
+  });
+
+  it('★★★ وغرفةُ كلّ مستأجرٍ في الويبسوكِت تحتاجها أيضاً', () => {
+    /* أوسعُ قراءةٍ عابرةٍ للمستأجرين في المنصّة: `t:` تعني غرفةَ **أيّ** عميل،
+       وحمولةُ `message:new` تحمل نصَّ الرسالة كاملاً. فحجبُ اللوحة وحدَها
+       إصلاحٌ على الورق — نفسُ البيانات تصل من الباب الثاني.
+
+       و`realtime.ts` ليس ضمن `routeCode` (وهو `src/routes/*.ts` وحدها)،
+       فيُقرأ ويُعمّى هنا صراحةً — وإلّا لَسقط الحارسُ على التعليق الذي يشرحه. */
+    const rt = maskComments(readFileSync(join(API_SRC, 'realtime.ts'), 'utf8'));
+    expect(rt, 'بوّابةٌ بالدور وحده').not.toMatch(/role === 'platform_owner'\s*&&\s*\(target/);
+    expect((rt.match(/claims\.mfa === 'ok'/g) ?? []).length, 'الانضمامُ التلقائيّ والمعالجُ كلاهما')
+      .toBeGreaterThanOrEqual(2);
+  });
+
+  it('★★ وتوكنُ الانتحال يحمل المطالبة — وإلّا شُلّ الانتحالُ بـ٤٠٣', () => {
+    const c = routeCode.get('console.ts')!;
+    expect(c).toMatch(/imp: t\.id, mfa: 'ok'/);
+  });
+
+  it('★★★ ولا مسارَ يخلق المطالبة من عنده — مصدرُها `auth.ts` وحده', () => {
+    /* مسارٌ يكتب `mfa: 'ok'` بنفسه يصنع بابَ التفافٍ على البوّابة كلِّها.
+       و`console.ts` وحده مستثنًى: هو **يحمل** ما أثبته توكنٌ سابقٌ خلف
+       نفس البوّابة، لا يخلقه. */
+    const leaks = [...routeCode].filter(([f, code]) => f !== 'console.ts' && /mfa:\s*'ok'/.test(code));
+    expect(leaks.map(([f]) => f)).toEqual([]);
+  });
+
+  it('★★ والسرُّ مختومٌ في القاعدة لا نصٌّ صريح', () => {
+    /* سرُّ TOTP كلمةُ سرٍّ ثانيةٌ بكلّ معنى: نسخةٌ احتياطيّةٌ غيرُ مشفَّرةٍ كانت
+       ستحمل العاملَين معاً لو خُزّن نصّاً. */
+    const schema = readFileSync(join(API_SRC, '..', '..', '..', 'packages', 'db', 'src', 'schema', 'platform.ts'), 'utf8');
+    expect(schema).toContain("mfaSecretEnc: text('mfa_secret_enc')");
+    expect(schema).toContain("mfaKeyVersion: integer('mfa_key_version')");
+    const auth = maskComments(readFileSync(join(API_SRC, 'auth.ts'), 'utf8'));
+    expect(auth, 'السرُّ يُختم قبل الحفظ').toMatch(/const sealed = seal\(totpSecret\)/);
+    expect(auth, 'ويُفَكّ خارج أيّ معاملة').toMatch(/verifyTotp\(open\(/);
+  });
+
+  it('★★★ وسماحةُ التسجيل تُبقي البابَ مفتوحاً — وبلاها قفلٌ دائم', () => {
+    /* لا استعادةَ ذاتيّةً لكلمة سرٍّ في هذه المنصّة، فمالكٌ قائمٌ بلا سرٍّ
+       يجب أن يظلّ قادراً على الدخول وعلى بلوغ مسار التسجيل. */
+    const auth = maskComments(readFileSync(join(API_SRC, 'auth.ts'), 'utf8'));
+    expect(auth).toMatch(/user\.role === 'platform_owner' \&& user\.mfaSecretEnc/);
+    expect(auth, 'التسجيلُ خلف `requireAuth()` وحدها لا خلف صلاحيّة اللوحة')
+      .toContain("'/auth/mfa/enroll', { preHandler: requireAuth() }");
+    expect(auth).toContain("'/auth/mfa/activate', { preHandler: requireAuth() }");
+  });
+
+  it('★★ ولمسحه بابُ مشغّلٍ — فهاتفٌ ضائعٌ لا يُقفل المنصّة إلى الأبد', () => {
+    /* `enroll` يردّ ٤٠٩ على حسابٍ مُفعَّلٍ عن قصد (وإلّا سجّل سارقُ الجلسة
+       هاتفَه هو)، فالنتيجةُ قفلٌ دائمٌ بلا هذا السكربت. */
+    const ops = readFileSync(join(API_SRC, '..', '..', '..', 'ops', 'clear-mfa.ts'), 'utf8');
+    expect(ops).toContain('mfaSecretEnc: null');
+    expect(ops, 'وكلُّ الجلسات تسقط معه').toContain('update(sessions)');
+    expect(ops, 'والأثرُ يُسجَّل').toContain("action: 'auth.mfa_cleared'");
   });
 });

@@ -113,6 +113,8 @@ export function publicId(): string {
 }
 
 /** حقولٌ تُنقَّح من كلّ سجلّ — تُمرَّر إلى pino redact. */
+export * from './totp.js';
+
 export const REDACT_PATHS = [
   'req.headers.authorization',
   'req.headers.cookie',
@@ -145,4 +147,13 @@ export const REDACT_PATHS = [
   /* والتجزئةُ السابقة سرٌّ ثانٍ بنفس عمر الثلاثين يوماً — وُلد مع نافذة السماح. */
   '*.prevRefreshHash',
   '*.verifyToken',
+  /* ★ والعاملُ الثاني: `totpSecret` و`otpauth` يعودان من مسار التسجيل **مرّةً
+     واحدةً** نصّاً صريحاً (وهو كلُّ الغرض: يُقرأ ثمّ يُنسى)، و`code` يصل في
+     جسم طلب التحقّق. فسطرُ تشخيصٍ واحدٌ يُضاف يوماً يطبع العاملَ الثاني كلَّه
+     في السجلّ — وحسابُ مالك المنصّة يفتح لوحةَ كلّ العملاء. */
+  '*.mfaSecretEnc',
+  '*.totpSecret',
+  '*.otpauth',
+  '*.challenge',
+  '*.code',
 ];

@@ -2,11 +2,14 @@ import { createHmac, randomBytes, scrypt as _scrypt, timingSafeEqual } from 'nod
 import { promisify } from 'node:util';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import {
-  AppError, ErrorCode, tenantBlocked, TENANT_BLOCKED_AR, type Role,
+  AppError, ErrorCode, tenantBlocked, TENANT_BLOCKED_AR, MfaVerifyBody, MfaActivateBody,
+  type Role,
 } from '@aibot/shared';
 import { getDb, withPlatform, users, sessions, tenants, auditLog, eq, and, ne, isNull, gt, sql } from '@aibot/db';
-import { sha256 } from '@aibot/crypto';
-import { enforceRate, loginRules } from './ratelimit.js';
+import {
+  sha256, seal, open, generateTotpSecret, verifyTotp, otpauthUri,
+} from '@aibot/crypto';
+import { enforceRate, enforceRateStrict, loginRules, mfaRules } from './ratelimit.js';
 
 const scrypt = promisify(_scrypt) as (p: string, s: Buffer, l: number) => Promise<Buffer>;
 
@@ -64,6 +67,15 @@ export interface AccessClaims {
   sid: string;       // sessionId
   /** انتحالٌ نشط: قراءةٌ فقط، ومسجَّل، ويراه العميل في سجلّه. */
   imp?: string;
+  /**
+   * ★★★ عاملٌ ثانٍ قُدّم فعلاً في هذه الجلسة.
+   *
+   * ⚠️ وغيابُه **يُقرأ رفضاً** لا سهواً. كلُّ توكنٍ صدر قبل هذه النشرة بلا
+   *    `mfa`، فلو كان الغيابُ يعني «مسموح» لبقيت اللوحةُ مفتوحةً دورةَ تجديدٍ
+   *    كاملةً بعد النشر — أي أنّ البوّابةَ تُركَّب مقفلةً على الورق مفتوحةً
+   *    في الواقع ربعَ ساعة.
+   */
+  mfa?: 'ok';
   exp: number;
 }
 
@@ -94,6 +106,60 @@ export function verifyAccess(token: string): AccessClaims | null {
   if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
   try {
     const claims = JSON.parse(Buffer.from(body, 'base64url').toString()) as AccessClaims;
+    /* ★ وتوكنُ التحدّي لا يُقرأ توكنَ وصولٍ أبداً: هو موقَّعٌ بنفس السرّ،
+       فبلا فحص النوع يصير اجتيازُ كلمة السرّ وحدها بطاقةَ دخول. */
+    if ((claims as { typ?: string }).typ === 'mfa') return null;
+    if (claims.exp * 1000 < Date.now()) return null;
+    return claims;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ★★★ **توكنُ التحدّي — نوعٌ مستقلٌّ لا توكنُ وصولٍ قصير.**
+ *
+ *   بين خطوتَي الدخول يجب أن يبقى بيدِ المُنادي شيءٌ يُثبت أنّه اجتاز كلمةَ
+ *   السرّ — وهذا الشيء **يجب ألّا يفتح شيئاً**. فلو وُقّع بنفس شكل توكن
+ *   الوصول لصار حاملُه داخلاً بكلمة سرٍّ وحدها، وهو بعينه ما نُغلقه.
+ *
+ *   ولذلك `typ: 'mfa'` يُفحص في الدخول: `verifyAccess` يرفض التحدّي،
+ *   و`verifyChallenge` يرفض توكنَ الوصول. ولا جلسةَ تُنشأ ولا كوكي يُرسَل
+ *   قبل أن يصل الرمز — فمهاجمٌ بكلمة السرّ وحدها لا يملك كوكيَ ثلاثين يوماً.
+ */
+const CHALLENGE_TTL_SEC = 5 * 60;
+
+interface ChallengeClaims {
+  sub: string;
+  typ: 'mfa';
+  /** معرّفٌ فريدٌ للتحدّي — وهو مفتاحُ حدِّ المحاولات، فلا يُعدّ على البريد. */
+  jti: string;
+  exp: number;
+}
+
+export function signChallenge(userId: string): string {
+  const payload: ChallengeClaims = {
+    sub: userId,
+    typ: 'mfa',
+    jti: randomBytes(16).toString('base64url'),
+    exp: Math.floor(Date.now() / 1000) + CHALLENGE_TTL_SEC,
+  };
+  const head = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
+  const body = b64url(JSON.stringify(payload));
+  const sig = createHmac('sha256', secret()).update(`${head}.${body}`).digest('base64url');
+  return `${head}.${body}.${sig}`;
+}
+
+export function verifyChallenge(token: string): ChallengeClaims | null {
+  const [head, body, sig] = token.split('.');
+  if (!head || !body || !sig) return null;
+  const expected = createHmac('sha256', secret()).update(`${head}.${body}`).digest('base64url');
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(body, 'base64url').toString()) as ChallengeClaims;
+    if (claims.typ !== 'mfa') return null;
     if (claims.exp * 1000 < Date.now()) return null;
     return claims;
   } catch {
@@ -229,6 +295,18 @@ export function requireAuth(opts: { role?: Role[]; settings?: boolean; billing?:
     if (opts.settings && !p.settings) throw new AppError(ErrorCode.FORBIDDEN, 'الإعدادات لمالك الحساب', 403);
     if (opts.billing && !p.billing) throw new AppError(ErrorCode.FORBIDDEN, 'الفوترة لمالك الحساب', 403);
     if (opts.console && !p.console) throw new AppError(ErrorCode.FORBIDDEN, 'لوحة المالك محجوبة', 403);
+    /* ★★★ واللوحةُ مفتاحُ القراءة إلى كلّ عميل: قائمتُهم، وتوكنُ انتحالٍ
+       داخل أيّ منهم، وغرفةُ كلّ مستأجرٍ في الويبسوكِت. فكلمةُ سرٍّ وحدها لا
+       تفتحها. والفحصُ على `opts.console` لا على الدور، فيغطّي كذلك المسارَين
+       الكاتبَين العابرَين للمستأجرين (`bot/seed` و`channel/connect`) وهما
+       بـ`console: true` بلا قائمة أدوار. */
+    if (opts.console && claims.mfa !== 'ok') {
+      throw new AppError(
+        ErrorCode.FORBIDDEN,
+        'لوحة المالك تحتاج رمز المصادقة الثنائيّة — فعّلها ثمّ سجّل الدخول من جديد.',
+        403,
+      );
+    }
 
     // الانتحال قراءةٌ فقط — وكلّ فعلٍ كاتبٍ يُرفض ولو كان الدور يسمح به
     if (claims.imp && req.method !== 'GET' && req.method !== 'HEAD') {
@@ -290,13 +368,27 @@ export async function registerAuth(app: FastifyInstance) {
       throw new AppError(ErrorCode.TENANT_SUSPENDED, TENANT_BLOCKED_AR, 403);
     }
 
+    /* ★★★ **مالكُ المنصّة المُسجَّل لا يُعطى جلسةً بكلمة السرّ وحدها.**
+       لا صفَّ جلسةٍ ولا كوكيَ تحديثٍ ولا توكنَ وصول — تحدٍّ عمرُه خمسُ دقائق
+       وحده. فمن سرق كلمةَ السرّ لا يملك شيئاً يعيش ثلاثين يوماً. */
+    if (user.role === 'platform_owner' && user.mfaSecretEnc) {
+      return reply.send({ mfaRequired: true, challenge: signChallenge(user.id) });
+    }
+
     const { refresh, sessionId } = await createSession(user.id, {
       ip: req.ip, userAgent: req.headers['user-agent'],
     });
     await withPlatform(getDb(), 'مصادقة: ختم آخر دخول',
       (tx) => tx.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id)));
 
-    const access = signAccess({ sub: user.id, tid: user.tenantId, role: user.role, sid: sessionId });
+    /* ★ ومالكُ منصّةٍ **لم يُسجّل بعد** يدخل ويبقى بلا `mfa` — فتُرفض عليه
+       اللوحةُ ويبقى بابُ التسجيل مفتوحاً. وبلا هذه السماحة يُقفَل المالكُ
+       القائم خارج المنصّة كلِّها بلا بابٍ ذاتيٍّ يعود منه. ومستخدمو
+       المستأجرين بعاملٍ واحدٍ بالتصميم في هذه الدفعة، فيحملونها دائماً. */
+    const access = signAccess({
+      sub: user.id, tid: user.tenantId, role: user.role, sid: sessionId,
+      ...(user.role === 'platform_owner' ? {} : { mfa: 'ok' as const }),
+    });
     return reply.header('set-cookie', refreshCookie(refresh)).send({
       access,
       user: { id: user.id, name: user.name, email: user.email, role: user.role, mustChangePassword: user.mustChangePassword },
@@ -327,7 +419,13 @@ export async function registerAuth(app: FastifyInstance) {
         .send({ error: { code: ErrorCode.TENANT_SUSPENDED, message: TENANT_BLOCKED_AR } });
     }
 
-    const access = signAccess({ sub: user.id, tid: user.tenantId, role: user.role, sid: rotated.sessionId });
+    /* ★★ والعاملُ الثاني يُثبَت **للجلسة** لا للتوكن: صفُّ الجلسة لم يُنشأ
+       إلّا بعد الرمز. فبلا حملِ المطالبة هنا تموت اللوحةُ بعد ربع ساعةٍ من
+       الدخول بـ٤٠٣ لا تفسيرَ لها. */
+    const access = signAccess({
+      sub: user.id, tid: user.tenantId, role: user.role, sid: rotated.sessionId,
+      ...(user.role === 'platform_owner' && !user.mfaSecretEnc ? {} : { mfa: 'ok' as const }),
+    });
     /* ★ الخاسرُ لا يُرسل كوكي — انظر `rotateSession`. */
     if (rotated.refresh === null) return reply.send({ access });
     return reply.header('set-cookie', refreshCookie(rotated.refresh)).send({ access });
@@ -397,6 +495,139 @@ export async function registerAuth(app: FastifyInstance) {
     },
   );
 
+  /* ═════════════════ العامل الثاني لمالك المنصّة ═════════════════ */
+
+  /**
+   * ★★★ الخطوةُ الثانية من الدخول — بلا توكنِ وصولٍ أصلاً.
+   *
+   *   المُنادي هنا لا يملك جلسةً: الدخولُ لم يُنشئ له واحدةً عمداً. فالتحدّي
+   *   وحده هو ما يُثبت أنّه اجتاز كلمةَ السرّ، و`typ` فيه يمنع تقديمَه
+   *   بطاقةَ دخولٍ إلى `requireAuth`.
+   */
+  app.post<{ Body: { challenge?: string; code?: string } }>('/auth/mfa/verify', async (req, reply) => {
+    const parsed = MfaVerifyBody.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      throw new AppError(ErrorCode.VALIDATION, 'رمزٌ من ستّ خاناتٍ وتحدٍّ صالح', 400);
+    }
+    const ch = verifyChallenge(parsed.data.challenge);
+    if (!ch) throw new AppError(ErrorCode.UNAUTHORIZED, 'انتهت مهلةُ الرمز — سجّل الدخول من جديد.', 401);
+
+    /* ⚠️ والحدُّ على `jti` لا على البريد: تحدٍّ واحدٌ يحتمل خمسَ محاولات، ثمّ
+       يُعاد الدخولُ من أوّله. وعدٌّ على البريد كان يسمح بتوليد تحدٍّ جديدٍ
+       لكلّ خمسِ محاولاتٍ بلا سقف. */
+    await enforceRateStrict(
+      mfaRules(ch.jti),
+      'محاولاتٌ كثيرة على هذا الرمز. سجّل الدخول من جديد.',
+    );
+
+    const db = getDb();
+    const rows = await withPlatform(db, 'مصادقة: قراءة سرّ العامل الثاني',
+      (tx) => tx.select({ u: users }).from(users).where(eq(users.id, ch.sub)).limit(1));
+    const user = rows[0]?.u;
+    if (!user?.isActive || !user.mfaSecretEnc) {
+      throw new AppError(ErrorCode.UNAUTHORIZED, 'تعذّر إكمالُ الدخول.', 401);
+    }
+
+    /* ★ الفكُّ والتحقّقُ **خارج** أيّ معاملة: حسابٌ محلّيٌّ لا يحتجز اتّصالاً
+       من بِركة العشرة، وهي نفسُ قاعدة `scrypt` في الخطوة الأولى. */
+    const okCode = verifyTotp(open(user.mfaSecretEnc, user.mfaKeyVersion ?? 1), parsed.data.code);
+    if (!okCode) throw new AppError(ErrorCode.UNAUTHORIZED, 'الرمز غير صحيح.', 401);
+
+    const { refresh, sessionId } = await createSession(user.id, {
+      ip: req.ip, userAgent: req.headers['user-agent'],
+    });
+    await withPlatform(db, 'مصادقة: ختم آخر دخول بعد العامل الثاني', async (tx) => {
+      await tx.update(users).set({ lastLoginAt: new Date() }).where(eq(users.id, user.id));
+      await tx.insert(auditLog).values({
+        tenantId: null, actorUserId: user.id,
+        action: 'auth.mfa_verify', entity: 'user', entityId: user.id, ip: req.ip,
+      });
+    });
+
+    const access = signAccess({
+      sub: user.id, tid: user.tenantId, role: user.role, sid: sessionId, mfa: 'ok',
+    });
+    return reply.header('set-cookie', refreshCookie(refresh)).send({
+      access,
+      user: {
+        id: user.id, name: user.name, email: user.email, role: user.role,
+        mustChangePassword: user.mustChangePassword,
+      },
+    });
+  });
+
+  /**
+   * ★ بدءُ التسجيل — بـ`requireAuth()` وحدها لا بصلاحيّة اللوحة.
+   *
+   *   وهذا هو بابُ الخروج من القفل: مالكٌ بلا سرٍّ يدخل عاديّاً (بلا `mfa`)
+   *   ويبلغ هذا المسار، فيُسجّل بنفسه من المتصفّح بلا صدفةٍ على الخادم.
+   */
+  app.post('/auth/mfa/enroll', { preHandler: requireAuth() }, async (req) => {
+    const db = getDb();
+    const me = (await withPlatform(db, 'مصادقة: قراءة المستخدم لبدء تسجيل العامل الثاني',
+      (tx) => tx.select().from(users).where(eq(users.id, req.auth!.sub)).limit(1)))[0];
+    if (!me) throw new AppError(ErrorCode.UNAUTHORIZED, 'لا مستخدم', 401);
+
+    /* ⚠️ ولا استبدالَ صامتٌ لسرٍّ قائم: من سرق جلسةً نشطةً كان سيُسجّل هاتفَه
+       هو ويُخرج صاحبَ الحساب من عاملِه الثاني بضغطة. والاستبدالُ يمرّ
+       بـ`ops/clear-mfa.ts` وحدَه. */
+    if (me.mfaEnrolledAt) {
+      throw new AppError(ErrorCode.VALIDATION, 'لهذا الحساب عاملٌ ثانٍ مُفعَّلٌ أصلاً.', 409);
+    }
+
+    const totpSecret = generateTotpSecret();
+    const sealed = seal(totpSecret);
+    await withPlatform(db, 'مصادقة: حفظ سرّ العامل الثاني مختوماً', (tx) => tx.update(users)
+      .set({ mfaSecretEnc: sealed.enc, mfaKeyVersion: sealed.keyVersion })
+      .where(eq(users.id, me.id)));
+
+    /* يُعاد نصّاً صريحاً **مرّةً واحدة** — وهذا كلُّ الغرض. ولا يُقرأ بعدها من
+       أيّ مسار: `mfa_secret_enc` مختومٌ ولا يُعاد. */
+    return { totpSecret, otpauth: otpauthUri(totpSecret, me.email) };
+  });
+
+  /**
+   * ★★ التفعيل — رمزٌ من التطبيق يُثبت أنّ السرَّ وصله فعلاً.
+   *
+   *   وبلا هذه الخطوة يُقفَل المالكُ بسرٍّ لم يُخزَّن في هاتفه: يُحفظ السرُّ
+   *   ثمّ يُرفض الرمزُ في الدخول التالي إلى الأبد.
+   */
+  app.post<{ Body: { code?: string } }>('/auth/mfa/activate', { preHandler: requireAuth() }, async (req) => {
+    const parsed = MfaActivateBody.safeParse(req.body ?? {});
+    if (!parsed.success) throw new AppError(ErrorCode.VALIDATION, 'رمزٌ من ستّ خانات', 400);
+
+    const db = getDb();
+    const me = (await withPlatform(db, 'مصادقة: قراءة المستخدم لتفعيل العامل الثاني',
+      (tx) => tx.select().from(users).where(eq(users.id, req.auth!.sub)).limit(1)))[0];
+    if (!me?.mfaSecretEnc) throw new AppError(ErrorCode.VALIDATION, 'ابدأ التسجيل أوّلاً.', 400);
+    if (me.mfaEnrolledAt) throw new AppError(ErrorCode.VALIDATION, 'مُفعَّلٌ أصلاً.', 409);
+
+    if (!verifyTotp(open(me.mfaSecretEnc, me.mfaKeyVersion ?? 1), parsed.data.code)) {
+      throw new AppError(ErrorCode.VALIDATION, 'الرمز غير صحيح — تحقّق من ساعة هاتفك.', 400);
+    }
+
+    await withPlatform(db, 'مصادقة: تفعيل العامل الثاني وإبطال الجلسات الأخرى', async (tx) => {
+      await tx.update(users).set({ mfaEnrolledAt: new Date() }).where(eq(users.id, me.id));
+      /* ★★ وكلُّ جلسةٍ أخرى تُبطَل: تفعيلُ قفلٍ مع إبقاء بابٍ قديمٍ مفتوحاً
+         ليس تفعيلاً. وجلسةُ هذا التبويب تبقى — لا نطرد من فعَل الشيءَ للتوّ. */
+      await tx.update(sessions)
+        .set({ revokedAt: new Date() })
+        .where(and(
+          eq(sessions.userId, me.id),
+          ne(sessions.id, req.auth!.sid),
+          isNull(sessions.revokedAt),
+        ));
+      await tx.insert(auditLog).values({
+        tenantId: null, actorUserId: me.id,
+        action: 'auth.mfa_enroll', entity: 'user', entityId: me.id, ip: req.ip,
+      });
+    });
+
+    /* والمطالبةُ لا تُضاف إلى توكنٍ صادرٍ سلفاً — فالدخولُ من جديد هو ما
+       يفتح اللوحة، وتقولها الرسالةُ صراحةً بدل أن تُترك للتخمين. */
+    return { ok: true, relogin: true };
+  });
+
   app.post('/auth/logout', { preHandler: requireAuth() }, async (req, reply) => {
     await revokeSession(req.auth!.sid);
     return reply.header('set-cookie', clearRefreshCookie()).send({ ok: true });
@@ -424,6 +655,11 @@ export async function registerAuth(app: FastifyInstance) {
       tenant: tenant && { id: tenant.id, name: tenant.name, status: tenant.status, capabilities: tenant.capabilities },
       permissions: PERMISSIONS[user.role],
       impersonating: req.auth!.imp ?? null,
+      /* ★ ثلاثُ حالاتٍ لا علَمٌ ثنائيّ: `pending` لم يُسجّل بعد فيُرسَل إلى
+         التسجيل، و`stale` سجَّل وهذا التوكنُ لم يخطُ الخطوةَ الثانية فيُرسَل
+         إلى الدخول. وجمعُهما في `false` يقول لمن سجَّل «سجِّل» — وهذه أسرعُ
+         طريقٍ إلى إطفاء الميزة. */
+      mfa: req.auth!.mfa === 'ok' ? 'ok' : (user.mfaSecretEnc ? 'stale' : 'pending'),
     };
   });
 }

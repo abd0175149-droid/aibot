@@ -30,6 +30,24 @@ export const LoginBody = z.object({
   password: z.string().min(8).max(200),
 });
 
+/**
+ * ★ عقدُ العامل الثاني — ستُّ خاناتٍ **بنمطٍ** لا بحدَّي طول.
+ *
+ *   `min(6).max(6)` يقبل «١٢٣٤٥٦» بالأرقام الهنديّة وفراغاً في الطرف، فيفشل
+ *   عند مقارنة HMAC برسالةٍ لا تُفرّق «رمزٌ خاطئ» من «رمزٌ مكتوبٌ بشكلٍ آخر».
+ *   والرفضُ عند العقد يقول ما يُصلَح.
+ */
+export const MfaVerifyBody = z.object({
+  challenge: z.string().min(16).max(2048),
+  code: z.string().regex(/^[0-9]{6}$/, 'الرمز ستُّ خاناتٍ لاتينيّة'),
+});
+export type MfaVerifyBody = z.infer<typeof MfaVerifyBody>;
+
+export const MfaActivateBody = z.object({
+  code: z.string().regex(/^[0-9]{6}$/, 'الرمز ستُّ خاناتٍ لاتينيّة'),
+});
+export type MfaActivateBody = z.infer<typeof MfaActivateBody>;
+
 export const SendMessageBody = z.object({
   text: z.string().min(1).max(4096).optional(),
   choices: z.object({

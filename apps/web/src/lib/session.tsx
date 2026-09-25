@@ -14,6 +14,15 @@ export interface Me {
   tenant: { id: string; name: string; status: string; capabilities: Record<string, boolean> } | null;
   permissions: { write: boolean; settings: boolean; billing: boolean; console: boolean };
   impersonating: string | null;
+  /**
+   * ★ حالةُ العامل الثاني — ثلاثٌ لا علَمٌ ثنائيّ.
+   *  · `pending` لم يُسجّل بعد ⟶ شاشةُ التسجيل.
+   *  · `stale`   سجَّل وهذا التوكن لم يخطُ الخطوةَ الثانية ⟶ دخولٌ من جديد.
+   *  · `ok`      اللوحة مفتوحة.
+   * وجمعُ الأوّلَين في `false` يقول لمن سجَّل «سجِّل» — وتلك أسرعُ طريقٍ إلى
+   * إطفاء الميزة.
+   */
+  mfa: 'ok' | 'stale' | 'pending';
 }
 
 interface Ctx {

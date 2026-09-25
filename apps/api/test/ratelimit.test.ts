@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   checkRate, accountKey, ipKey, loginRules, isUnusableClientIp,
+  mfaRules, enforceRateStrict,
   type RateStore, type RateRule,
 } from '../src/ratelimit.js';
 
@@ -72,6 +73,28 @@ describe('حدُّ المعدّل — الحكم', () => {
 
   it('لا قاعدةَ ⟶ لا منع', async () => {
     expect((await checkRate(memStore(), [])).ok).toBe(true);
+  });
+
+  it('★★★ وحدُّ الرمز يفشل **مقفلاً** — انقلابٌ مقصودٌ ومحصورُ الأثر', async () => {
+    /* كلُّ ما في هذا الملفّ يفشل مفتوحاً: ريدِسٌ متعثّرٌ يجب ألّا يُقفل المنصّةَ
+       على عملائها. لكنّ رمز المصادقة ستُّ خاناتٍ — مليونُ احتمالٍ فقط — وفشلٌ
+       مفتوحٌ هناك يعني تخميناً بلا سقفٍ للعامل الثاني، أي إلغاءَه بعطلٍ في
+       خدمةٍ أخرى. والمدى محصور: أسوأُ أثرِه تعطيلُ دخولِ شخصٍ واحد. */
+    await expect(enforceRateStrict(mfaRules('j'), 'كثير', deadStore)).rejects.toThrow();
+  });
+
+  it('★ والمسموحُ يمرّ، وما بعد السقف يُرفض', async () => {
+    const s = memStore();
+    const rules = mfaRules('jti-1');
+    for (let i = 0; i < 5; i += 1) {
+      await expect(enforceRateStrict(rules, 'كثير', s)).resolves.toBeUndefined();
+    }
+    await expect(enforceRateStrict(rules, 'كثير', s)).rejects.toThrow();
+  });
+
+  it('وقاعدةُ الرمز ٥ في خمس دقائق، ومفتاحُها التحدّي لا البريد', () => {
+    /* عدٌّ على البريد كان يسمح بتوليد تحدٍّ جديدٍ لكلّ خمس محاولاتٍ بلا سقف. */
+    expect(mfaRules('abc')).toEqual([{ key: 'rl:mfa:abc', limit: 5, windowSec: 300 }]);
   });
 });
 

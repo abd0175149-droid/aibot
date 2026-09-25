@@ -186,7 +186,11 @@ export async function registerConsole(app: FastifyInstance) {
 
       return {
         access: signAccess(
-          { sub: req.auth!.sub, tid: t.id, role: 'platform_owner', sid: req.auth!.sid, imp: t.id },
+          /* ★★ والمطالبةُ تُحمَل لا تُخلَق: هذا المسارُ نفسُه خلف `owner` الذي
+             يشترط `mfa === 'ok'`، فالتوكنُ الجديد يرث ما أثبته القديم. وبلا
+             حملِها يفشل توكنُ الانتحال في بوّابته هو، فيُصاب الانتحالُ بالشلل
+             بـ٤٠٣ لا يفهمها مالكُ المنصّة. */
+          { sub: req.auth!.sub, tid: t.id, role: 'platform_owner', sid: req.auth!.sid, imp: t.id, mfa: 'ok' },
           30 * 60,
         ),
         tenant: { id: t.id, name: t.name },

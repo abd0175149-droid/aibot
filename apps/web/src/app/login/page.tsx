@@ -28,9 +28,17 @@ import { Alert, Button, Dock, Field, FormInput, Note, Skeleton } from '@/compone
  *   المقابلة له في نفس النظام — لا رقمَ بلا سياقٍ يبرّره.
  */
 
+/**
+ * ★★★ والدخولُ صار خطوتَين لحساب مالك المنصّة — فـ`access` **قد لا يأتي**.
+ *
+ *   بلا هذا: `setToken(undefined)` ثمّ تحويلٌ إلى `/console` يردّ ٤٠١ — قفلٌ
+ *   كاملٌ يصنعه العميلُ لا الخادم.
+ */
 interface LoginResult {
-  access: string;
-  user: { role: string; mustChangePassword: boolean };
+  access?: string;
+  mfaRequired?: boolean;
+  challenge?: string;
+  user?: { role: string; mustChangePassword: boolean };
 }
 
 function LoginForm() {
@@ -45,6 +53,9 @@ function LoginForm() {
   const [show, setShow] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** تحدٍّ بيدنا = الخطوةُ الثانية مفتوحة. و`null` = ما زلنا في الأولى. */
+  const [challenge, setChallenge] = useState<string | null>(null);
+  const [code, setCode] = useState('');
 
   /* وجهةٌ مطلوبةٌ سلفاً: القشرةُ تحوّل من يطلب شاشةً بلا جلسةٍ إلى هنا
      بـ`?next=`. وقولُ ذلك يمنع قراءةَ الشاشة «خرجتَ» — وقد لا يكون خرج. */
@@ -61,8 +72,26 @@ function LoginForm() {
     setError(null);
     try {
       const r = await post<LoginResult>('/auth/login', { email, password });
-      setToken(r.access);
-      await reload();
+
+      /* ★ ولا `setBusy(false)` قبل تبديل الخطوة: وميضُ زرٍّ يعود صالحاً ثمّ
+         تُبدَّل الشاشةُ تحته يُقرأ فشلاً. */
+      if (r.mfaRequired && r.challenge) {
+        setChallenge(r.challenge);
+        setBusy(false);
+        return;
+      }
+      await finish(r);
+    } catch (e) {
+      setError(e instanceof ApiError ? e.message : 'تعذّر تسجيل الدخول. حاول ثانيةً.');
+      setBusy(false);
+    }
+  }
+
+  /** ما بعد وصول التوكن — من الخطوة الأولى أو الثانية، بلا نسختَين. */
+  async function finish(r: LoginResult) {
+    if (!r.access || !r.user) throw new ApiError('INTERNAL', 'ردٌّ ناقصٌ من الخادم', 500);
+    setToken(r.access);
+    await reload();
 
       /* ★ كلمة السرّ المؤقّتة: الخادم يرسل `mustChangePassword` منذ البداية
          ولم يكن يُقرأ إطلاقاً — فمن أُنشئ له حسابٌ بكلمةٍ مؤقّتة يدخل بها
@@ -74,16 +103,26 @@ function LoginForm() {
         return;
       }
 
-      // مالك المنصّة يبدأ من لوحته، والعميل من لوحته — لا شاشة اختيار
-      router.replace(next ?? (r.user.role === 'platform_owner' ? '/console' : '/app'));
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'تعذّر تسجيل الدخول. حاول ثانيةً.');
+    // مالك المنصّة يبدأ من لوحته، والعميل من لوحته — لا شاشة اختيار
+    router.replace(next ?? (r.user.role === 'platform_owner' ? '/console' : '/app'));
+  }
+
+  /** الخطوةُ الثانية: رمزٌ من تطبيق المصادقة. */
+  async function submitCode(e: FormEvent) {
+    e.preventDefault();
+    if (busy || !challenge) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await finish(await post<LoginResult>('/auth/mfa/verify', { challenge, code }));
+    } catch (x) {
+      setError(x instanceof ApiError ? x.message : 'تعذّر التحقّق. حاول ثانيةً.');
       setBusy(false);
     }
   }
 
   return (
-    <form className="authcard" onSubmit={submit}>
+    <form className="authcard" onSubmit={challenge ? submitCode : submit}>
       {/* الترويسة: الهويّة وحدها — نفسُ موضعها في القشرة وبنفس نحوها */}
       <header className="auth-top">
         <b className="auth-mark">AiBot</b>
@@ -92,8 +131,12 @@ function LoginForm() {
 
       <div className="auth-b">
         <div className="auth-h">
-          <h1>سجّل الدخول</h1>
-          <p>بوتك ومحادثات زبائنك — من مكانٍ واحد.</p>
+          <h1>{challenge ? 'رمزُ المصادقة الثنائيّة' : 'سجّل الدخول'}</h1>
+          <p>
+            {challenge
+              ? 'افتح تطبيق المصادقة واكتب الرمز الظاهر الآن — يتبدّل كلّ نصف دقيقة.'
+              : 'بوتك ومحادثات زبائنك — من مكانٍ واحد.'}
+          </p>
         </div>
 
         {/* ★ يُنطَق: نفسُ نبرة `Note` ودورُها حيٌّ، فيُسمع الفشلُ لا يُرى فقط */}
@@ -105,6 +148,29 @@ function LoginForm() {
           <Note tone="brand">بعد الدخول تعود إلى الصفحة التي طلبتها.</Note>
         )}
 
+        {challenge && (
+          <Field id="lg-code" label="الرمز">
+            <FormInput
+              id="lg-code"
+              name="one-time-code"
+              value={code}
+              onChange={(v) => setCode(v.replace(/[^0-9]/g, '').slice(0, 6))}
+              /* `one-time-code` عقدُ المتصفّح: به يعرض الهاتفُ الرمزَ من إشعاره
+                 بضغطةٍ واحدة. ورمزٌ يُنقل بالعين من شاشةٍ إلى شاشةٍ هو الخطوةُ
+                 التي يتركها الناس. */
+              autoComplete="one-time-code"
+              inputMode="numeric"
+              enterKeyHint="go"
+              dir="ltr"
+              autoFocus
+              required
+              invalid={Boolean(error)}
+            />
+          </Field>
+        )}
+
+        {!challenge && (
+        <>
         <Field id="lg-email" label="البريد الإلكترونيّ">
           <FormInput
             id="lg-email"
@@ -154,7 +220,11 @@ function LoginForm() {
           </div>
         </Field>
 
+        </>
+        )}
+
         {/* طيٌّ تدريجيّ: لا قرارَ يُتّخذ على هذا في هذه اللحظة */}
+        {!challenge && (
         <details className="auth-fold">
           <summary>نسيت كلمة السرّ؟</summary>
           <p>
@@ -162,12 +232,25 @@ function LoginForm() {
             وستُطلب منك كلمتك الخاصّة عند أوّل دخول. والاستعادة الذاتيّة قادمة.
           </p>
         </details>
+        )}
+
+        {challenge && (
+          <details className="auth-fold">
+            <summary>فقدتُ هاتفي</summary>
+            <p>
+              لا بابَ ذاتيّاً للعامل الثاني عن قصد — أيُّ بابٍ ذاتيٍّ هو بعينه ما يُبطله.
+              راسل مشغّل المنصّة ليمسحه عن حسابك، ثمّ سجّل عاملاً جديداً عند أوّل دخول.
+            </p>
+          </details>
+        )}
       </div>
 
       {/* الرصيف: الفعلُ الأوّل وحده، وسطرٌ يقول عاقبتَه قبل الضغط لا بعده */}
-      <Dock hint="تبقى جلستك مفتوحةً على هذا المتصفّح حتّى تخرج بنفسك.">
+      <Dock hint={challenge
+        ? 'لم تُفتح جلسةٌ بعد — كلمةُ السرّ وحدها لا تفتح لوحة المالك.'
+        : 'تبقى جلستك مفتوحةً على هذا المتصفّح حتّى تخرج بنفسك.'}>
         <Button type="submit" variant="primary" size="lg" wide busy={busy}>
-          دخول
+          {challenge ? 'تحقّق' : 'دخول'}
         </Button>
       </Dock>
     </form>

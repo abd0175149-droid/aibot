@@ -33,6 +33,23 @@ export const users = pgTable('users', {
   role: text('role', { enum: ['platform_owner', 'tenant_owner', 'tenant_agent'] }).notNull(),
   isActive: boolean('is_active').notNull().default(true),
   mustChangePassword: boolean('must_change_password').notNull().default(false),
+  /**
+   * ★★★ **العاملُ الثاني لمالك المنصّة — مختومٌ لا نصٌّ صريح.**
+   *
+   *   سرُّ TOTP كلمةُ سرٍّ ثانيةٌ بكلّ معنى: من يقرؤه يولّد الرمزَ إلى الأبد.
+   *   فنسخةٌ احتياطيّةٌ غيرُ مشفَّرةٍ من القاعدة كانت ستحمل **العاملَين معاً**
+   *   لو خُزّن نصّاً — فيصير العاملُ الثاني زينةً على ورق.
+   *
+   *   و`keyVersion` على الصفّ كما في توكنات قنوات العملاء: تدويرُ `MASTER_KEY`
+   *   مهمّةٌ تُعيد الختمَ صفّاً صفّاً، لا عمليّةٌ تُوقف المنصّة.
+   *
+   * ⚠️ وأعمدةٌ على `users` لا جدولٌ جديد: كلُّ جدولٍ في المخطّط يجب أن يكون
+   *    في `TENANT_SCOPED` أو `GLOBAL_TABLES`، وحارسُ العزل يثبّت الثانيةَ عند
+   *    أربعةِ أسماءٍ بالاسم — وجدولٌ خامسٌ قرارُ عزلٍ لا تفصيلُ مصادقة.
+   */
+  mfaSecretEnc: text('mfa_secret_enc'),
+  mfaKeyVersion: integer('mfa_key_version'),
+  mfaEnrolledAt: timestamp('mfa_enrolled_at', { withTimezone: true }),
   lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(now),
 }, (t) => [index('users_tenant_idx').on(t.tenantId)]);
