@@ -24,3 +24,22 @@ export function safeNext(raw: string | null | undefined): string | null {
   if (/[\u0000-\u001f\u007f]/.test(raw)) return null;
   return raw;
 }
+
+/**
+ * إلى أين يُرسَل من لا جلسةَ له.
+ *
+ * ★ كان المسارُ يُبنى في موضعَين بصيغتين (`api.ts` و`Shell.tsx`)، وكلاهما
+ *   يأخذ `pathname` وحده — فمن كان يقرأ محادثةً بعينها (`?c=…`) يعود إلى
+ *   قائمةٍ عامّة بعد الدخول ويبحث عنها من جديد. و`safeNext` يقبل الاستعلامَ
+ *   والمرساةَ أصلاً، فلا سببَ لإسقاطهما.
+ *
+ * ⚠️ والمرورُ من `safeNext` مقصود: ما لا يجوز قبولُه من عنوانٍ خارجيّ لا يجوز
+ *    أن نبنيَه بأيدينا. وعند الرفض يُسقَط `next` ولا يُرفَض الدخول — و`safeNext`
+ *    ترفض أيّ `:`، فاستعلامٌ يحمل نقطتَين يهبط إلى `/login` مجرّداً.
+ */
+export function loginHref(path?: string, search?: string): string {
+  const p = path ?? (typeof location === 'undefined' ? '/' : location.pathname);
+  const q = search ?? (typeof location === 'undefined' ? '' : location.search);
+  const next = safeNext(`${p}${q}`);
+  return next ? `/login?next=${encodeURIComponent(next)}` : '/login';
+}

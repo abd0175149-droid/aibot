@@ -12,7 +12,56 @@
 let accessToken: string | null = null;
 let refreshing: Promise<boolean> | null = null;
 
-export function setToken(t: string | null): void { accessToken = t; }
+/**
+ * ★★★ **انتهاءُ الجلسة خبرٌ يُبلَّغ، لا تنقّلٌ يُنفَّذ من هنا.**
+ *
+ *   كان هذا الملفّ يكتب `location.href` بنفسه عند فشل التجديد — وهي تحميلٌ
+ *   كاملٌ للصفحة يمحو شجرةَ React كلَّها. فيضيع نصُّ الشخصيّة الذي كُتب ولم
+ *   يُحفظ (شاشة البوت)، وحقولُ الدعوة (الفريق)، و**الكلمةُ المؤقّتة المعروضة
+ *   مرّةً واحدة** — والخادم لا يخزّنها نصّاً فلا سبيل إليها بعدها.
+ *
+ *   والأسوأ أنّه يقع من **استقصاءٍ في الخلفيّة**: إنبوكسٌ مفتوحٌ يسأل كلّ
+ *   دقيقة، فتُمحى شاشةُ من لم يلمس شيئاً منذ ساعة وهو يكتب في تبويبٍ آخر.
+ *
+ *   فصار الملفُّ يُبلّغ، وقشرةُ الجلسة ترسم بوّابةً فوق ما هو مرسومٌ — والنصُّ
+ *   المكتوبُ باقٍ خلفها، ويعود بلا تحميلٍ عند نجاح الاستئناف.
+ */
+const expiredWatchers = new Set<() => void>();
+const resumedWatchers = new Set<() => void>();
+
+export function watchExpired(fn: () => void): () => void {
+  expiredWatchers.add(fn);
+  return () => { expiredWatchers.delete(fn); };
+}
+
+export function watchResumed(fn: () => void): () => void {
+  resumedWatchers.add(fn);
+  return () => { resumedWatchers.delete(fn); };
+}
+
+/**
+ * ★★ **وعلَمُ الموت قاطعُ دائرة.** التنقّلُ القديم كان — بلا قصد — هو ما يوقف
+ *   حلقةَ الطلبات: الصفحةُ تُحمَّل من جديد فينتهي كلُّ مُستقصٍ. وبلاه يبقى
+ *   إنبوكسٌ واقفٌ على البوّابة يطلب `/auth/refresh` كلَّ دقيقةٍ إلى الأبد —
+ *   كلُّ مرّةٍ استعلامُ قاعدةٍ وكوكي محوٍ جديد. فالتجديدُ يُرفَض بلا شبكةٍ
+ *   أصلاً ما دام العلَمُ مرفوعاً، ويسقط عند أوّل استئنافٍ ناجح.
+ */
+let dead = false;
+
+function notifyExpired(): void {
+  dead = true;
+  for (const fn of expiredWatchers) fn();
+}
+
+function notifyResumed(): void {
+  dead = false;
+  for (const fn of resumedWatchers) fn();
+}
+
+export function setToken(t: string | null): void {
+  accessToken = t;
+  if (t) notifyResumed();
+}
 export function getToken(): string | null { return accessToken; }
 
 export class ApiError extends Error {
@@ -35,12 +84,17 @@ const HUMAN: Record<string, string> = {
 
 async function refresh(): Promise<boolean> {
   // نداءٌ واحد مهما تزامنت الطلبات — وإلّا دوّرنا الـrefresh مرّاتٍ وأبطلناه
+  /* قاطعُ الدائرة: جلسةٌ ميّتةٌ لا تُسأل الشبكةُ عنها كلَّ دقيقة. */
+  if (dead) return false;
   refreshing ??= (async () => {
     try {
       const res = await fetch('/api/auth/refresh', { method: 'POST', credentials: 'include' });
       if (!res.ok) return false;
       const j = (await res.json()) as { access: string };
       accessToken = j.access;
+      /* تبويبٌ آخر استأنف الجلسة (الكوكي مشتركٌ بين التبويبات): البوّابةُ
+         المرسومةُ هنا تُزال بلا أن يُعيد أحدٌ كتابةَ كلمته. */
+      notifyResumed();
       return true;
     } catch {
       return false;
@@ -76,9 +130,9 @@ export async function api<T = unknown>(
   if (res.status === 401 && init.retry !== false && hadToken) {
     if (await refresh()) return api<T>(path, { ...init, retry: false });
     accessToken = null;
-    if (typeof window !== 'undefined' && !location.pathname.startsWith('/login')) {
-      location.href = `/login?next=${encodeURIComponent(location.pathname)}`;
-    }
+    /* ⚠️ و`/auth/logout` مستثنًى مع `/auth/login`: الخروجُ بتوكنٍ ميّتٍ كان
+       يرسم البوّابةَ إطاراً واحداً قبل أن يصل التحويل. */
+    if (!/^\/auth\/(login|logout)/.test(path)) notifyExpired();
     throw new ApiError('UNAUTHORIZED', HUMAN.UNAUTHORIZED!, 401);
   }
 
@@ -160,4 +214,20 @@ export function idempotencyKey(): string {
 
 export async function bootstrap(): Promise<boolean> {
   return refresh();
+}
+
+/**
+ * ★ استئنافُ جلسةٍ **في مكانها** — بلا تحميلِ صفحةٍ ولا فقدِ ما كُتب.
+ *
+ *   يُنادى من بوّابة انتهاء الجلسة وحدها. و`retry: false` مقصود: ٤٠١ من نداء
+ *   دخولٍ جوابُ الخادم لا انتهاءُ جلسة، فلا يُعاد التجديدُ عليه ولا تُرفع
+ *   بوّابةٌ فوق بوّابة.
+ */
+export async function resumeSession(email: string, password: string): Promise<void> {
+  const r = await api<{ access: string }>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ email, password }),
+    retry: false,
+  });
+  setToken(r.access);
 }

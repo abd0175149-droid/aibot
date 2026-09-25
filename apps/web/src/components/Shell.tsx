@@ -137,10 +137,17 @@ export function Shell({
   /* شارةُ المِصرف مجموعُ ما خلفه: عددٌ مخفيٌّ وراء قائمةٍ لم يُبلَّغ. */
   const restBadge = rest.reduce((s, n) => s + (n.badge ?? 0), 0);
 
+  /**
+   * ★ **الخروجُ تحميلٌ صلبٌ لا تنقّلٌ داخل التطبيق.**
+   *
+   *   `router.replace` يُبقي شجرةَ React — وفيها بياناتُ المستأجر المرسومة
+   *   ومقبضُ الويبسوكِت المنضمُّ إلى غرفته. وتغييرُ الهويّة يجب أن يمحو
+   *   الاثنين، فالتحميلُ الكامل هو الضمانةُ الوحيدة التي لا تُنسى.
+   */
   async function logout() {
     await post('/auth/logout').catch(() => undefined);
     setToken(null);
-    router.replace('/login');
+    location.replace('/login');
   }
 
   /**
@@ -154,12 +161,15 @@ export function Shell({
    * لا شاشةٌ عالقةٌ بزرٍّ لا يفعل شيئاً.
    */
   async function leaveImpersonation() {
+    /* ★★ وهذا تغييرُ هويّةٍ أيضاً — وكان تنقّلاً داخل التطبيق وحده.
+       فالمقبضُ يبقى منضمّاً إلى غرفة المستأجر المُنتحَل (`t:<id>`) ولا تُشتقّ
+       الغرفُ من جديد، وشجرةُ React تحتفظ ببياناته المرسومة. والتحميلُ الكامل
+       يمحو الاثنين معاً — وهو نفسُ ما يفعله الخروج سطراً واحداً أعلاه. */
     if (await bootstrap()) {
-      await reload();
-      router.replace('/console/tenants');
+      location.replace('/console/tenants');
     } else {
       setToken(null);
-      router.replace('/login');
+      location.replace('/login');
     }
   }
 
