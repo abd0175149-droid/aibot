@@ -289,6 +289,15 @@ describe('★ النشرُ يتراجع عند كلّ فشل — لا عند ب�
     expect(readFileSync(join(REPO, 'ops', 'backup-offsite.sh'), 'utf8'))
       .toMatch(/AGE_H.*-gt 48|-gt 48/);
     expect(src, 'والنشرُ يُظهره — وهو ما يقرؤه إنسانٌ كثيراً').toContain('BACKUP-FAILED');
+    /* ★★ **وتقريرُ الحالة لا يُسقط ما يُقرّر عنه.** مجلّدٌ غائبٌ يجعل
+       `find` يخرج بـ١، و`set -e` يحوّله تراجعَ نشرةٍ سليمة — وقع فعلاً في
+       أوّل تشغيلٍ لهذه الكتلة بسبب مسارٍ افتراضيٍّ خاطئ. */
+    expect(src).toMatch(/head -1 \|\| true\)"/);
+    /* والمسارُ نفسُه في الموضعَين — وإلّا قاس الفحصُ مجلّداً آخر. */
+    const bk = readFileSync(join(REPO, 'ops', 'backup-offsite.sh'), 'utf8');
+    const def = /BACKUP_OFFSITE_DIR:-\$\{HOME\}\/backups\/aibot-offsite/;
+    expect(bk).toMatch(def);
+    expect(src, 'النشرُ يقيس مجلّداً غير الذي تكتب فيه الحزمة').toMatch(def);
   });
 
   it('★★★ و`GIT_REV` يُخبز في الصورة ولا يُمرّر وقتَ التشغيل', () => {

@@ -235,11 +235,16 @@ docker compose up -d $SERVICES
 # 🔴 النسخةُ الليليّة كانت تفشل بلا OnFailure ولا أحدَ يعلم، حتّى اليوم الذي
 #    تُطلب فيه. والنشرُ يجري كثيراً ويقرؤه إنسان، فهو أقربُ موضعٍ يُرى فيه
 #    الانقطاع. ولا يُفشِل النشر: حزمةٌ قديمةٌ ليست سبباً لمنع إصلاحٍ عاجل.
-OFFSITE_DIR="${OFFSITE:-${HOME}/backups/offsite}"
+# ⚠️ نفسُ الافتراض حرفيّاً كما في `ops/backup-offsite.sh` — مسارٌ مختلفٌ
+#    هنا يعني فحصاً يقيس مجلّداً لا وجودَ له.
+OFFSITE_DIR="${BACKUP_OFFSITE_DIR:-${HOME}/backups/aibot-offsite}"
 if [ -s "${OFFSITE_DIR}/BACKUP-FAILED" ]; then
   echo "  ⚠ هناك إخفاقاتٌ مسجَّلة في ${OFFSITE_DIR}/BACKUP-FAILED — اقرأها"
 fi
-BK_NEWEST="$(find "${OFFSITE_DIR}/daily" -name '*.tar.gz.gpg' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)"
+# 🔴 `|| true` ليست تراخياً: **تقريرُ حالةٍ يجب ألّا يُسقط ما يُقرّر عنه.**
+#    مجلّدٌ غائبٌ يجعل `find` يخرج بـ١، و`set -e` يحوّل ذلك إلى تراجعِ
+#    نشرةٍ سليمة — وقع فعلاً في أوّل تشغيلٍ لهذه الكتلة بسبب مسارٍ خاطئ.
+BK_NEWEST="$(find "${OFFSITE_DIR}/daily" -name '*.tar.gz.gpg' -printf '%T@\n' 2>/dev/null | sort -rn | head -1 || true)"
 if [ -z "$BK_NEWEST" ]; then
   echo "  ⚠ لا حزمةَ خارجَ الخادم إطلاقاً — شغّل ops/install-backup-timer.sh"
 else
