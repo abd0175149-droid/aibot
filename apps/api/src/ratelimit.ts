@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { isIP } from 'node:net';
 import IORedis from 'ioredis';
 import { AppError, ErrorCode } from '@aibot/shared';
 
@@ -79,6 +80,14 @@ export function accountKey(email: string): string {
 export function isUnusableClientIp(ip: string | undefined): boolean {
   if (!ip) return true;
   const v = ip.replace(/^::ffff:/, '');
+
+  /* ★ **وما ليس عنواناً شكلاً يُرفض — والرفضُ افتراضيٌّ لا القبول.**
+     `X-Forwarded-For` تُزوَّر، ويومَ يُوثَق الجسرُ تصير قيمتُها هي `req.ip`:
+     نصٌّ حرٌّ يدخل مفتاحَ ريدِس (`rl:login:ip:<أيّ شيء>`)، فيُولّد مهاجمٌ
+     مفاتيحَ بلا حدٍّ ويتخطّى السقفَ بتغيير الترويسة في كلّ طلب.
+     و`isIP` لا نمطٌ مكتوبٌ بيد: نمطٌ مثل `[0-9a-f:]+` يقبل `'a'.repeat(50)`
+     و`deadbeef` — جُرّبا فمرّا — ولا يحدّ طولَ المفتاح أصلاً. */
+  if (isIP(v) === 0) return true;
   if (v === '::1' || v === '127.0.0.1') return true;
   if (/^10\./.test(v)) return true;
   if (/^192\.168\./.test(v)) return true;

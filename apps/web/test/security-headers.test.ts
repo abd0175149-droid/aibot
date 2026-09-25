@@ -123,6 +123,19 @@ describe('★ الإعدادُ يصل فعلاً — لا مفتاحاً يُق�
     expect(webBuild.slice(0, webBuild.indexOf('environment'))).toMatch(/PUBLIC_URL:/);
   });
 
+  it('★★ و`TRUST_PROXY` مشروحٌ في القالب — مفتاحٌ غائبٌ عن القالب لا يضبطه أحد', () => {
+    /* المفتاحُ يصل الحاويةَ منذ دفعةٍ سابقة، لكنّ قيمتَه الافتراضيّة
+       (`127.0.0.1`) لا تُطابق قرينَ الاتّصال — بوّابةَ جسر دوكر — فتُهمَل
+       `X-Forwarded-For` ويعود `req.ip` بوّابةَ الجسر لكلّ زائر. والمدى
+       **خاصٌّ بالخادم** ويُعيد دوكر تعيينَه إن حُذفت الشبكة، فتثبيتُه في
+       المستودع يجعل قيمةً تتغيّر تُحرَس باختبارٍ أخضر. فموضعُه `.env`،
+       وواجبُ المستودع أن يشرحه ويُعطي أمرَ قراءته. */
+    const env = readFileSync(join(root, '.env.example'), 'utf8');
+    expect(env, 'مفتاحٌ غائبٌ عن القالب لا يملؤه أحد').toMatch(/^TRUST_PROXY=/m);
+    expect(env, 'وأمرُ قراءة المدى على الخادم — لا قيمةٌ تُنسَخ').toContain('docker network inspect');
+    expect(env, 'وطريقةُ التحقّق من أنّه سرى').toContain('docker compose logs api');
+  });
+
   it('`TRUST_PROXY` مُمرَّرٌ إلى الـAPI — وإلّا فالحدُّ على IP زينة', () => {
     expect(compose).toMatch(/TRUST_PROXY:\s*\$\{TRUST_PROXY/);
   });
