@@ -232,6 +232,24 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
       };
     }
 
+    /* ★★ **زرُّ «عدّل» لم يكن له معالجٌ إطلاقاً.** الأداةُ ترسل ثلاثةَ
+       أزرار، ويُعالَج «أكّد» و«إلغاء» — و«عدّل» يسقط إلى النموذج كرسالةٍ
+       عاديّةٍ نصُّها «عدّل»، فيخمّن ما يعدّله الزبون. وأخطرُ منه أنّ
+       `pendingAction` **يبقى** قائماً ساعةً كاملة: فضغطةٌ على «أكّد» في
+       الرسالة القديمة — وهي تبقى قابلةً للضغط في واتساب — تُنفّذ الطلبَ
+       **بالوسائط التي طلب الزبونُ تعديلها**. حجزٌ لم يُرِده أحد.
+       فالمسحُ أوّلاً، ثمّ طلبُ التعديل صراحةً. */
+    if (press.startsWith('edit:')) {
+      await tx.update(conversations).set({ pendingAction: null }).where(eq(conversations.id, conv.id));
+      return {
+        conversationId: conv.id,
+        sends: [{
+          source: 'system',
+          message: { kind: 'text', body: 'تمام. اكتبلي شو بدّك تعدّل ورح جهّزلك الطلب من جديد.' },
+        }],
+      };
+    }
+
     if (press.startsWith('confirm:')) {
       const pending = conv.pendingAction as { key?: string; args?: Record<string, unknown>; expiresAt?: string } | null;
       const wanted = press.slice('confirm:'.length);
@@ -539,7 +557,7 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
       sends: [...emits, ...(result.text ? [{ kind: 'text', body: result.text } as OutboundMessage] : [])]
         .map((message) => ({ source: 'bot' as const, message, aiRunId: run!.id })),
     };
-  }).catch(async (e: unknown): Promise<never> => {
+  }).catch(async (e: unknown): Promise<SendPlan | null> => {
     /* ★ فشلُ المزوّد كان **صامتاً تماماً**: النوع `ai_error` مسجَّلٌ في
        `AUTO_RESOLVABLE` وفي شاشة الحوادث ولا موضعَ واحد يرفعه. فمزوّدٌ يعيد
        ٥٠٠ يُفشل المهمّة، وBullMQ يستهلك المحاولتَين، ثمّ لا شيء: لا صفَّ في
@@ -570,8 +588,40 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
        و`UnrecoverableError` تُنهي المهمّة فوراً وتضعها في `failed` مع
        الحادثة المرفوعة أعلاه — فيبقى الأثر ويتوقّف النزف. */
     if (e instanceof AiError && !e.retryable) {
-      const { UnrecoverableError } = await import('bullmq');
-      throw new UnrecoverableError(e.message);
+      /* ★★★ **والزبونُ كان يبقى صامتاً.** `UnrecoverableError` تُنهي المهمّة
+         وتحفظ الحادثة — وهذا كلُّ ما كان يحدث. أي أنّ مخطّطَ أداةٍ معطوباً
+         (‏400 من المزوّد) يُسكِت البوت عن **كلّ** زبونٍ وكلّ رسالةٍ إلى أن
+         يلاحظ المالكُ الحادثة. والزبونُ ينتظر ولا يعلم أنّ أحداً لن يجيبه،
+         ولا الموظّفُ يعلم أنّ زبوناً ينتظر.
+
+         فالخطأُ الدائم يُقال صراحةً وتُوسَم المحادثة. ولا تُعاد المهمّة:
+         الخطّةُ تُسلَّم كأيّ خطّةٍ أخرى فتُحجَز صفوفُها وتُرسَل مرّةً واحدة
+         عبر الصندوق الصادر نفسِه — فلا رسالةٌ مكرّرةٌ ولا نداءُ نموذجٍ ثانٍ. */
+      const fail = await withTenant(db, tenantId, async (tx) => {
+        await tx.update(conversations)
+          .set({ needsAttention: true })
+          .where(eq(conversations.id, job.conversationId));
+        const cfgRow = (await tx.select({ msg: botConfigs.failMessage }).from(botConfigs)
+          .where(eq(botConfigs.tenantId, tenantId)).limit(1))[0];
+        const body = cfgRow?.msg?.trim()
+          || 'صار عندنا خلل تقني مؤقّت. حوّلتك لموظّف ورح يتواصل معك.';
+        /* ⚠️ ولا تُعاد الرسالةُ نفسُها مرّتَين على التوالي: العطلُ دائمٌ
+           فكلُّ رسالةٍ من الزبون تمرّ من هنا. أوّلُ مرّةٍ خبرٌ، والثانيةُ
+           ضجيجٌ يبدو كبوتٍ عاطل. ونفسُ نمطِ «خارج ساعات العمل» أعلاه. */
+        const lastOut = (await tx.select({ body: messages.body }).from(messages)
+          .where(and(
+            eq(messages.conversationId, job.conversationId),
+            eq(messages.direction, 'out'),
+            isNull(messages.deletedAt),
+          ))
+          .orderBy(desc(messages.createdAt)).limit(1))[0];
+        if (lastOut?.body?.trim() === body) return null;
+        return {
+          conversationId: job.conversationId,
+          sends: [{ source: 'system' as const, message: { kind: 'text', body } as OutboundMessage }],
+        } satisfies SendPlan;
+      }).catch(() => null);
+      return fail;
     }
     throw e; // إعادة المحاولة تتولّاها BullMQ — والحادثة لا تُلغي الفشل
   });

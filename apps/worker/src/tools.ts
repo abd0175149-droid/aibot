@@ -146,6 +146,26 @@ export async function execTenantTool(ctx: ExecCtx): Promise<{
          فارغاً فيردّ «انتهت صلاحيّة هذا الطلب» — على زرٍّ ضُغط للتوّ.
          فكانت الأداة تَعِد بتأكيدٍ لا يقود إلى شيء، والزبون يدور في حلقة. */
       const action = String(args.action ?? 'confirm');
+
+      /* ★★ **و`action` لا بدّ أن يكون أداةً مفعَّلةً فعلاً.** النموذجُ يملأ
+         هذا الوسيطَ بنفسه، فقد يخترع اسماً (`book_trip` وليس في الحساب إلّا
+         `create_booking`). والزبونُ يرى ملخّصاً وثلاثةَ أزرار، فيضغط «أكّد»،
+         فيُنفَّذ مفتاحٌ لا وجودَ له فيفشل — فيُقال له «تعذّر تسجيل الطلب لخلل
+         تقني، حوّلتك لموظّف». أي أنّ الأزرارَ كانت وعداً لا يملكه أحد، وثمنُه
+         تحويلٌ بشريٌّ عن عطلٍ لم يقع.
+         والرفضُ **للنموذج** لا للزبون: يقرأ الخطأ ويُعيد النداء بالمفتاح
+         الصحيح في الشوط نفسه، فلا يرى الزبونُ من هذا شيئاً. */
+      const known = ctx.tools.find((t) => t.key === action && t.enabled && !t.disabledReason);
+      if (!known) {
+        return {
+          result: {
+            error: `لا أداةَ مفعَّلةٌ بالمفتاح «${action}».`,
+            note: 'نادِ `ask_confirmation` بمفتاحِ أداةٍ من قائمتك، أو نفّذ الأداةَ مباشرةً.',
+          },
+          failed: true,
+        };
+      }
+
       ctx.deferred.push({ key: action, args: (args.args ?? {}) as Record<string, unknown> });
       emits.push({
         kind: 'choices',
