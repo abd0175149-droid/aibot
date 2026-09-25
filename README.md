@@ -56,9 +56,35 @@ pnpm dev:api & pnpm dev:worker & pnpm --filter @aibot/web run dev
 corepack pnpm@9.12.3 install          # corepack enable يحتاج صلاحيّة إداريّة على ويندوز
 cp .env.example .env                  # املأ الأسرار
 docker compose up -d db redis
-pnpm --filter @aibot/db run generate  # بعد أيّ تغييرٍ في المخطّط
 pnpm dev:api
 ```
+
+### الترحيلات — تُكتب بخطّ اليد، ولا تُولَّد مباشرةً في مكانها
+
+`deploy.sh` يُطبّق **كلّ** ملفّات الترحيل في **كلّ** نشرة، عن قصد: لا جدولَ
+هجراتٍ يتباعد بين بيئتَين. ونتيجةُ ذلك شرطٌ واحدٌ لا يُساوَم عليه: **كلُّ
+عبارةٍ متماثلة** (`IF NOT EXISTS` · كتلةُ `DO` تبتلع التكرار وحده).
+
+فبعد تغيير `src/schema.ts`:
+
+```bash
+# ① وَلِّد إلى مجلَّدٍ مؤقّتٍ — لا فوق migrations/ مباشرةً
+mkdir -p .tmpgen && cp -r migrations/meta .tmpgen/meta
+npx drizzle-kit generate --dialect=postgresql --schema=./src/schema.ts --out=.tmpgen
+
+# ② اجعل المولَّد متماثلاً، ثمّ انقله باسمٍ **بالرقم التالي**
+node --import tsx scripts/idempotent.ts .tmpgen/XXXX_*.sql
+mv .tmpgen/XXXX_*.sql migrations/0012_وصفٌ_قصير.sql
+
+# ③ وانقل اللقطة الجديدة — وإلّا عاد الانحراف
+mv .tmpgen/meta/*_snapshot.json migrations/meta/0000_snapshot.json
+```
+
+⚠️ **والاسمُ مهمٌّ لا تجميليّ**: النشرُ يمرّ على الملفّات بترتيبٍ **أبجديّ**،
+وdrizzle يُسمّي مولَّداته باسمٍ عشوائيّ (`0001_chubby_zuras.sql`) قد يسبق
+`0001_tables.sql` — فيُنشئ جدولاً بمفتاحٍ أجنبيٍّ إلى جداولَ لم تُنشأ بعد.
+و`packages/db/test/migrations.test.ts` يحرس الشروطَ الثلاثة: التماثل، وتطابقَ
+اللقطة مع المخطَّط، وترقيمَ الملفّات.
 
 الاختبارات والتحقّق الساكن:
 

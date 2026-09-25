@@ -14,6 +14,13 @@
  *  ① `CREATE TABLE "x"`            ⟶ `CREATE TABLE IF NOT EXISTS "x"`
  *  ② `CREATE [UNIQUE] INDEX "x"`   ⟶ `… IF NOT EXISTS "x"`
  *  ③ `ALTER TABLE … ADD CONSTRAINT …` ⟶ كتلة DO تبتلع `duplicate_object` وحده
+ *  ④ `ALTER TABLE … ADD COLUMN …`      ⟶ `… ADD COLUMN IF NOT EXISTS …`
+ *
+ * ★★ و④ أُضيف بعد أن كُشف أنّ غيابَه عطلٌ من نوع «لا نشرَ بعد اليوم»: أوّلُ
+ *    ترحيلٍ يولّده drizzle بعمودٍ جديد ينجح في النشرة الأولى ويسقط في **كلّ**
+ *    نشرةٍ بعدها — لأنّ الملفّ يبقى في المجلَّد و`deploy.sh` يُطبّق الكلَّ في
+ *    كلّ مرّة. فلا يعود أحدٌ قادراً على النشر حتّى يُحرَّر الملفّ يدويّاً.
+ *    و`README` يدلّ كلَّ قادمٍ جديدٍ على `drizzle-kit generate` بالنصّ.
  *
  * ولماذا ③ كتلةٌ لكلّ عبارةٍ لا كتلةٌ واحدة: كتلةٌ واحدة تُلغي كلّ ما بعد
  * أوّل استثناء. وابتلاع `duplicate_object` **وحده** مقصود: خطأُ مرجعٍ ناقصٍ
@@ -28,7 +35,7 @@ import { argv } from 'node:process';
 const DEFAULT_FILES = ['packages/db/migrations/0001_tables.sql'];
 
 export function makeIdempotent(sql: string): { out: string; counts: Record<string, number> } {
-  const counts = { tables: 0, indexes: 0, constraints: 0 };
+  const counts = { tables: 0, indexes: 0, constraints: 0, columns: 0 };
 
   let out = sql.replace(/^CREATE TABLE (?!IF NOT EXISTS)/gm, () => {
     counts.tables += 1;
@@ -47,6 +54,15 @@ export function makeIdempotent(sql: string): { out: string; counts: Record<strin
     (_m, body: string, tail: string | undefined) => {
       counts.constraints += 1;
       return `DO $$ BEGIN\n  ${body};\nEXCEPTION WHEN duplicate_object THEN NULL;\nEND $$;${tail ?? ''}`;
+    },
+  );
+
+  /* ④ عمودٌ جديد. ولا تُطابق `ADD CONSTRAINT` (يعالجها ③) ولا ما حُمي سلفاً. */
+  out = out.replace(
+    /^(ALTER TABLE .*? ADD COLUMN )(?!IF NOT EXISTS)/gm,
+    (_m, head: string) => {
+      counts.columns += 1;
+      return `${head}IF NOT EXISTS `;
     },
   );
 
