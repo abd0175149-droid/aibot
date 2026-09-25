@@ -9,6 +9,27 @@ import { getDb, withTenant, knowledgeSources, eq } from '@aibot/db';
  * ولذلك المعاينة للعميل قبل الاعتماد شرطٌ لا خيار.
  */
 
+/**
+ * ★★★ **سقوفٌ على ملفٍّ يرفعه العميل — ولم يكن ثمّة سقفٌ واحد.**
+ *
+ *   `extractXlsx` كانت تقرأ المصنَّف كلَّه وتُحوّله كلَّه بلا أيّ حدّ، في
+ *   **نفس العمليّة** التي تردّ على الزبائن: عاملُ `kb-ingest` و`bot-reply`
+ *   و`ch-outbound` كلُّهم في حاويةٍ واحدة (`docker-compose.yml`)، وبلا
+ *   `mem_limit`. فجدولٌ بمليون خليّة يُجمّد الردَّ لكلّ زبونٍ حتّى يفرغ منه
+ *   — أو يُنهي العمليّةَ بنفاد ذاكرة، فتسقط الطوابيرُ الثلاثة معاً.
+ *
+ * ⚠️ والسقفُ يُقرأ من `!ref` **قبل** `sheet_to_json` لا بعده: المصفوفةُ
+ *    الناتجة هي نفسُها ما نخشى حجمَه، ففحصُها بعد بنائها فحصٌ بعد فوات الأوان.
+ *
+ * ⚠️ ولا مهلةَ زمنيّةٌ حول `XLSX.read`: هي **متزامنة**، فحلقةٌ ساخنة داخلها لا
+ *    تُفسح للمؤقّت أصلاً — و`Promise.race` هنا راحةٌ كاذبة تُقاس بعد أن يكون
+ *    الحدثُ قد تجمّد فعلاً. الحدُّ الحقيقيُّ عمليّةٌ منفصلة، وهي عملٌ لم يُنجز.
+ */
+/** أقصى عددِ خلايا مُعلَنٍ في كلّ أوراق المصنَّف مجتمعةً. */
+const MAX_CELLS = 200_000;
+/** أقصى طولِ نصٍّ مستخرَجٍ يُكتب في القاعدة. */
+const MAX_TEXT_CHARS = 2_000_000;
+
 export interface Extracted {
   text: string;
   pages?: number;
@@ -21,6 +42,19 @@ export async function handleIngest(job: { tenantId: string; sourceId: string; pa
     const buf = await readFile(job.path);
     const out = await extract(buf, job.mime);
     const clean = cleanText(out.text);
+
+    /* ★★ **سقفُ المخرَج.** `extracted_text` عمودُ `text` بلا حدّ، و`charCount`
+       يُكتب منه. فملفٌّ واحدٌ يُنتج عشراتِ الميغابايتات يدخل القاعدة، ثمّ
+       يُقطَّع ويُضمَّن — أي نداءُ تضمينٍ لكلّ قطعة، وكلُّها على حساب المنصّة.
+       والمليونان سخيّان عمداً: أكبرُ ملفّ معرفةٍ معقول دونهما بمراتب.
+       ⚠️ وهنا لا في `embed.ts`: حارسُ `wave3-knowledge` يشترط أن يبقى
+          `chunkText(s.extractedText` حرفيّاً هناك. */
+    if (clean.length > MAX_TEXT_CHARS) {
+      throw new Error(
+        `النصُّ المستخرج ${clean.length} محرفاً — والحدّ ${MAX_TEXT_CHARS}. `
+        + 'قسّم الملفّ أو احذف ما لا يحتاجه البوت.',
+      );
+    }
 
     /* `withTenant` لا `db` المجرّد: `knowledge_sources` تحت RLS، والمهمّة
        تحمل `tenantId` فلا عذر. بلا سياقٍ يمرّ التحديث على **صفر صفوف** بلا
@@ -73,6 +107,22 @@ async function extractDocx(buf: Buffer): Promise<Extracted> {
 async function extractXlsx(buf: Buffer): Promise<Extracted> {
   const XLSX = await import('xlsx');
   const wb = XLSX.read(buf, { type: 'buffer' });
+
+  /* العدُّ من `!ref` — وهو مدى الورقة المُعلَن — قبل بناء أيّ صفّ. */
+  let cells = 0;
+  for (const name of wb.SheetNames) {
+    const ref = wb.Sheets[name]?.['!ref'];
+    if (!ref) continue;
+    const r = XLSX.utils.decode_range(ref);
+    cells += (r.e.r - r.s.r + 1) * (r.e.c - r.s.c + 1);
+  }
+  if (cells > MAX_CELLS) {
+    throw new Error(
+      `المصنَّف ${cells} خليّة — والحدّ ${MAX_CELLS}. قسّمه أو احذف الأوراق `
+      + 'التي لا يحتاجها البوت.',
+    );
+  }
+
   const parts: string[] = [];
   for (const name of wb.SheetNames) {
     const sheet = wb.Sheets[name];
