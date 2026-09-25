@@ -113,3 +113,66 @@ describe('بوّابةُ الجودة داخل deploy.sh', () => {
     expect(sh.slice(at, at + 400)).toContain('⚠⚠');
   });
 });
+
+describe('★★★ بوّابةٌ لا يجوز أن تتعلّق — والتعلّقُ وقع فعلاً', () => {
+  const sh = read('deploy.sh');
+  const gate = sh.slice(sh.indexOf('say "بوّابة الجودة"'), sh.indexOf('say "وسم الصور'));
+
+  /**
+   * أوّلُ نشرةٍ بعد تغيير القفل علّقت **عشرين دقيقة** على `pnpm install`:
+   * لا شبكة، ولا كتابةٌ على القرص، ولا رسالة — و`fd 0` للعمليّة أنبوبٌ موروثٌ
+   * من `ssh`. وأداةٌ تسأل سؤالاً على أنبوبٍ لا يُغذّى تنتظر أبداً.
+   *
+   * وبوّابةٌ غائبةٌ تُنتج نشرةً مكسورةً تُكتشف؛ أمّا بوّابةٌ معلّقةٌ فتُنتج
+   * مشغّلاً ينتظر شاشةً صامتةً ثمّ يتعلّم أن يضبط `AIBOT_SKIP_GATE=1`.
+   * والقاعدةُ مكتوبةٌ في هذا المستودع أصلاً لـ`docker compose exec -T`:
+   * **كلُّ نداءٍ يعلن مصدر stdin** — وقد أُدخلت أوامرُ تخرقها.
+   */
+  it('★ المِرساةُ موجودة — فلا يمرّ الحارسُ على فراغ', () => {
+    expect(gate.length).toBeGreaterThan(400);
+    expect(gate).toContain('vitest run');
+  });
+
+  it('★★★ كلُّ أمرٍ ينتظر في البوّابة له مهلةٌ صريحة', () => {
+    /* الأوامرُ التي انتظرت فعلاً أو قد تنتظر: التثبيت، فحصُ الأنواع،
+       الاختبارات، التدقيق. ولا يكفي أن يكون لبعضها مهلة. */
+    const waiting = [...gate.matchAll(/^\s*(?:if !\s*)?(npx [^\n|]*)/gm)]
+      .map((m) => m[1]!.trim())
+      .filter((c) => !c.startsWith('npx --yes pnpm@9 install --frozen-lockfile')
+        || !gate.includes('gate_run "$GATE_INSTALL_TIMEOUT"'));
+    const unguarded = waiting.filter((c) => !/^npx/.test(c) ? false : true);
+    // كلُّ نداءِ npx إمّا داخل `gate_run` (وهي تُمهِل) أو مسبوقٌ بـ`timeout`
+    const bare = unguarded.filter((c) => {
+      const at = gate.indexOf(c);
+      const before = gate.slice(Math.max(0, at - 120), at);
+      return !/gate_run\s/.test(before) && !/timeout\s+\d+\s*$/.test(before.trimEnd() + ' ');
+    });
+    expect(
+      bare,
+      'أمرٌ في البوّابة بلا مهلة. نشرةٌ علّقت عشرين دقيقةً على `pnpm install` '
+      + 'بلا رسالة — مرّره عبر `gate_run` أو اسبقه بـ`timeout`.',
+    ).toEqual([]);
+  });
+
+  it('★★ وكلُّ أمرٍ ينتظر يُعلن مصدر stdin', () => {
+    /* 🔴 السببُ المباشر: `fd 0` أنبوبٌ موروثٌ من `ssh`. والقاعدةُ نفسُها
+       التي يحرسها `ops-scripts.test.ts` على `docker compose exec -T`. */
+    expect(gate, 'لا `< /dev/null` في `gate_run`').toMatch(/timeout "\$secs" "\$@" < \/dev\/null/);
+    const auditAt = gate.indexOf('pnpm@9 audit');
+    expect(auditAt).toBeGreaterThan(0);
+    expect(gate.slice(auditAt, auditAt + 160), 'التدقيقُ بلا مصدرِ stdin معلَن')
+      .toContain('< /dev/null');
+  });
+
+  it('★★ و«تعلّق» تُفرَّق عن «فشل» — وإلّا ذهب التشخيصُ في الاتّجاه الخاطئ', () => {
+    /* 124 رمزُ `timeout`. وبلا تفريقٍ يقرأ المشغّلُ «اختبارٌ فاشل» فيبحث في
+       الاختبارات بينما العطلُ في الشبكة أو في قفلٍ. */
+    expect(gate).toContain('-eq 124');
+    expect(gate).toContain('تجاوز');
+  });
+
+  it('★ والمهلُ قابلةٌ للضبط — خادمٌ بطيءٌ لا يُصلَح بتحرير السكربت', () => {
+    expect(gate).toMatch(/GATE_INSTALL_TIMEOUT:-\d+/);
+    expect(gate).toMatch(/GATE_STEP_TIMEOUT:-\d+/);
+  });
+});

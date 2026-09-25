@@ -26,6 +26,20 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+
+    # ⚠️ نفسُ صورة الإنتاج (`pgvector/pgvector:pg16`): الامتدادُ والإصدارُ
+    #    جزءٌ ممّا يُختبَر — فقاعدةٌ أخرى تشهد على مخطّطٍ غيرِ الذي يعمل.
+    services:
+      db:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_PASSWORD: probe
+          POSTGRES_DB: aibot
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+
     # ⚠️ سقفٌ صريح: وظيفةٌ معلّقةٌ ست ساعات (الافتراض) تحجب الطابور وتُنفق
     #    الدقائق على لا شيء.
     timeout-minutes: 15
@@ -69,6 +83,25 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: '1'
           NEXT_PUBLIC_API_URL: https://aibot.masaros.net/api
+
+      # ★★★ ④ **العزل يُثبَت على بوستجرس حقيقيّ — لا على نصّ الشيفرة.**
+      #
+      #    `packages/db/test/rls-leak.sql` مكتوبٌ منذ دفعاتٍ بأحدَ عشرَ تأكيداً
+      #    ولم يكن في المستودع كلِّه سطرٌ يُشغّله — ووثيقةُ الحالة تعدّه في عمود
+      #    المُنجَز. واختبارٌ لا يُشغَّل ادّعاءٌ مكتوبٌ يُطمئن.
+      #
+      #    وكلُّ اختبارات العزل الأخرى تعبيراتٌ نمطيّةٌ على النصّ: تمسك «نسيتُ
+      #    `where`» ولا تمسك «السياسةُ لم تُطبَّق» ولا «دورُ التطبيق سوبريوزر».
+      #    وعطلا اليوم (تاريخٌ خامٌّ في قالب `sql`) مرّا من ١٠٨٨ اختباراً ساكناً
+      #    وسقطا عند أوّل تنفيذٍ حقيقيّ — وهذا هو الدرسُ بعينه.
+      - name: عزل المستأجرين على قاعدةٍ حقيقيّة
+        run: ops/rls-leak.sh
+        env:
+          PGHOST: 127.0.0.1
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: probe
+          PGDATABASE: aibot
 
       # ④ الاعتماديّات المعلومةُ الثغرات — تُقال ولا تُفشِل: ثغرةٌ في تبعيّةِ
       #    تطويرٍ لا تُبرّر منعَ إصلاحٍ عاجل، وثغرةٌ حقيقيّةٌ تُعالَج بقرارٍ لا

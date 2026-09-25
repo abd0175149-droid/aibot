@@ -176,17 +176,55 @@ if [ "${AIBOT_SKIP_GATE:-0}" = "1" ]; then
   echo "     يُنشر بلا فحصِ أنواعٍ ولا اختبار. أعِدها فور انتهاء الطارئ."
 else
   say "بوّابة الجودة"
+
+  # ★★★ **بوّابةٌ تتعلّق أسوأ من بوّابةٍ غائبة** — وهذا وقع فعلاً.
+  #
+  #    أوّلُ نشرةٍ بعد تغيير القفل علّقت **عشرين دقيقة** على
+  #    `pnpm install`: لا شبكة، ولا كتابةٌ على القرص، ولا رسالة. والنشرُ
+  #    ينتظر إلى الأبد بلا مهلةٍ ولا تشخيص. وبوّابةٌ غائبةٌ تُنتج نشرةً
+  #    مكسورة تُكتشف؛ أمّا بوّابةٌ معلّقةٌ فتُنتج مشغّلاً ينتظر شاشةً صامتة
+  #    ثمّ يتعلّم أن يضبط `AIBOT_SKIP_GATE=1`.
+  #
+  # ⚠️ و`< /dev/null` على كلّ أمرٍ ينتظر: القاعدةُ مكتوبةٌ في هذا المستودع
+  #    لـ`docker compose exec -T` («كلُّ نداءٍ يعلن مصدر stdin»)، وقد أدخلتُ
+  #    أوامرَ تقرأ stdin بلا إعلانه. و`fd 0` للعمليّة المعلّقة كان أنبوباً
+  #    موروثاً من `ssh`، وأداةٌ تسأل سؤالاً على أنبوبٍ لا يُغذّى تنتظر أبداً.
+  #
+  # ⚠️ والمهلةُ سخيّةٌ عمداً: الخادمُ مشتركٌ وحِملُه يبلغ سبعة، وبوّابةٌ تفشل
+  #    على بطءٍ عابرٍ إنذارٌ كاذبٌ يُعلَّم أن يُتجاوَز.
+  GATE_INSTALL_TIMEOUT="${GATE_INSTALL_TIMEOUT:-900}"
+  GATE_STEP_TIMEOUT="${GATE_STEP_TIMEOUT:-600}"
+
+  # ★ رسالةُ المهلة تُفرَّق عن رسالة الفشل: «تعلّق» و«فشل» عطلان مختلفان،
+  #   وخلطُهما يُرسل المشخِّصَ في الاتّجاه الخاطئ. و124 رمزُ `timeout`.
+  gate_run() {
+    local secs="$1" what="$2"; shift 2
+    local rc=0
+    timeout "$secs" "$@" < /dev/null || rc=$?
+    if [ "$rc" -eq 124 ]; then
+      echo "  ✘ ${what}: تجاوز ${secs} ثانية فقُطع. ولم يُلمس شيءٌ بعد."
+      echo "     شغّله يدويّاً على الخادم لترى أين يقف."
+      exit 1
+    fi
+    return "$rc"
+  }
+
   if ! git diff --quiet "$BEFORE" "$AFTER" -- pnpm-lock.yaml 2>/dev/null \
      || [ ! -d node_modules ]; then
     echo "  ℹ القفل تغيّر — تثبيت التبعيّات"
-    npx --yes pnpm@9 install --frozen-lockfile >/dev/null
+    if ! gate_run "$GATE_INSTALL_TIMEOUT" "تثبيت التبعيّات" \
+         npx --yes pnpm@9 install --frozen-lockfile; then
+      echo "  ✘ فشل تثبيت التبعيّات — لا يُنشر. ولم يُلمس شيءٌ بعد."
+      exit 1
+    fi
   fi
 
   # ① الأنواع: هذا ما لا يفحصه شيءٌ آخر في المسار كلِّه.
   for t in apps/api apps/worker apps/web packages/core packages/db \
            packages/shared packages/ai packages/channels packages/crypto; do
     [ -f "$t/tsconfig.json" ] || continue
-    if ! npx tsc -p "$t/tsconfig.json" --noEmit; then
+    if ! gate_run "$GATE_STEP_TIMEOUT" "فحص أنواع ${t}" \
+         npx tsc -p "$t/tsconfig.json" --noEmit; then
       echo "  ✘ خطأُ أنواعٍ في ${t} — لا يُنشر. ولم يُلمس شيءٌ بعد."
       exit 1
     fi
@@ -194,7 +232,7 @@ else
   echo "  ✔ الأنواع سليمة"
 
   # ② الاختبارات — وأكثرُها حرّاسٌ ساكنةٌ تحرس أعطالاً وقعت فعلاً.
-  if ! npx vitest run --reporter=basic; then
+  if ! gate_run "$GATE_STEP_TIMEOUT" "الاختبارات" npx vitest run --reporter=basic; then
     echo "  ✘ اختبارٌ فاشل — لا يُنشر. ولم يُلمس شيءٌ بعد."
     exit 1
   fi
@@ -207,7 +245,8 @@ else
   #    وإنذارٌ حقيقيٌّ يُعالَج بقرارٍ لا بحاجزٍ آليّ. والغرضُ أن **يُرى**.
   #    (ويحرس `ci-gate.test.ts` أن يبقى `exit 1` محصوراً بما يُفشِل فعلاً.)
   echo "  ℹ إنذارات الاعتماديّات:"
-  npx --yes pnpm@9 audit --audit-level high 2>&1 | grep -E "^│ (critical|high)" | sed 's/^/    /' || true
+  timeout 120 npx --yes pnpm@9 audit --audit-level high < /dev/null 2>&1 \
+    | grep -E "^│ (critical|high)" | sed 's/^/    /' || true
 fi
 
 # ── 3. وسم الصور العاملة قبل البناء ─────────────────────────────
