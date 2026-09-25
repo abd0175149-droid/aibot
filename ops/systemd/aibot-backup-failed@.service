@@ -1,0 +1,12 @@
+[Unit]
+Description=AiBot — إنذارُ فشلِ الحزمة الاحتياطيّة (%i)
+# ★ وحدةٌ يُنادِيها `OnFailure=` في وحدة الحزمة. ووجودُها هو الفرقُ بين
+#   «فشلت النسخةُ الليليّة» و«لم يعلم أحدٌ أنّها فشلت» — والثاني هو ما كان.
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/aibot
+# ⚠️ ولا يُنادى هنا شيءٌ يحتاج شبكةً أو سرّاً: الإنذارُ يجب أن يعمل **خصوصاً**
+#    حين يكون شيءٌ آخر معطوباً. فالكتابةُ إلى ملفٍّ وjournald، ويقرؤهما المراقبُ
+#    الخارجيّ كما تصف `ops/EXTERNAL-MONITOR.md`.
+ExecStart=/bin/bash -c 'F="${HOME}/backups/offsite/BACKUP-FAILED"; { echo "=== $(date -Is) ==="; echo "الوحدة: %i"; systemctl --user status "%i" --no-pager -n 40 || true; } >> "$F"; echo "فشلت الحزمةُ الاحتياطيّة (%i) — التفصيل في $F"'

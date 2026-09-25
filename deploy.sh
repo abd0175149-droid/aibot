@@ -231,6 +231,26 @@ docker compose rm -sf $SERVICES 2>/dev/null || true
 docker compose up -d $SERVICES
 
 # ── 6. بوّابة الصحّة — هي التي تقرّر النجاح، لا نهاية السكربت ───
+# ── 5ب. حالةُ النسخ الاحتياطيّ — تُقال لا تُفشِل ─────────────────
+# 🔴 النسخةُ الليليّة كانت تفشل بلا OnFailure ولا أحدَ يعلم، حتّى اليوم الذي
+#    تُطلب فيه. والنشرُ يجري كثيراً ويقرؤه إنسان، فهو أقربُ موضعٍ يُرى فيه
+#    الانقطاع. ولا يُفشِل النشر: حزمةٌ قديمةٌ ليست سبباً لمنع إصلاحٍ عاجل.
+OFFSITE_DIR="${OFFSITE:-${HOME}/backups/offsite}"
+if [ -s "${OFFSITE_DIR}/BACKUP-FAILED" ]; then
+  echo "  ⚠ هناك إخفاقاتٌ مسجَّلة في ${OFFSITE_DIR}/BACKUP-FAILED — اقرأها"
+fi
+BK_NEWEST="$(find "${OFFSITE_DIR}/daily" -name '*.tar.gz.gpg' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)"
+if [ -z "$BK_NEWEST" ]; then
+  echo "  ⚠ لا حزمةَ خارجَ الخادم إطلاقاً — شغّل ops/install-backup-timer.sh"
+else
+  BK_AGE=$(( ( $(date +%s) - ${BK_NEWEST%.*} ) / 3600 ))
+  if [ "$BK_AGE" -gt 48 ]; then
+    echo "  ⚠ آخرُ حزمةٍ خارجيّةٍ عمرُها ${BK_AGE} ساعة"
+  else
+    echo "  ✔ آخرُ حزمةٍ خارجيّةٍ عمرُها ${BK_AGE} ساعة"
+  fi
+fi
+
 say "بوّابة الصحّة"
 OK=0
 for i in $(seq 1 30); do

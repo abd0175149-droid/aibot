@@ -116,6 +116,47 @@ trap cleanup EXIT INT TERM
 #    هذا السكربت من سياقٍ يقرأ من stdin (حلقة `while read`، أو سكربتٌ يُمرَّر
 #    بـ`bash -s`) لأكل pg_dump بقيّةَ ذلك الإدخال، فيتوقّف المنادي في منتصفه
 #    بلا خطأ. كُشف حين أكلت هذه السطور بقيّةَ سكربتِ اختبارٍ مُرِّر عبر ssh.
+# ── 1أ. هل نُسخ شيءٌ أصلاً منذ يومَين؟ ──────────────────────────
+# 🔴 المؤقّتُ قد يكون معطَّلاً، أو الوحدةُ تفشل ليلةً بعد ليلة — ولا شيءَ كان
+#    يسأل «متى آخرُ حزمةٍ فعلاً؟». والسؤالُ يُطرح **هنا** لأنّ هذا أوّلُ شيءٍ
+#    يعمل حين يعمل شيء: فإن كان الانقطاعُ طويلاً بقي أثرُه مكتوباً ولو نجحت
+#    هذه الليلة. ولا يُفشِل التنفيذ: حزمةُ اليوم أهمُّ من الشكوى من الأمس.
+NEWEST="$(find "${OFFSITE}/daily" -name '*.tar.gz.gpg' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)"
+if [ -n "$NEWEST" ]; then
+  AGE_H=$(( ( $(date +%s) - ${NEWEST%.*} ) / 3600 ))
+  if [ "$AGE_H" -gt 48 ]; then
+    echo "⚠ آخرُ حزمةٍ عمرُها ${AGE_H} ساعة — انقطاعٌ لم يُبلَّغ عنه" \
+      | tee -a "${OFFSITE}/BACKUP-FAILED" >&2
+  fi
+else
+  echo "⚠ لا حزمةَ سابقةٌ إطلاقاً في ${OFFSITE}/daily" \
+    | tee -a "${OFFSITE}/BACKUP-FAILED" >&2
+fi
+
+# ── 1ب. الوسائط — الأصولُ التي لا تحملها القاعدة ─────────────────
+# 🔴 `knowledge_sources.storage_path` يحمل **مساراً** لا بايتات، والبايتاتُ في
+#    مجلّد دوكر `media_data`. فحزمةٌ فيها القاعدةُ وحدها تُستعاد إلى صفوفٍ
+#    كلُّها تشير إلى ملفّاتٍ غير موجودة: كلُّ ملفّ معرفةٍ رفعه عميلٌ يموت مع
+#    القرص.
+# 🔴 والفقدُ **صامتٌ تماماً**: النصُّ المستخرَج محفوظٌ في القاعدة فيبقى البوت
+#    يردّ كأنّ شيئاً لم يكن، و`unlink` عند الحذف يُبلَع — فلا شيءَ في أيّ
+#    شاشةٍ يقول إنّ الأصل ضاع. ولا يُكتشف إلّا يوم يُطلب الملفّ نفسُه.
+# ★ و`ops/migrate-host.sh` ينسخ هذا المجلّد منذ كُتب: كان الترحيلُ بين
+#   الخوادم أشملَ من النسخة الاحتياطيّة نفسِها.
+say "الوسائط"
+if docker compose ps --status running --services 2>/dev/null | grep -qx api; then
+  # ⚠️ `tar` داخل الحاوية لا `docker cp`: الثاني يكتب إلى القرص مرّتَين (نسخةٌ
+  #    ثمّ ضغط)، والأوّل يسيل مباشرةً. و`|| true` لأنّ مجلّداً فارغاً ليس عطلاً.
+  docker compose exec -T api tar -C /app -cf - media < /dev/null 2>/dev/null \
+    | gzip > "${STAGE}/media.tar.gz" || true
+  MSZ=$(stat -c%s "${STAGE}/media.tar.gz" 2>/dev/null || echo 0)
+  echo "  ✔ الوسائط ${MSZ} بايت"
+else
+  # ولا تُبتلع الحالة: حزمةٌ بلا وسائط تُعلن ذلك في المانيفست لا تُخفيه.
+  echo "  ⚠ حاوية api ليست تعمل — لا وسائط في هذه الحزمة"
+  : > "${STAGE}/media-MISSING"
+fi
+
 say "pg_dump"
 docker compose exec -T db pg_dump -U "$DB_USER" "$DB" < /dev/null | gzip > "${STAGE}/db.sql.gz"
 # نفس فخّ deploy.sh: pg_dump يفشل صامتاً فيُنتج ملفّاً ضئيلاً، والأنبوب يُخفي
@@ -156,6 +197,13 @@ union all select 'audit_log',count(*) from audit_log;"
   echo "master_key_version=${MASTER_KEY_VERSION:-1}"
   echo "dump_bytes=${SZ}"
   echo "dump_sha256=$(sha256sum "${STAGE}/db.sql.gz" | cut -d' ' -f1)"
+  # ★ والوسائطُ تُذكر صراحةً: مانيفستٌ يسكت عنها يجعل حزمةً ناقصةً تبدو كاملة.
+  if [ -f "${STAGE}/media.tar.gz" ]; then
+    echo "media_bytes=$(stat -c%s "${STAGE}/media.tar.gz")"
+    echo "media_sha256=$(sha256sum "${STAGE}/media.tar.gz" | cut -d' ' -f1)"
+  else
+    echo "media_bytes=MISSING"
+  fi
   echo "# ── عدد الصفوف لحظةَ الـdump — عمود المقارنة في ops/restore-drill.sh ──"
   docker compose exec -T db psql -U "$DB_USER" -d "$DB" -At -F= -c "$COUNT_SQL" < /dev/null | tr -d '\r' | sed 's/^/rows./'
 } > "${STAGE}/MANIFEST.txt"

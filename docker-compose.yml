@@ -70,9 +70,12 @@ services:
     environment:
       NODE_ENV: production
       PORT: ${API_PORT:-4100}
-      # GIT_REV يُقرأ في /api/health ويُطابق عليه deploy.sh.
+      # 🔴 **`GIT_REV` لا يُمرَّر وقتَ التشغيل** — يُخبز في الصورة وحدها
+      #    (‏`ARG`/`ENV` في `Dockerfile`). وإلّا كذبت `/api/health` في اللحظة
+      #    التي تُحتاج فيها: بعد تراجعٍ تعود الصورةُ القديمة بينما يبقى
+      #    المتغيّرُ حاملاً النسخةَ الجديدة، فتقول النقطةُ إنّها النسخةُ التي
+      #    فشلت وهي تشغّل سابقتها. رأيتُ ذلك بعينه أثناء اختبار التراجع.
       # بدونه لا تستطيع البوّابة أن تميّز «نُشرت النسخة الجديدة» من «القديمة ما زالت تعمل».
-      GIT_REV: ${GIT_REV:?يُمرَّر من deploy.sh — لا تنشر يدويّاً}
       # 🔴 دور التطبيق لا مالك القاعدة: المالك سوبريوزر ويتجاوز RLS كليّاً،
       #    فتصير البوّابة الثانية زينةً في الإنتاج. راجع 0003_roles.sql
       DATABASE_URL: postgresql://${APP_DB_USER:-aibot_app}:${APP_DB_PASSWORD:?اضبط APP_DB_PASSWORD}@db:5432/${DB_NAME:-aibot}
@@ -134,7 +137,6 @@ services:
     command: ["node", "--import", "tsx", "apps/worker/src/main.ts"]
     environment:
       NODE_ENV: production
-      GIT_REV: ${GIT_REV:-unknown}
       # 🔴 دور التطبيق لا مالك القاعدة: المالك سوبريوزر ويتجاوز RLS كليّاً،
       #    فتصير البوّابة الثانية زينةً في الإنتاج. راجع 0003_roles.sql
       DATABASE_URL: postgresql://${APP_DB_USER:-aibot_app}:${APP_DB_PASSWORD:?اضبط APP_DB_PASSWORD}@db:5432/${DB_NAME:-aibot}
@@ -165,9 +167,11 @@ services:
     restart: always
     environment:
       NODE_ENV: production
-      # ★ ومتغيّرُ تشغيلٍ أيضاً لا وسيطُ بناءٍ وحده: هذا يكشف حالةً لا
-      #   يكشفها الأوّل — صورةٌ قديمة أُعيد تشغيلها تحت وسمٍ جديد.
-      GIT_REV: ${GIT_REV:-unknown}
+      # 🔴 **ولا `GIT_REV` وقتَ التشغيل.** كان هنا بحجّة أنّه «يكشف صورةً قديمة
+      #    أُعيد تشغيلها تحت وسمٍ جديد» — وهو يفعل **العكس** بالضبط: متغيّرُ
+      #    التشغيل يغلب المخبوز، فتُعلن الحاويةُ نسخةَ النشرة مهما كانت صورتُها،
+      #    وبوّابةُ النشر التي كُتبت لتمسك صورةً بائتةً لا تستطيع أن تمسكها.
+      #    والمخبوزُ وحده يصف الصورةَ التي تعمل فعلاً.
       PORT: ${WEB_PORT:-3070}
       HOSTNAME: 0.0.0.0
       API_INTERNAL_URL: http://api:${API_PORT:-4100}

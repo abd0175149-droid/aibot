@@ -253,6 +253,63 @@ describe('★ النشرُ يتراجع عند كلّ فشل — لا عند ب�
     expect(disarms.filter((d) => d === 'trap - ERR'), 'نزعٌ يترك EXIT مُسلَّحة').toEqual([]);
   });
 
+  it('★★★ والحزمةُ الليليّة تُخرج فشلَها — وكان يسقط في الصمت', () => {
+    /* بلا `OnFailure` لا يخرج الفشل من journald أبداً: تسقط النسخةُ ليلةً
+       بعد ليلة ولا أحدَ يعلم، حتّى اليوم الذي تُطلب فيه. */
+    const unit = readFileSync(join(REPO, 'ops', 'systemd', 'aibot-backup.service'), 'utf8');
+    expect(unit).toMatch(/^OnFailure=/m);
+    expect(readFileSync(join(REPO, 'ops', 'systemd', 'aibot-backup-failed@.service'), 'utf8'))
+      .toContain('BACKUP-FAILED');
+  });
+
+  it('★★★ ولا `After=docker.service` في وحدةِ مستخدم — تُهمَل بصمت', () => {
+    /* مديرُ المستخدم لا يحمل وحداتِ النظام، فالترتيبُ إليها لا خطأَ
+       فيه ولا تحذيرَ ولا انتظار — سطرٌ يُقرأ «تنتظر دوكر» وهي لا تنتظر. */
+    const unit = readFileSync(join(REPO, 'ops', 'systemd', 'aibot-backup.service'), 'utf8');
+    expect(unit, 'وحدةُ مستخدم').toMatch(/WantedBy=default\.target/);
+    expect(unit, 'ترتيبٌ إلى وحدةِ نظامٍ لا يراها مديرُ المستخدم')
+      .not.toMatch(/^After=.*docker\.service/m);
+    expect(unit, 'والانتظارُ يُصنع بفحصٍ يُنفّذ')
+      .toMatch(/ExecStartPre=.*--status running/);
+  });
+
+  it('★★★ والوسائطُ في الحزمة — وإلّا استُعيدت صفوفٌ تشير إلى لا شيء', () => {
+    /* `knowledge_sources.storage_path` يحمل **مساراً** لا بايتات، والبايتاتُ
+       في مجلّد دوكر. والفقدُ صامتٌ: النصُّ المستخرَج محفوظٌ في القاعدة
+       فيبقى البوت يردّ كأنّ شيئاً لم يكن. و`migrate-host.sh` ينسخه منذ كُتب:
+       كان الترحيلُ أشملَ من النسخة الاحتياطيّة نفسِها. */
+    const b = readFileSync(join(REPO, 'ops', 'backup-offsite.sh'), 'utf8');
+    expect(b).toContain('tar -C /app -cf - media');
+    expect(b, 'والمانيفست يذكرها — مانيفستٌ يسكت يجعل ناقصاً يبدو كاملاً')
+      .toContain('media_sha256');
+    expect(b, 'وغيابُها يُعلَن لا يُبتلع').toContain('media-MISSING');
+  });
+
+  it('★★ وعمرُ آخر حزمةٍ يُفحص — ولم يكن أحدٌ يسأل', () => {
+    expect(readFileSync(join(REPO, 'ops', 'backup-offsite.sh'), 'utf8'))
+      .toMatch(/AGE_H.*-gt 48|-gt 48/);
+    expect(src, 'والنشرُ يُظهره — وهو ما يقرؤه إنسانٌ كثيراً').toContain('BACKUP-FAILED');
+  });
+
+  it('★★★ و`GIT_REV` يُخبز في الصورة ولا يُمرّر وقتَ التشغيل', () => {
+    /* متغيّرُ التشغيل يغلب المخبوز، فتُعلن الحاويةُ نسخةَ النشرة مهما
+       كانت صورتُها. وعند التراجع تقول `/api/health` إنّها النسخةُ التي فشلت
+       وهي تشغّل سابقتَها — تكذب في اللحظة التي تُحتاج فيها. رأيتُها بعيني
+       أثناء اختبار التراجع. وبوّابةُ نسخةِ الواجهة كُتبت لتمسك صورةً بائتةً
+       — ومتغيّرُ التشغيل يُعميها عنها تماماً. */
+    const c = readFileSync(join(REPO, 'docker-compose.yml'), 'utf8');
+    const lines = c.split(/\r?\n/);
+    const bad: string[] = [];
+    let inArgs = false;
+    for (const t of lines) {
+      if (/^ *args:/.test(t)) inArgs = true;
+      else if (/^ *(environment|volumes|ports|command|depends_on|build|image):/.test(t)) inArgs = false;
+      if (/GIT_REV:/.test(t) && !/^ *#/.test(t) && !inArgs) bad.push(t.trim());
+    }
+    expect(bad, '`GIT_REV` مُمرّرٌ وقتَ التشغيل — يغلب المخبوز فيكذب الوصف').toEqual([]);
+    expect(readFileSync(join(REPO, 'Dockerfile'), 'utf8')).toMatch(/ENV GIT_REV=\$\{GIT_REV}/);
+  });
+
   it('★★★ وبوّابةُ النشر تسأل عن العامل — وكانت عمياءَ عنه تماماً', () => {
     /* كلُّ ما يجعل البوت يردّ يعيش في عمليّة العامل: الواردُ والتوليدُ
        والصادر. والبوّابةُ كانت تطابق `rev` الـAPI وحده، فنشرةٌ تكسر مسارَ

@@ -1,9 +1,13 @@
 [Unit]
 Description=AiBot — حزمة احتياطيّة مشفَّرة (pg_dump + .env + MASTER_KEY)
 Documentation=file:%h/aibot/docs/plan/19-backup-and-restore.md
-# الحزمة تحتاج حاوية db حيّة. وليست تبعيّةً صلبة: لو كان دوكر ساقطاً فالسكربت
-# يفشل برسالةٍ واضحة في journald — وهذا أفضل من مؤقّتٍ لا يُطلق أبداً بلا سبب.
-After=docker.service network-online.target
+# 🔴 **لا `After=docker.service` هنا ولا `network-online.target`.** هذه وحدةُ
+#    **مستخدم** (‏`WantedBy=default.target` أدناه، وتُثبَّت في
+#    `~/.config/systemd/user`)، ومديرُ المستخدم لا يحمل أيّاً من وحدتَي النظام
+#    تلك — فالترتيبُ إليهما **يُهمَل بصمت**: لا خطأ ولا تحذير ولا انتظار.
+#    سطرٌ كان يُقرأ «الحزمة تنتظر دوكر» وهي لا تنتظر شيئاً.
+#    والانتظارُ الحقيقيّ يُصنع بفحصٍ يُنفَّذ فعلاً (‏`ExecStartPre` أدناه)، لا
+#    بوعدٍ في `[Unit]`.
 
 [Service]
 Type=oneshot
@@ -17,7 +21,15 @@ WorkingDirectory=%h/aibot
 #   فتبقى بعد أيّ تنظيفٍ للمستودع، والسكربت يأتي مع `git pull` في `deploy.sh`.
 #   فبين التثبيت وأوّل نشرٍ قد يغيب الملفّ — و`203/EXEC` لا يقول ذلك لأحد.
 ExecStartPre=/bin/bash -c 'test -x %h/aibot/ops/backup-offsite.sh || { echo "ops/backup-offsite.sh غائب أو غير قابلٍ للتنفيذ — يجلبه ./deploy.sh من git"; exit 1; }'
+# ★ الانتظارُ الفعليّ: حتّى خمس دقائق ريثما تقوم حاوية db بعد إقلاع المضيف.
+#   (‏`ExecStartPre` يرث `WorkingDirectory` أدناه فيجد `.env` وcompose.)
+ExecStartPre=/bin/bash -c 'for i in $(seq 1 30); do docker compose ps --status running --services 2>/dev/null | grep -qx db && exit 0; sleep 10; done; echo "حاوية db ليست تعمل بعد خمس دقائق — لا pg_dump بلا قاعدة"; exit 1'
 ExecStart=/bin/bash %h/aibot/ops/backup-offsite.sh
+# 🔴 **الرقعةُ الحاملة لهذه النتيجة كلِّها.** بلا `OnFailure` لا يخرج الفشلُ من
+#    journald أبداً: النسخةُ الليليّة تسقط ليلةً بعد ليلة ولا أحد يعلم، حتّى
+#    اليوم الذي تُطلب فيه. وهي تعمل على **كلّ** فشل: `ExecStartPre` وExecStart
+#    والمهلة والقتل.
+OnFailure=aibot-backup-failed@%n.service
 # النسخ ليس عملاً عاجلاً: لا يُزاحم API ولا العامل على قرصٍ واحدٍ أو نواةٍ واحدة.
 Nice=10
 IOSchedulingClass=idle
