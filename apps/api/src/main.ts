@@ -13,6 +13,7 @@ import { registerReports } from './routes/reports.js';
 import { registerPlayground } from './routes/playground.js';
 import { registerTeam } from './routes/team.js';
 import { registerPush } from './routes/push.js';
+import { registerNotifications, alertingReachable } from './routes/notifications.js';
 import { attachRealtime, closeRealtime } from './realtime.js';
 import { pingRedis, closeQueues, queueDepths, workerBeat } from './queues.js';
 import { closeRateLimiter } from './ratelimit.js';
@@ -117,6 +118,12 @@ app.get('/api/health/deep', { preHandler: requireAuth({ console: true }) }, asyn
   redis: await pingRedis(),
   queues: await queueDepths(),
   worker: await workerBeat(),
+  /* ★★★ **هل يُبلَّغ أحدٌ أصلاً؟** — والجوابُ كان مفترضاً لا مقروءاً.
+     كلُّ ما بُني في `notify.ts` و`incidents.ts` و`quota.ts` يفترض أنّ لمالك
+     المنصّة اشتراكَ دفعٍ مسجَّلاً، و`Promise.all` على مصفوفةٍ **فارغة** ينجح:
+     فالتنبيهُ الحرج «يُرسَل» بنجاحٍ إلى لا أحد، بلا سطرٍ في السجلّ.
+     ومنصّةٌ عمياءُ عن أعطالها حالةٌ تُعلَن لا تُفترض — فتظهر هنا حيث تُقرأ. */
+  alerting: await alertingReachable(),
   uptimeSec: Math.round(process.uptime()),
 }));
 
@@ -140,6 +147,7 @@ await app.register(async (api) => {
   await registerPlayground(api);
   await registerTeam(api);
   await registerPush(api);
+  await registerNotifications(api);
 }, { prefix: '/api' });
 
 /** إغلاقٌ لطيف: مهمّةٌ نصف منفَّذة عند إعادة النشر تضيع بلا هذا. */

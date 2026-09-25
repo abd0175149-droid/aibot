@@ -1,4 +1,4 @@
-import { getDb, withPlatform, incidents, eq, and, sql, inArray } from '@aibot/db';
+import { getDb, withPlatform, incidents, eq, and, sql, inArray, isNull } from '@aibot/db';
 import { sha256 } from '@aibot/crypto';
 
 /**
@@ -106,6 +106,10 @@ const AUTO_RESOLVABLE = new Set([
      صفّ سعرٍ — ودليلُها شوطٌ لاحقٌ وجد سعراً؛ و`quota_exceeded` تزول بانقلاب
      الشهر أو رفع الباقة — ودليلُها إرسالٌ نجح بعدها. */
   'price_missing', 'quota_exceeded',
+  /* ★ وحادثةُ المنصّة نفسِها: «قناةُ التنبيه بلا مشترك» تزول بتسجيل اشتراكٍ
+     أو بتثبيت مفاتيح VAPID، ودليلُها فحصٌ دوريٌّ وجد القناةَ موصولة. وحادثةٌ
+     لا تُغلق تُعمي عن نفسها: `isNew` تصير كاذبةً فلا يُنبّه أيّ انقطاعٍ لاحق. */
+  'alerting_unsubscribed',
 ]);
 
 /**
@@ -129,7 +133,13 @@ const AUTO_RESOLVABLE = new Set([
  *   ويُنادى في المسار الساخن، فثلاثُ عباراتٍ لكلّ رسالة ثمنٌ لا يُدفع:
  *   تُجمع في `in (...)` واحدة تُصيب صفراً في الحالة الغالبة.
  */
-export async function resolveOpenOfKinds(tenantId: string, kinds: string[]): Promise<number> {
+/**
+ * ⚠️ و`tenantId` يقبل `null`: حوادثُ المنصّة (‏`tenant_id IS NULL`‏) لم تكن
+ *    تُحلّ آليّاً إطلاقاً — `eq(col, null)` لا يُطابق NULL في SQL، فيُنتج
+ *    `= NULL` وهو دائماً غيرُ معروف. أي أنّ العبارةَ كانت تصيب صفراً بصمتٍ
+ *    مهما كان في الجدول، وتُرجع 0 كأنّ لا حادثةَ هناك.
+ */
+export async function resolveOpenOfKinds(tenantId: string | null, kinds: string[]): Promise<number> {
   const allowed = kinds.filter((k) => AUTO_RESOLVABLE.has(k));
   if (!allowed.length) return 0;
   const res = await withPlatform(getDb(), 'حوادث: حلٌّ آليٌّ بعد نجاحٍ لاحق',
@@ -137,7 +147,7 @@ export async function resolveOpenOfKinds(tenantId: string, kinds: string[]): Pro
       status: 'resolved',
       resolvedAt: new Date(),
     }).where(and(
-      eq(incidents.tenantId, tenantId),
+      tenantId === null ? isNull(incidents.tenantId) : eq(incidents.tenantId, tenantId),
       inArray(incidents.kind, allowed),
       sql`${incidents.status} <> 'resolved'`,
     )).returning({ id: incidents.id }));

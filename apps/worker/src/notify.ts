@@ -1,8 +1,9 @@
 import webpush from 'web-push';
 import {
   getDb, withPlatform, pushSubscriptions, notifications, users, incidents,
-  eq, and, isNull, sql, desc,
+  eq, and, isNull, sql, desc, inArray,
 } from '@aibot/db';
+import { resolveOpenOfKinds } from './incidents.js';
 
 /**
  * الإشعارات — Web Push بـVAPID، ولا شيء غيره.
@@ -194,4 +195,66 @@ function humanize(kind: string): string {
     kb_embed_failed: 'فشل تجهيز المعرفة — النسخة السابقة ما زالت تعمل',
   };
   return map[kind] ?? kind;
+}
+
+/**
+ * ★★★ **هل يُبلَّغ أحدٌ أصلاً؟ — والجوابُ كان مفترضاً لا مقروءاً.**
+ *
+ *   كلُّ ما بُني في هذا الملفّ وفي `incidents.ts` و`quota.ts` يفترض أنّ لمالك
+ *   المنصّة اشتراكَ دفعٍ مسجَّلاً. و`Promise.all` على مصفوفةٍ **فارغة** ينجح:
+ *   فكلُّ تنبيهٍ حرجٍ «يُرسَل» بنجاحٍ إلى لا أحد، بلا سطرٍ واحدٍ في السجلّ
+ *   يشير إلى ذلك. ولمّا كان الاشتراكُ نفسُه لا مسارَ يكتبه، كانت المصفوفةُ
+ *   فارغةً **دائماً**: نظامُ مراقبةٍ بلا مشتركٍ واحد نظامُ تسجيلٍ لا مراقبة.
+ *
+ * ⚠️ والاشتراكُ يموت بلا حدثٍ يُعلنه: الإذنُ يُسحب من إعدادات المتصفّح، أو
+ *    يُبدَّل مفتاحُ VAPID فتموت الاشتراكاتُ كلُّها معاً، أو يُمسح الجهاز. ولذلك
+ *    الفحصُ **دوريٌّ** لا عند الإقلاع وحده: العمياءُ تُولد في منتصف الطريق.
+ *
+ * ⚠️ والحادثةُ هي القناةُ الصحيحة هنا **لأنّ** الدفعَ هو المعطوب: شاشةُ
+ *    `/console/incidents` تُقرأ بالعين ولا تحتاج اشتراكاً. وسطرُ `error` معها
+ *    لمن يقرأ `docker compose logs`.
+ */
+export async function checkAlerting(): Promise<{ ok: boolean; owners: number; subs: number }> {
+  const db = getDb();
+  const state = await withPlatform(db, 'تنبيهات: هل لمالكي المنصّة اشتراكٌ واحد', async (tx) => {
+    const owners = await tx.select({ id: users.id }).from(users)
+      .where(and(eq(users.role, 'platform_owner'), eq(users.isActive, true)));
+    if (!owners.length) return { ok: false, owners: 0, subs: 0, why: 'لا مالكَ منصّةٍ نشِطٌ إطلاقاً' };
+    const ids = owners.map((o) => o.id);
+    const subs = await tx.select({ id: pushSubscriptions.id }).from(pushSubscriptions)
+      .where(inArray(pushSubscriptions.userId, ids));
+    return {
+      ok: subs.length > 0,
+      owners: owners.length,
+      subs: subs.length,
+      why: subs.length ? '' : 'لا اشتراكَ دفعٍ لأيّ مالكِ منصّة',
+    };
+  });
+
+  const missingKeys = !process.env.VAPID_PUBLIC_KEY || !process.env.VAPID_PRIVATE_KEY;
+  if (state.ok && !missingKeys) {
+    /* عادت القناةُ ⟹ تُغلق الحادثةُ من نفسها. وحادثةٌ لا تُغلق تُعمي عن
+       نفسها: `raiseIncident` لا يُنبّه إلّا على بصمةٍ **جديدة**. */
+    await resolveOpenOfKinds(null, ['alerting_unsubscribed']).catch(() => 0);
+    return { ok: true, owners: state.owners, subs: state.subs };
+  }
+
+  const why = missingKeys ? 'مفاتيحُ VAPID غيرُ مهيّأةٍ على الخادم' : state.why;
+  console.error(JSON.stringify({
+    level: 'error', svc: 'worker',
+    msg: '🔴 قناةُ التنبيه بلا مشترك — كلُّ تنبيهٍ حرجٍ يُكتب ولا يصل أحداً',
+    why, owners: state.owners, subs: state.subs,
+  }));
+  const { raiseIncident } = await import('./incidents.js');
+  await raiseIncident({
+    tenantId: null,
+    kind: 'alerting_unsubscribed',
+    severity: 'critical',
+    title: `قناةُ التنبيه بلا مشترك — ${why}`,
+    detail: { owners: state.owners, subs: state.subs, vapidConfigured: !missingKeys },
+    /* بصمةٌ بالسبب: «لا مفاتيح» و«لا اشتراك» عطلان مختلفان وعلاجُهما مختلف. */
+    causeKey: missingKeys ? 'vapid' : 'nosubs',
+  }).catch(() => undefined);
+
+  return { ok: false, owners: state.owners, subs: state.subs };
 }

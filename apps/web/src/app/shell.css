@@ -358,3 +358,96 @@
 .push-n { font-size: 12.5px; color: var(--ink-2); line-height: 1.55; margin: 0; }
 .push-n.ok { color: var(--ok); }
 .push-n.bad { color: var(--crit); }
+
+/* ══════════════ جرسُ التنبيهات ══════════════ */
+/* ★ ولماذا في الترويسة لا في ورقة الحساب: هذا **خبرٌ يُلاحَق** لا إعدادٌ
+   يُضبط مرّةً. و`push-tg` أسفلَ الورقة إعدادُ جهاز؛ أمّا التنبيهُ نفسُه
+   فلا يجوز أن يسكن قائمةً تُفتح — وإلّا وصل الخبرُ بعد الحدث. وهي القاعدةُ
+   نفسُها التي رفعت عدّادَ السقف إلى هنا. */
+/* ★ والموضعُ بالمحدِّد لا بهامشٍ مطلق: `.shell-st` تدفع نفسها بـauto، فلو
+   وضعنا auto على الجرس أيضاً لتقاسما الفراغَ فجلس العدّادُ في الوسط. فحين
+   لا عدّادَ يلي الجرسُ الهويّةَ مباشرةً فيأخذ الدفعَ، وحين يوجد يتولّاه هو. */
+.brand + .nb { margin-inline-start: auto; }
+/* ★ و`align-self: stretch` ليس تجميلاً: اللوحُ يُعلَّق بـ`calc(100% + 7px)`
+   من `.nb`، فإن كان ارتفاعُها ٣٦ (ارتفاعَ الزرّ) بدأ اللوحُ **فوق** حدّ
+   الترويسة السفليّ بمِقدارِ ما تبقّى من ارتفاعها فيركبه. قِيس ذلك في صورة:
+   `panel.top` أصغر من `header.bottom` بـ٢px. وبالتمدّد يصير ١٠٠٪ هو قاعُ
+   محتوى الترويسة، والسبعةُ هي حشوُها السفليّ — فيقع اللوحُ على الحدّ تماماً
+   مهما تغيّر ارتفاعُ الترويسة. */
+.nb { position: relative; display: flex; align-items: center; align-self: stretch; }
+
+.nb-btn {
+  position: relative;
+  display: grid; place-items: center;
+  inline-size: 36px; block-size: 36px;
+  border: 1px solid var(--rule); border-radius: var(--radius-pill);
+  background: var(--surface); color: var(--ink);
+  font-size: 15px; cursor: pointer;
+}
+.nb-btn:hover { background: var(--surface-2); }
+.nb-btn:focus-visible { outline: 2px solid var(--fill); outline-offset: 2px; }
+
+/* الشارةُ رقمٌ لا نقطة: «واحد» و«سبعة عشر» قراران مختلفان تماماً.
+   ⚠️ و`.num` عليها في JSX تعزلها LTR — فلا يُوضع فيها حرفٌ عربيّ أبداً. */
+.nb-badge {
+  position: absolute; inset-block-start: -3px; inset-inline-end: -3px;
+  min-inline-size: 17px; padding: 0 4px;
+  background: var(--crit); color: var(--status-on);
+  border-radius: var(--radius-pill);
+  font-size: 11px; font-weight: 700; line-height: 17px; text-align: center;
+}
+
+.nb-panel {
+  position: absolute;
+  inset-block-start: calc(100% + 7px);
+  /* ينفتح نحو البداية: الجرسُ عند النهاية، فحدُّه النهائيُّ هو المرساة. */
+  inset-inline-end: 0;
+  /* ⚠️ لا عرضٌ مخمَّن: على 390px يفيض لوحٌ بعرض 340 عن الشاشة. */
+  inline-size: min(330px, calc(100vw - 28px));
+  background: var(--surface);
+  border: 1px solid var(--rule); border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  /* فوق المحتوى ودون الأوراق المنزلقة (80) — فلا يحجب ورقةً تُفتح فوقه. */
+  z-index: 40;
+  overflow: hidden;
+}
+.nb-hd {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 10px 12px;
+  border-block-end: 1px solid var(--rule-soft);
+  font-size: var(--t-sm);
+}
+.nb-all {
+  margin-inline-start: auto;
+  border: 0; background: none; padding: 0;
+  color: var(--fill); font-size: 12.5px; cursor: pointer;
+}
+.nb-all:hover { text-decoration: underline; }
+
+.nb-note { margin: 0; padding: 14px 12px; font-size: 12.5px; color: var(--muted); line-height: 1.55; }
+.nb-note.bad { color: var(--crit); }
+
+.nb-list {
+  margin: 0; padding: 0; list-style: none;
+  /* ⚠️ `min-height: 0` غيرُ لازمٍ هنا لأنّ اللوحَ لا يقيّد الطول بـflex —
+     والسقفُ بـmax-block-size على القائمة وحدها فيبقى الرأسُ ثابتاً. */
+  max-block-size: min(60vh, 420px);
+  overflow-y: auto;
+}
+.nb-i + .nb-i { border-block-start: 1px solid var(--rule-soft); }
+/* غيرُ المقروء يُعرَف بشريطٍ لا بلونِ خطٍّ وحده: اللونُ يضيع على من لا
+   يميّزه، والشريطُ شكلٌ يُرى في كلّ حال. */
+.nb-i.new { border-inline-start: 3px solid var(--crit); background: var(--crit-wash); }
+.nb-it {
+  display: grid; gap: 3px;
+  inline-size: 100%;
+  padding: 10px 12px;
+  border: 0; background: none;
+  text-align: start; cursor: pointer; color: inherit;
+}
+.nb-it:hover { background: var(--surface-2); }
+.nb-it:focus-visible { outline: 2px solid var(--fill); outline-offset: -2px; }
+.nb-t { font-size: var(--t-sm); font-weight: 600; line-height: 1.45; }
+/* ⚠️ النصُّ يلتفّ ولا يُقصّ: عنوانُ حادثةٍ مقطوعٌ في منتصفه ليس خبراً. */
+.nb-b { font-size: 12.5px; color: var(--ink-2); line-height: 1.5; }
+.nb-w { font-size: 11.5px; color: var(--muted); }

@@ -8,7 +8,7 @@ import { sweepStrandedConversations } from './enqueue.js';
 import { handleEmbed } from './embed.js';
 import { sendOutbound } from './outbound.js';
 import { runHealthPoll, closeExpiredWindows, negativeSignals } from './health.js';
-import { handleNotify, flushDigest } from './notify.js';
+import { handleNotify, flushDigest, checkAlerting } from './notify.js';
 import { runRetention } from './retention.js';
 import { handleIngest } from './extract.js';
 import { runPlayground } from './playground.js';
@@ -86,6 +86,11 @@ const workers = [
       log('احتفاظ', Object.fromEntries(r.map((x) => [x.table, x.deleted])));
     } else if (job.name === 'digest') {
       await flushDigest();
+    } else if (job.name === 'alerting') {
+      const a = await checkAlerting();
+      /* ويُسجَّل في الحالتَين: «القناة تعمل» خبرٌ يُقرأ بعد إصلاحٍ، و«صفر
+         مشتركين» هو الخبرُ الذي لم يكن يُكتب إطلاقاً. */
+      log(a.ok ? 'قناةُ التنبيه موصولة' : '🔴 قناةُ التنبيه بلا مشترك', a);
     } else if (job.name === 'stranded') {
       const n = await sweepStrandedConversations();
       /* صفرٌ هو الحالةُ السليمة ولا يُسجَّل: سطرٌ كلَّ دقيقةٍ ضجيجٌ يملأ قرصاً
@@ -123,6 +128,10 @@ const SCHED = [
      تأخيرُ ردٍّ مقبولٌ في أسوأ حالةٍ، والمسحُ `SCAN` على مفاتيحَ قليلةٍ
      فكلفتُه لا تُذكر. */
   { q: QUEUE.maintenance, name: 'stranded', jobId: 'stranded-convs', every: 60_000 },
+  /* ★ فحصُ بلوغِ التنبيه كلَّ ساعة — لا عند الإقلاع وحده. الاشتراكُ يموت بلا
+     حدثٍ يُعلنه (إذنٌ يُسحب، مفتاحُ VAPID يُبدَّل، جهازٌ يُمسح)، فالعمياءُ
+     تُولد في منتصف الطريق لا عند البداية. */
+  { q: QUEUE.maintenance, name: 'alerting', jobId: 'alerting-check', every: 60 * 60_000 },
 ] as const;
 
 export const SCHED_EXPECTED = SCHED.length;

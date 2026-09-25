@@ -8,6 +8,7 @@ import { useVisualViewport } from '@/lib/viewport';
 import { bootstrap, post, setToken } from '@/lib/api';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { PushToggle } from '@/components/PushToggle';
+import { NotifBell } from '@/components/NotifBell';
 import { Skeleton, Note, Button, Sheet } from '@/components/ui';
 
 export interface NavItem {
@@ -186,6 +187,11 @@ export function Shell({
             الخبرُ بعد الحدّ. وهو ظاهرٌ الآن على **كلّ عرض** بدل أن يكون
             صفّاً ملتفّاً داخل شريطٍ أفقيٍّ على الهاتف. */}
         {footer ? <div className="shell-st">{footer}</div> : null}
+        {/* ★ الجرسُ في الترويسة لا في ورقة الحساب: `PushToggle` أسفلَ الورقة
+            إعدادُ **هذا الجهاز**، أمّا التنبيهُ نفسُه فخبرٌ يُلاحَق — ولا يجوز
+            أن يسكن قائمةً تُفتح وإلّا وصل بعد الحدث. وهو الاحتياطُ عن الدفع:
+            من رفض الإذن أو سُحب منه أو مات اشتراكُه يراه هنا. */}
+        <NotifBell />
       </header>
 
       {/* ══════ الشاشة: المُمرِّر الوحيد ══════ */}
