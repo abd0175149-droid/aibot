@@ -7,7 +7,7 @@ import {
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useApi, useToast, fmt, AR_LOCALE } from '@/lib/useApi';
 import { api, post, idempotencyKey, ApiError } from '@/lib/api';
-import { MESSAGE_TYPE_AR, type MessageDTO } from '@aibot/shared';
+import { MESSAGE_TYPE_AR, QUOTA_BLOCKED_MSG, type MessageDTO } from '@aibot/shared';
 import { useCan, useSession } from '@/lib/session';
 import { useSocket, useLink, useFallbackPoll } from '@/lib/socket';
 import {
@@ -1104,7 +1104,21 @@ function InboxScreen() {
                           {/* ★ «لم تصل» بلا مخرجٍ يدفع الموظّف إلى كتابتها من
                               جديد بمفتاحٍ جديد — فتصل نسختان إن كان العطل
                               عابراً. الإعادة على الصفّ نفسه تُنهي الاثنين. */}
-                          {m.direction === 'out' && m.status === 'failed' && !can.readOnly && (
+                          {/* ★★ **وعند السقف «أعِد المحاولة» حلقةٌ بلا مخرج.**
+                              الإرسالُ مرفوضٌ في طبقة الحصّة قبل أن يلمس ميتا، فكلُّ
+                              إعادةٍ تفشل بنفس السبب — والموظّف يعيد ويعيد ويظنّ
+                              العطلَ في الشبكة. والسقفُ يرفعه صاحبُ الفوترة لا هو،
+                              فيُقال له ذلك بدل زرٍّ يَعِد بما لا يقع. */}
+                          {m.direction === 'out' && m.status === 'failed'
+                            && m.errorMessage?.includes(QUOTA_BLOCKED_MSG) && (
+                            <span className="ibx-err">
+                              {can.billing
+                                ? 'أعِد المحاولة بعد رفع السقف — الإرسال مرفوضٌ قبل أن يصل ميتا.'
+                                : 'السقف يرفعه صاحبُ الفوترة في حسابك — أبلِغه، فالإعادة لا تنجح قبل ذلك.'}
+                            </span>
+                          )}
+                          {m.direction === 'out' && m.status === 'failed' && !can.readOnly
+                            && !m.errorMessage?.includes(QUOTA_BLOCKED_MSG) && (
                             <button
                               type="button" className="ibx-retry"
                               onClick={() => void retrySend(m.id)}

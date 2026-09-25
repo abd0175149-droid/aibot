@@ -3,7 +3,7 @@ import {
   channelIdentities, subscriptions, plans, tenants, eq, and, isNull, sql, desc,
 } from '@aibot/db';
 import { getAdapter, degradeChoices, canRender, type ChannelKind } from '@aibot/channels';
-import { tenantBlocked, type OutboundMessage } from '@aibot/shared';
+import { tenantBlocked, QUOTA_BLOCKED_MSG, type OutboundMessage } from '@aibot/shared';
 import { open as decrypt } from '@aibot/crypto';
 import { emitToTenant } from './events.js';
 import { announceQuotaCrossing } from './quota.js';
@@ -59,7 +59,7 @@ export class WindowClosedError extends Error {
 export class QuotaExceededError extends Error {
   readonly code = 'QUOTA_EXCEEDED';
   constructor(public readonly policy: string) {
-    super('بلغ الحساب سقف نوافذ الباقة');
+    super(QUOTA_BLOCKED_MSG);
   }
 }
 

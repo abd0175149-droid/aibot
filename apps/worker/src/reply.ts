@@ -10,7 +10,7 @@ import {
   type KnowledgeProvider, type BusinessHours,
 } from '@aibot/core';
 import { getProvider, computeCost, DEFAULT_CHAT_MODEL, AiError, type ToolCall } from '@aibot/ai';
-import { mediaPlaceholder, type OutboundMessage } from '@aibot/shared';
+import { mediaPlaceholder, QUOTA_BLOCKED_MSG, type OutboundMessage } from '@aibot/shared';
 import {
   sendOutbound, checkQuota, WindowClosedError, QuotaExceededError, TenantBlockedError,
 } from './outbound.js';
@@ -605,7 +605,7 @@ async function safeSend(job: Parameters<typeof sendOutbound>[0]): Promise<void> 
     if (e instanceof QuotaExceededError) {
       await raiseIncident({
         tenantId: job.tenantId, kind: 'quota_exceeded', severity: 'warn',
-        title: 'بلغ الحساب سقف نوافذ الباقة', detail: { policy: e.policy },
+        title: QUOTA_BLOCKED_MSG, detail: { policy: e.policy },
       });
       return;
     }

@@ -1677,7 +1677,10 @@ export default function BotPage() {
                             <span className="num">{`v${v.version}`}</span>
                             <span className="rm-note" dir="auto">{v.note?.trim() || 'بلا ملاحظة'}</span>
                           </span>
-                          <span className="rm-v">{fmt.when(v.publishedAt)}</span>
+                          {/* ★ والتاريخُ في `small`: `.rm-v` حجمُ **قيمةٍ رأسٍ**، فتاريخٌ
+                              نسبيٌّ فيه يصير أعلى صوتاً من النسخة نفسِها ومن ملاحظتها
+                              — وهما ما يُقرأ ليُختار. */}
+                          <span className="rm-v"><small>{fmt.when(v.publishedAt)}</small></span>
                           <span className="rm-c">
                             {isLive && <Tag tone="ok" label="تخدم زبائنك الآن" />}
                             {!isLive && v.embedStatus === 'pending' && <Tag tone="warn" label="تُجهَّز معرفتها" />}

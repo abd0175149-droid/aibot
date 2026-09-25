@@ -11,6 +11,7 @@ import {
 } from '@/components/ui';
 import { Band, Hero, Vital, Fold, ScreenDock, MARK, SEV, type Sev } from '@/components/screen';
 import { ChannelConnectForm } from '@/components/ChannelConnectForm';
+import { SupportLink } from '@/components/support';
 
 /**
  * القنوات.
@@ -85,7 +86,8 @@ const STATE: Record<Channel['status'], { label: string; tone: Tone; sev: Sev }> 
  * سمعةُ الرقم عند ميتا — و**نصُّ العاقبة** معها لا نصُّ الحالة: «أخضر» حالة،
  * و«لو صار أصفر أوقف أيّ إرسالٍ جماعيّ في الحال» قرار.
  */
-const QUALITY: Record<string, { label: string; sev: Sev; why: string }> = {
+/* `why` عقدةُ عرضٍ لا نصّ: «راسلنا» هنا كان نصّاً بلا رابط في شاشتَين. */
+const QUALITY: Record<string, { label: string; sev: Sev; why: ReactNode }> = {
   GREEN: {
     label: 'أخضر',
     sev: 'good',
@@ -101,8 +103,13 @@ const QUALITY: Record<string, { label: string; sev: Sev; why: string }> = {
   RED: {
     label: 'أحمر',
     sev: 'bad',
-    why: 'ميتا خفضت سقف إرسالك اليوميّ فعلاً. لا ترسل شيئاً جماعيّاً حتّى يعود أصفر أو أخضر، '
-      + 'وراسلنا لنراجع معك ما يُشكى منه.',
+    why: (
+      <>
+        ميتا خفضت سقف إرسالك اليوميّ فعلاً. لا ترسل شيئاً جماعيّاً حتّى يعود أصفر أو أخضر، و
+        <SupportLink subject="سمعةُ الرقم عند ميتا: أحمر">راسلنا</SupportLink>
+        {' '}لنراجع معك ما يُشكى منه.
+      </>
+    ),
   },
 };
 
@@ -292,7 +299,13 @@ export default function ChannelsPage() {
                     ? `سمعةُ رقمك عند ميتا: ${QUALITY[wa.qualityRating]?.label ?? wa.qualityRating}`
                     : 'سمعةُ رقمك عند ميتا: لم تُقرأ بعد'}
                   why={wa.qualityRating
-                    ? (QUALITY[wa.qualityRating]?.why ?? 'قيمةٌ جديدةٌ من ميتا — راسلنا لنقرأها معك.')
+                    ? (QUALITY[wa.qualityRating]?.why ?? (
+                      <>
+                        قيمةٌ جديدةٌ من ميتا —{' '}
+                        <SupportLink subject="قيمةُ سمعةٍ جديدةٌ من ميتا">راسلنا</SupportLink>
+                        {' '}لنقرأها معك.
+                      </>
+                    ))
                     : 'تُقرأ من ميتا عند أوّل فحصٍ للاتّصال. وهي التي تقرّر سقف إرسالك اليوميّ.'}
                 />
                 <WebhookVital report={reports[wa.id]} lastCheckedAt={wa.lastCheckedAt} />

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { Shell, type NavItem } from '@/components/Shell';
 import { Meter, Pill, Skeleton, Button } from '@/components/ui';
 import { useApi, fmt } from '@/lib/useApi';
-import { useSession } from '@/lib/session';
+import { useSession, useCan } from '@/lib/session';
 
 /**
  * تخطيط لوحة العميل.
@@ -38,6 +38,18 @@ interface Overview {
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { me } = useSession();
+  /**
+   * ★ **عدّادُ السقف كان رابطاً لمن لا يملك فتحَ وجهته.**
+   *
+   *   `/app/usage` محجوبةٌ في التنقّل بـ`needs: 'billing'`، و`GET /usage` يردّ
+   *   ٤٠٣ لغير صاحب الفوترة. والعدّادُ في ذيل الشريط لم يكن محجوباً بشيء: فموظّفٌ
+   *   يرى «بلغتَ السقف» ويضغط، فيهبط على شاشةٍ تردّ صندوقَ خطأ — طريقٌ مسدودٌ
+   *   صنعناه نحن في اللحظة التي يبحث فيها عن تفسير.
+   *
+   *   فالعدّادُ يبقى مرئيّاً له (هو يحتاج أن يعرف لماذا صمت البوت) ويسقط عنه
+   *   الرابطُ وسهمُه. والتفسيرُ يُقال له حيث يقع العطل فعلاً: في الإنبوكس.
+   */
+  const can = useCan();
   const hasTenant = Boolean(me?.tenant);
   // لا نداء قبل وجود مستأجر — وإلّا فـ403 مستحقّ على مالك المنصّة
   const { data, error, loading, reload } = useApi<Overview>(hasTenant ? '/reports/overview' : null);
@@ -78,8 +90,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
       </div>
     );
   } else if (data?.windowsLimit) {
-    capFooter = (
-      <Link className="cap" href="/app/usage">
+    const capBody = (
+      <>
         <span className="cap-h">
           {/* عزلٌ اتجاهيّ على «12 / 1500»: بلاه ترتفع الشرطة المائلة إلى R
               فيُقلب الرقمان بصريّاً — رقمٌ مقلوبٌ لا قبيح. */}
@@ -93,11 +105,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               label={pct >= 1 ? 'بلغتَ السقف' : 'قاربتَ السقف'}
             />
           )}
-          <span aria-hidden="true" className="cap-go">←</span>
+          {can.billing && <span aria-hidden="true" className="cap-go">←</span>}
         </span>
         <Meter pct={pct} />
-      </Link>
+      </>
     );
+    capFooter = can.billing
+      ? <Link className="cap" href="/app/usage">{capBody}</Link>
+      : <div className="cap">{capBody}</div>;
   }
 
   return <Shell nav={nav} footer={capFooter}>{children}</Shell>;

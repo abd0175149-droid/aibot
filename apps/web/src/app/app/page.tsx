@@ -4,6 +4,8 @@ import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useApi, fmt } from '@/lib/useApi';
 import { useSession } from '@/lib/session';
+import { SupportLink } from '@/components/support';
+import { planTalkLabel, planTalkSubject, planTalkBody } from '@/lib/support';
 import {
   PageHead, Stack, Row, Pill, Tag, Dot, Note, Meter,
   Skeleton, ErrorBox, type Tone,
@@ -123,6 +125,13 @@ export default function HomePage() {
     ? <> · وأنذرناك عند <span className="num">{`${hit.threshold}%`}</span> {fmt.when(hit.firedAt)}</>
     : null;
 
+  /* ★ نفسُ فعل شاشة الاستهلاك ونصُّه من نفس الموضع — شاشتان تقولان
+     «راسلنا» بصيغتين تُقرآن قناتين. */
+  const planTalk = atCap || pct >= 0.95;
+  const planLabel = planTalkLabel(data.overagePolicy);
+  const planSubject = planTalkSubject();
+  const planBody = planTalkBody(data.windowsUsed, data.windowsLimit);
+
   const chans = data.channels;
   const chBad = chans.filter((c) => c.status !== 'connected').length;
 
@@ -138,7 +147,13 @@ export default function HomePage() {
       ? {
         sev: 'bad',
         head: 'بلغتَ سقف الباقة لهذا الشهر',
-        sub: <>{data.capConsequence}{alertedAt}{' '}<Link href="/app/usage">شاهد الاستهلاك</Link></>,
+        /* عند السقف الدواءُ يسبق الإيصال: «شاهد الاستهلاك» يشرح ما وقع
+           ولا يُنهيه، ورفعُ السقف قرارٌ بشريٌّ عندنا. */
+        sub: <>
+          {data.capConsequence}{alertedAt}{' '}
+          <SupportLink subject={planSubject} body={planBody}>{planLabel}</SupportLink>{' · '}
+          <Link href="/app/usage">شاهد الاستهلاك</Link>
+        </>,
       }
       : pct >= 0.8
         ? {
@@ -182,6 +197,7 @@ export default function HomePage() {
       {needs && atCap && (
         <Note tone="crit">
           <b>بلغتَ سقف الباقة لهذا الشهر.</b> {data.capConsequence}{alertedAt}{' '}
+          <SupportLink subject={planSubject} body={planBody}>{planLabel}</SupportLink>{' · '}
           <Link href="/app/usage">شاهد الاستهلاك</Link>
         </Note>
       )}
@@ -407,7 +423,8 @@ export default function HomePage() {
       <Fold summary="لماذا يفرّق بوتك بين «بحث ولم يجد» و«وجد ولم يُجب»">
         <Note>
           <b>تمييزٌ يوفّر عليك أسبوعاً.</b> «بحث ولم يجد» يعني أنّ المعلومة ناقصةٌ من معرفتك —
-          أضِفها. و«وجد ولم يُجب» يعني أنّها موجودةٌ والمشكلة في شخصيّة البوت — راسلنا.
+          أضِفها. و«وجد ولم يُجب» يعني أنّها موجودةٌ والمشكلة في شخصيّة البوت —{' '}
+          <SupportLink subject="شخصيّةُ البوت: يجد ولا يُجيب">راسلنا</SupportLink>.
           بلا هذا التمييز تضيف محتوًى لمشكلةٍ ليست فيه.
         </Note>
       </Fold>
@@ -417,8 +434,17 @@ export default function HomePage() {
       <ScreenDock
         hint={needs
           ? 'يفتح الإنبوكس — والمرشِّح «يحتاج تدخّلاً» أوّلُ حبّةٍ فيه.'
-          : 'لا شيء عاجل. والرصيف يحمل فعل الشاشة الأوّل دائماً، حتّى لو كان اطمئناناً.'}
+          : planTalk
+            ? 'سقفُ باقتك هو العائق الآن — ورفعُه قرارٌ بشريّ، نردّ خلال ٢٤ ساعة عمل.'
+            : 'لا شيء عاجل. والرصيف يحمل فعل الشاشة الأوّل دائماً، حتّى لو كان اطمئناناً.'}
       >
+        {/* وقاعدةُ الأولويّة كما هي: انتظارٌ ← فاتورةٌ ← اطمئنان. فحين لا ينتظر
+            شيءٌ والسقفُ مبلوغ، الفعلُ الأوّل هو ما يُزيل العائق لا «افتح الإنبوكس». */}
+        {!needs && planTalk && (
+          <SupportLink className="btn primary lg wide sc-link" subject={planSubject} body={planBody}>
+            {planLabel}
+          </SupportLink>
+        )}
         <Link
           className={needs ? 'btn primary lg wide sc-link' : 'btn quiet lg wide sc-link'}
           href="/app/inbox"

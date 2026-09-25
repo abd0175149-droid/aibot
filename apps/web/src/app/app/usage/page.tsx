@@ -5,6 +5,8 @@ import type { ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useApi, useToast, fmt } from '@/lib/useApi';
 import { download, get, ApiError } from '@/lib/api';
+import { SupportLink } from '@/components/support';
+import { planTalkLabel, planTalkSubject, planTalkBody } from '@/lib/support';
 import {
   PageHead, Stack, Row, Pill, Tag, Note, Meter, Button, Sheet, Table, Empty,
   Skeleton, ErrorBox, KV, KVRow, type Column, type Tone,
@@ -62,6 +64,12 @@ interface Usage {
   aiCostUsd: number;
   avgRepliesPerWindow: number;
   /** نصُّ العاقبة من الخادم — نفسُ نصّ الإشعار، فلا نسختان تتباعدان. */
+  /**
+   * سياسةُ التجاوز من الخادم. يُرسلها `/usage` منذ كُتب ولم تكن معلَنةً هنا،
+   * فلم تكن الشاشةُ تفرّق «توقّف بوتك» من «الزائد يُفوتَر» — وهما فعلان
+   * مختلفان يُطلبان من العميل.
+   */
+  overagePolicy: string;
   capConsequence: string;
   quotaAlerts: QuotaAlert[];
   items: Window[];
@@ -236,6 +244,21 @@ export default function UsagePage() {
       .map((k) => ({ f: k as Filt, label: CH[k]?.label ?? k })),
   ];
 
+  /**
+   * ★ **فعلُ الرصيف يتبدّل بالحالة — كما يتبدّل الشريطُ والبطوليّ.**
+   *
+   *   عند السقف كان الفعلُ الأوّل (والوحيد) «نزِّل الجدول (CSV)»: أي أنّ الشاشةَ
+   *   التي يفتحها إشعارُ «بلغتَ سقفك» تعطيه ملفّاً ولا تعطيه مخرجاً. ورفعُ السقف
+   *   قرارٌ بشريٌّ عندنا، فالتواصلُ هو الفعل.
+   *
+   *   و٩٥٪ داخلةٌ عمداً: عندها يبقى وقتٌ للتصرّف، وهو كلُّ معنى العتبة. والشريطُ
+   *   نفسُه يحمل الرابط في الحالتين، فلا يقول الرصيفُ «راسلنا» ويسكت الشريط.
+   */
+  const planTalk = atCap || pct >= 0.95;
+  const planLabel = planTalkLabel(data.overagePolicy);
+  const planSubject = planTalkSubject(data.period);
+  const planBody = planTalkBody(data.windowsBilled, data.windowsLimit, data.period);
+
   /* ★ ترتيبُ الشريط: **ما وقع** يسبق ما يُتوقَّع. السقفُ المبلوغ أوّلاً، ثمّ
      العتبةُ المعبورة (خبرٌ واقعٌ اليوم)، ثمّ الوتيرة (إسقاطٌ قد لا يقع). وكان
      الإسقاطُ يسبق العتبة، فيُقرأ «تُنهي الشهر تحت سقفك» على 88٪. */
@@ -246,6 +269,7 @@ export default function UsagePage() {
       sub: <>
         {data.capConsequence}
         {hit && <> · وأنذرناك عند <span className="num">{`${hit.threshold}%`}</span> {fmt.when(hit.firedAt)}</>}
+        {' · '}<SupportLink subject={planSubject} body={planBody}>{planLabel}</SupportLink>
       </>,
     }
     : near
@@ -255,6 +279,7 @@ export default function UsagePage() {
         sub: <>
           {data.capConsequence}
           {hit && <> · وأنذرناك عند <span className="num">{`${hit.threshold}%`}</span> {fmt.when(hit.firedAt)}</>}
+          {planTalk && <>{' · '}<SupportLink subject={planSubject} body={planBody}>{planLabel}</SupportLink></>}
         </>,
       }
       : paceOver
@@ -506,7 +531,9 @@ export default function UsagePage() {
       </Fold>
 
       {/* ★ الرصيف: مرشّحاتُ الشاشة وفعلُها الأوّل معاً في مدى الإبهام. */}
-      <ScreenDock hint="الملفُّ يحمل نوافذ الشهر كلَّها — لا الصفحةَ المعروضة.">
+      <ScreenDock hint={planTalk
+        ? 'رفعُ السقف قرارٌ بشريّ — نردّ خلال ٢٤ ساعة عمل. والملفُّ يحمل نوافذ الشهر كلَّها.'
+        : "الملفُّ يحمل نوافذ الشهر كلَّها — لا الصفحةَ المعروضة."}>
         <ChipRow label="مرشّحات">
           {chips.map((c) => (
             <button
@@ -520,7 +547,19 @@ export default function UsagePage() {
             </button>
           ))}
         </ChipRow>
-        <Button variant="primary" size="lg" wide busy={exporting} onClick={() => void exportCsv()}>
+        {/* الأبناءُ يُرسمون بالترتيب في `Dock`، فالموضعُ هو الأولويّة. */}
+        {planTalk && (
+          <SupportLink className="btn primary lg wide sc-link" subject={planSubject} body={planBody}>
+            {planLabel}
+          </SupportLink>
+        )}
+        <Button
+          variant={planTalk ? 'quiet' : 'primary'}
+          size="lg"
+          wide
+          busy={exporting}
+          onClick={() => void exportCsv()}
+        >
           نزِّل الجدول (CSV)
         </Button>
       </ScreenDock>
