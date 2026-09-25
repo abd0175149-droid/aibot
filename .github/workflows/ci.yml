@@ -1,0 +1,77 @@
+# ════════════════════════════════════════════════════════════════
+# بوّابةُ الجودة على كلّ دفعةٍ وكلّ طلبِ دمج.
+#
+# 🔴 العطلُ الذي وُلدت منه: الإنتاج يشغّل **مصادر TypeScript** عبر `tsx`،
+#    و`tsx` يُسقط الأنواع ولا يفحصها. فخطأُ نوعٍ لا يظهر في البناء ولا في
+#    الإقلاع — يظهر عند أوّل استدعاءٍ لتلك الدالّة، على زبونٍ حقيقيّ، بعد
+#    النشر بساعات. ولم يكن في المستودع بوّابةٌ واحدة: `deploy.sh` يسحب
+#    master ويبني ما فيه أيّاً كان.
+#
+# ★ وهي بوّابةٌ ثانيةٌ لا وحيدة: `deploy.sh` يفحص الأنواع والاختبارات على
+#   المضيف قبل أن يلمس شيئاً. فمن دفع بلا مرورٍ من هنا يُمسَك هناك — وبوّابةٌ
+#   واحدةٌ يمكن تخطّيها بالدفع المباشر ليست بوّابة.
+# ════════════════════════════════════════════════════════════════
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+# دفعتان متتاليتان على الفرع نفسه: تُلغى الأولى. لا فائدة من نتيجةٍ بائتة.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    # ⚠️ سقفٌ صريح: وظيفةٌ معلّقةٌ ست ساعات (الافتراض) تحجب الطابور وتُنفق
+    #    الدقائق على لا شيء.
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ★ الإصدارات مثبَّتةٌ لا عائمة: `pnpm@latest` يُغيّر حلَّ الاعتماديّات
+      #   يوماً ما فتنكسر البوّابةُ على تغييرٍ لم يكتبه أحدٌ في هذا المستودع.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      # `--frozen-lockfile` يفشل إن خالف `package.json` القفلَ — وهذا فحصٌ
+      # في نفسه: قفلٌ غيرُ محدَّثٍ يعني أنّ الخادمَ سيثبّت غيرَ ما اختُبر.
+      - run: pnpm install --frozen-lockfile
+
+      # ① الأنواع — وهذا ما لا يفحصه شيءٌ آخر في المسار كلِّه.
+      - name: فحص الأنواع
+        run: |
+          for t in apps/api apps/worker apps/web packages/core packages/db \
+                   packages/shared packages/ai packages/channels packages/crypto; do
+            [ -f "$t/tsconfig.json" ] || continue
+            echo "▶ $t"
+            npx tsc -p "$t/tsconfig.json" --noEmit
+          done
+
+      # ② الاختبارات — وأكثرُها حرّاسٌ ساكنةٌ تحرس أعطالاً وقعت فعلاً.
+      - name: الاختبارات
+        run: npx vitest run --reporter=basic
+
+      # ③ البناءُ يُثبت أنّ الواجهة تُصرَّف فعلاً: خطأٌ في مكوّنٍ لا يظهر في
+      #    `tsc` وحده (‏`next build` يفحص الحدود والصفحات الساكنة).
+      - name: بناء الواجهة
+        run: pnpm --filter @aibot/web run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+          NEXT_PUBLIC_API_URL: https://aibot.masaros.net/api
+
+      # ④ الاعتماديّات المعلومةُ الثغرات — تُقال ولا تُفشِل: ثغرةٌ في تبعيّةِ
+      #    تطويرٍ لا تُبرّر منعَ إصلاحٍ عاجل، وثغرةٌ حقيقيّةٌ تُعالَج بقرارٍ لا
+      #    بحاجزٍ آليّ. والغرضُ أن تُرى.
+      - name: تدقيق الاعتماديّات
+        run: pnpm audit --audit-level high || true
