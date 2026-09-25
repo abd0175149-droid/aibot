@@ -32,6 +32,11 @@ say()  { echo -e "\n▶ $1"; }
 fail() { echo -e "\n❌ $1" >&2; }
 
 rollback() {
+  # 🔴 نزعُ المصيدتَين **أوّلَ شيء**. بعد تسليح EXIT صارتا اثنتين: فشلٌ حقيقيّ
+  #    يُطلق ERR فتُنادى هذه، ثمّ تخرج بـ1 فتُطلق EXIT فتُنادى ثانيةً — ويصطدم
+  #    `docker compose up` بنفسه («container name is already in use»، وهو
+  #    العطلُ الموصوفُ أسفله). والنزعُ يحمي كذلك من فشل `docker tag` هنا.
+  trap - ERR EXIT
   fail "فشل النشر — تراجع إلى وسوم rollback-${STAMP}"
   for s in $SERVICES; do
     if docker image inspect "aibot-${s}:rollback-${STAMP}" >/dev/null 2>&1; then
@@ -49,6 +54,19 @@ rollback() {
   exit 1
 }
 trap rollback ERR
+
+# 🔴 **`exit 1` لا يُطلق `trap … ERR`** — دلالةُ bash لا علّةُ سكربت (مُجرَّبةٌ
+#    على bash 5: `false` تُطلق المصيدة و`exit 1` لا تُطلقها، وكذلك
+#    `if ! cmd; then exit 1; fi`). وكلُّ بوّابةٍ في هذا الملفّ تفشل بـ`exit 1`:
+#    الترحيلُ، وصحّةُ الخلفيّة، ورمزُ الواجهة، ونسختُها. فكانت تخرج **بلا
+#    تراجع**: حاوياتُ «الاستبدال» الجديدة تبقى تخدم الطلبات على قاعدةٍ نصفِ
+#    مُرحَّلة، ولا يُطبع أمرُ التراجع لأنّ الملخّص لم يُبلَغ — فيبدو الأمرُ
+#    نشرةً فاشلةً نظيفة وهو خادمٌ عالق.
+#
+#    ومصيدةٌ على EXIT تمسك الاثنين معاً — الفشلَ الحقيقيَّ و`exit` الصريح —
+#    بلا مطاردة كلّ بوّابةٍ على حدة اليوم وغداً. و`exit "$rc"` آخرُ أمرٍ فيها
+#    فيبقى الخروجُ الصفريُّ صفريّاً رغم أنّ `[ ]` قبله تعود 1.
+arm_rollback() { trap 'rc=$?; [ "$rc" -ne 0 ] && rollback; exit "$rc"' EXIT; }
 
 # ── 0. البيئة ────────────────────────────────────────────────────
 [ -f .env ] || { fail ".env غائب — الأسرار تُكتب باليد على الخادم فقط"; exit 1; }
@@ -125,7 +143,9 @@ export GIT_REV="$AFTER"
 if [ "$BEFORE" != "$AFTER" ] && [ "${AIBOT_REEXEC:-0}" != "1" ]; then
   if ! git diff --quiet "$BEFORE" "$AFTER" -- deploy.sh; then
     say "deploy.sh تغيّر — إعادة تنفيذ نفسه مرّةً واحدة"
-    trap - ERR
+    # و`EXIT` معها احتياطاً: `exec` يستبدل الصورة فلا تعمل المصائد، والنزعُ
+    # الصريحُ يبقى صحيحاً لو صار الاستبدالُ يوماً استدعاءً عاديّاً.
+    trap - ERR EXIT
     AIBOT_REEXEC=1 exec bash "$0" "$@"
   fi
 fi
@@ -136,6 +156,11 @@ for s in $SERVICES; do
   docker image inspect "aibot-${s}:latest" >/dev/null 2>&1 \
     && docker tag "aibot-${s}:latest" "aibot-${s}:rollback-${STAMP}" || true
 done
+
+# ★ التسليحُ **هنا** لا في الأعلى: قبل هذا السطر لا وسومَ `rollback-${STAMP}`
+#   فلا شيءَ يُتراجَع إليه، وتسليحٌ مبكّرٌ يجعل فشلَ «.env غائب» أو «pg_dump فشل
+#   صامتاً» يهدم حاوياتٍ سليمةً ويُعيد إنشاءها بلا سبب.
+arm_rollback
 
 say "البناء"
 docker compose build --build-arg GIT_REV="$GIT_REV" $SERVICES
@@ -214,7 +239,9 @@ for s in $SERVICES; do
 done
 docker image prune -f >/dev/null 2>&1 || true
 
-trap - ERR
+# النجاحُ أُعلن: تُنزع المصيدتان. وبلا نزع EXIT يتراجع نشرٌ **ناجح** لو أخفق
+# أيُّ أمرٍ في طبع الملخّص أدناه.
+trap - ERR EXIT
 cat <<EOF
 
 ✅ نُشرت النسخة ${GIT_REV:0:8}

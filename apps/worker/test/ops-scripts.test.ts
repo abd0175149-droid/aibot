@@ -196,3 +196,77 @@ describe('سكربتات التشغيل قابلةٌ للتنفيذ في الف�
     ).toEqual([]);
   });
 });
+
+/* ══════════════════════════════════════════════════════════════════════════
+   ★★★ **`exit 1` لا يُطلق `trap … ERR`** — وكلُّ بوّابةٍ في `deploy.sh` تفشل به.
+
+   دلالةُ bash لا علّةُ سكربت، ومُجرَّبةٌ: `false` تُطلق المصيدةَ و`exit 1` لا
+   تُطلقها، وكذلك `if ! cmd; then exit 1; fi`. فالبوّاباتُ الأربع (الترحيلُ،
+   وصحّةُ الخلفيّة، ورمزُ الواجهة، ونسختُها) كانت تخرج **بلا تراجع**: حاوياتُ
+   «الاستبدال» الجديدة تبقى تخدم الطلبات على قاعدةٍ نصفِ مُرحَّلة، ولا يُطبع
+   أمرُ التراجع لأنّ الملخّص لم يُبلَغ — فيبدو الأمرُ نشرةً فاشلةً نظيفة وهو
+   خادمٌ عالق.
+
+   والتناقضُ الذي يُثبت العطل: `ALTER ROLE` بعد الترحيل بستّة أسطرٍ أمرٌ
+   **عريان**، فيُطلق ERR ويتراجع فعلاً — بينما فشلُ الترحيل نفسِه لا يتراجع.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+describe('★ النشرُ يتراجع عند كلّ فشل — لا عند بعضه', () => {
+  const src = readFileSync(join(REPO, 'deploy.sh'), 'utf8');
+  /* التعليقاتُ تُعمّى: هذا الملفّ يشرح العطلَ الذي يحرسه بأسطرٍ تحمل
+     `exit 1` و`trap` — وماسحٌ لا يُعميها يبلّغ عن شرحه هو. */
+  const code = src.split(/\r?\n/).map((t) => (/^\s*#/.test(t) ? '' : t));
+
+  it('المِرساةُ موجودة — فلا يمرّ الحارسُ على فراغ', () => {
+    expect(code.some((t) => /docker\s+compose\s+up\s+-d/.test(t))).toBe(true);
+  });
+
+  it('★★★ مصيدةٌ على EXIT مُسلَّحة — وهي وحدها تمسك `exit` الصريح', () => {
+    expect(src).toMatch(/arm_rollback\(\)\s*{\s*trap\s+'rc=\$\?;/);
+    /* وتُنادى فعلاً: تعريفٌ بلا نداءٍ طمأنينةٌ كاذبة. */
+    expect(code.some((t) => /^arm_rollback\s*$/.test(t.trim())), 'مُعرَّفةٌ ولا تُنادى').toBe(true);
+  });
+
+  it('★★ والتسليحُ بعد وجود وسومٍ يُتراجَع إليها لا قبلها', () => {
+    /* تسليحٌ مبكّرٌ يجعل فشلَ «.env غائب» أو «pg_dump فشل صامتاً» يهدم
+       حاوياتٍ سليمةً ويُعيد إنشاءها بلا شيءٍ يُستعاد إليه. */
+    const iTag = src.indexOf(':rollback-${STAMP}"');
+    const iArm = src.search(/^arm_rollback$/m);
+    const iUp = src.search(/^docker compose up -d \$SERVICES$/m);
+    expect(iTag).toBeGreaterThan(0);
+    expect(iArm, 'التسليحُ قبل إنشاء الوسوم').toBeGreaterThan(iTag);
+    expect(iArm, 'التسليحُ بعد نقطة اللا رجوع — فبوّاباتُ ما قبلها بلا حماية').toBeLessThan(iUp);
+  });
+
+  it('★★★ والتراجعُ ينزع المصيدتَين أوّلَ شيء — وإلّا جرى مرّتَين', () => {
+    /* فشلٌ حقيقيّ يُطلق ERR فتُنادى `rollback`، ثمّ تخرج بـ1 فتُطلق EXIT
+       فتُنادى ثانيةً — ويصطدم `docker compose up` بنفسه. */
+    const at = src.indexOf('rollback() {');
+    expect(at).toBeGreaterThan(0);
+    const firstStmt = src.slice(at, src.indexOf('fail ', at));
+    expect(firstStmt, 'النزعُ ليس أوّلَ ما يجري في الدالّة').toContain('trap - ERR EXIT');
+  });
+
+  it('★★ والنجاحُ ينزعهما معاً — وإلّا تراجع نشرٌ ناجحٌ على خطأٍ في طبع الملخّص', () => {
+    const disarms = [...src.matchAll(/^\s*trap - ERR(?: EXIT)?$/gm)].map((m) => m[0].trim());
+    expect(disarms.length, 'النزعُ في التراجع وإعادة التنفيذ والنجاح').toBeGreaterThanOrEqual(3);
+    expect(disarms.filter((d) => d === 'trap - ERR'), 'نزعٌ يترك EXIT مُسلَّحة').toEqual([]);
+  });
+
+  it('★★★ ولا خروجَ غيرُ صفريٍّ بعد نقطة اللا رجوع خارج حماية التسليح', () => {
+    /* هذا هو الحارسُ الحقيقيّ: بوّابةٌ جديدةٌ تُضاف غداً بـ`exit 1` بعد
+       الاستبدال تسقط هنا ما لم تكن تحت مصيدةٍ مُسلَّحة. */
+    const lines = src.split(/\r?\n/);
+    const blind = lines.map((t, i) => ({ t, i }))
+      .filter(({ t }) => !/^\s*#/.test(t));
+    const iArm = blind.findIndex(({ t }) => /^arm_rollback\s*$/.test(t.trim()));
+    expect(iArm, 'لا تسليحَ إطلاقاً').toBeGreaterThan(-1);
+    const iRollbackEnd = blind.findIndex(({ t }) => /^}\s*$/.test(t) && t.length < 4);
+    void iRollbackEnd;
+    const after = blind.slice(iArm + 1).filter(({ t }) => /\bexit [1-9]/.test(t));
+    /* كلُّها مسموحةٌ **لأنّ** التسليح يغطّيها — والعدُّ يوثّق أنّها موجودةٌ فعلاً
+       فلا يُقرأ الحارسُ نجاحاً على سكربتٍ بلا بوّابات. */
+    expect(after.length, 'لا بوّابةَ تخرج بعد التسليح — تغيّر الملفّ، راجِع الحارس')
+      .toBeGreaterThanOrEqual(4);
+  });
+});
