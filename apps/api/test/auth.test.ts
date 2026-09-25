@@ -1,12 +1,36 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import {
-  hashPassword, verifyPassword, signAccess, verifyAccess,
+  hashPassword, verifyPassword, signAccess, verifyAccess, passwordHashOrDecoy,
   PERMISSIONS, refreshCookie, clearRefreshCookie, readRefreshCookie,
 } from '../src/auth.js';
 
 beforeAll(() => { process.env.JWT_SECRET = 'test-secret-at-least-32-bytes-long!!'; });
 
 describe('كلمات السرّ', () => {
+  it('★★★ بريدٌ مجهولٌ يُنفّذ `scrypt` كاملاً — وإلّا فرزت الساعةُ المسجَّلَ من غيره', async () => {
+    /* بلا هذا: بريدٌ غير مسجَّلٍ يعود ٤٠١ بعد قراءةٍ واحدةٍ (نحو خمسة مِلّي)
+       والمسجَّلُ بعد `scrypt` كامل (نحو مئة). فطلبٌ واحدٌ لكلّ بريدٍ يفرز
+       المسجَّلَ بالساعة وحدها — وحدُّ ٥/دقيقة/حساب لا يمسّ ذلك لأنّ الإحصاء
+       يستعمل بريداً مختلفاً في كلّ طلب. */
+    const decoy = passwordHashOrDecoy(undefined);
+
+    /* ⚠️ والطولُ هو الحِمل: قيمةٌ قصيرةٌ أو مشوّهةٌ يرفضها `verifyPassword`
+       على فحص `alg`/الطول **بلا أن تُشغّل `scrypt`** — فيعود المقياسُ من حيث
+       أُغلق، صامتاً. فالبنيةُ تطابق `hashPassword`: ملحٌ ١٦، مفتاحٌ ٦٤. */
+    const [alg, salt, key] = decoy.split('$');
+    expect(alg).toBe('scrypt');
+    expect(Buffer.from(salt!, 'base64')).toHaveLength(16);
+    expect(Buffer.from(key!, 'base64')).toHaveLength(64);
+
+    const real = await hashPassword('x');
+    const [, rSalt, rKey] = real.split('$');
+    expect(salt!.length, 'شكلُ الشَّرَك يخالف شكلَ الحقيقيّة').toBe(rSalt!.length);
+    expect(key!.length).toBe(rKey!.length);
+
+    expect(await verifyPassword('أيّ-كلمة', decoy), 'الشَّرَكُ يقبل كلمةً').toBe(false);
+    expect(passwordHashOrDecoy('scrypt$a$b'), 'الحقيقيّةُ تُستبدَل').toBe('scrypt$a$b');
+  });
+
   it('تتحقّق من الصحيحة وترفض الخاطئة', async () => {
     const h = await hashPassword('كلمة-سرّ-قويّة-123');
     expect(await verifyPassword('كلمة-سرّ-قويّة-123', h)).toBe(true);

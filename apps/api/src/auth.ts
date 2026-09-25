@@ -29,6 +29,32 @@ export async function verifyPassword(plain: string, stored: string): Promise<boo
   return key.length === expected.length && timingSafeEqual(key, expected);
 }
 
+/**
+ * ★★★ **تجزئةٌ شَرَك — لتساوي زمنِ الردّ.**
+ *
+ *   بريدٌ غير مسجَّلٍ كان يعود ٤٠١ بعد قراءةٍ واحدةٍ من القاعدة (نحو خمسة
+ *   مِلّي)، والمسجَّلُ بعد `scrypt` كامل (نحو مئة). فطلبٌ واحدٌ لكلّ بريدٍ يفرز
+ *   المسجَّلَ من غيره **بالساعة وحدها**، وحدُّ ٥/دقيقة/حساب لا يمسّ ذلك لأنّ
+ *   كلَّ بريدٍ عدّادُه الخاصّ — والإحصاءُ يستعمل بريداً مختلفاً في كلّ طلب.
+ *
+ *   فتُنفَّذ التجزئة في كلّ الأحوال: مفتاحٌ عشوائيٌّ أربعةٌ وستّون بايتاً لا
+ *   تساويه كلمةُ سرٍّ أبداً، وبنفس المُعامِلات فالكلفةُ هي الكلفةُ نفسُها.
+ *   ويُولَّد مرّةً عند الإقلاع فلا سرَّ مكتوباً في المستودع.
+ *
+ * ⚠️ وبنيتُه تطابق `hashPassword` بالضبط (ملحٌ ١٦، مفتاحٌ ٦٤): قيمةٌ قصيرةٌ
+ *    أو مشوّهةٌ يرفضها `verifyPassword` على فحص `alg`/الطول **بلا أن تُشغّل
+ *    `scrypt`** — فيعود المقياسُ الزمنيُّ من حيث أُغلق، صامتاً.
+ */
+const DECOY_HASH = `scrypt$${randomBytes(16).toString('base64')}$${randomBytes(64).toString('base64')}`;
+
+/**
+ * يُستدعى **خارج** أيّ معاملة: `scrypt` يحتجز خانةً من بِركة libuv نحو مئة
+ * مِلّي، وداخل معاملةٍ يحتجز معها اتّصالاً من بِركة العشرة.
+ */
+export function passwordHashOrDecoy(stored: string | undefined): string {
+  return stored ?? DECOY_HASH;
+}
+
 /* ───────────────────────── التوكنات ───────────────────────── */
 
 export interface AccessClaims {
@@ -248,8 +274,12 @@ export async function registerAuth(app: FastifyInstance) {
     const user = rows[0]?.u;
     // رسالةٌ واحدة للحالتين — لا نكشف أيّ بريدٍ مسجَّل
     const bad = () => new AppError(ErrorCode.UNAUTHORIZED, 'البريد أو كلمة السرّ غير صحيحة', 401);
-    if (!user || !user.isActive) throw bad();
-    if (!(await verifyPassword(password, user.passwordHash))) throw bad();
+    /* ★ **التجزئةُ تُنفَّذ قبل أيّ قرار — لا خروجَ مبكِّراً على بريدٍ مجهول.**
+       الخروجُ المبكِّر هو التسريبُ نفسُه: انظر `DECOY_HASH` أعلاه. وأسبابُ
+       الرفض الثلاثة (لا بريدَ كهذا · حسابٌ معطَّل · كلمةٌ خاطئة) تكلّف الآن
+       تجزئةً واحدةً وتعود بنفس الجسم. */
+    const ok = await verifyPassword(password, passwordHashOrDecoy(user?.passwordHash));
+    if (!user || !user.isActive || !ok) throw bad();
 
     /* ★ **حالةُ المستأجر تُفحص بعد كلمة السرّ لا قبلها.**
        قبلَها تصير مقياساً يُميّز بريداً مسجَّلاً من غيره بلا معرفة الكلمة.

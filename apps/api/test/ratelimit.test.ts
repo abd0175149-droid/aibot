@@ -177,6 +177,21 @@ describe('★ الحدُّ مُركَّبٌ فعلاً على الدخول', () 
     expect(iHash).toBeGreaterThan(iRate);
   });
 
+  it('★★★ ولا خروجَ على بريدٍ مجهولٍ قبل التجزئة — الخروجُ المبكِّر هو التسريب', () => {
+    /* كان السطرُ `if (!user || !user.isActive) throw bad();` يسبق التجزئة،
+       فبريدٌ غير مسجَّلٍ يعود بعد قراءةٍ واحدةٍ والمسجَّلُ بعد `scrypt` كامل.
+       والقرارُ الآن واحدٌ بعد تجزئةٍ واحدةٍ في كلّ الأحوال. */
+    expect(AUTH_CODE).toMatch(/verifyPassword\(password, passwordHashOrDecoy\(user\?\.passwordHash\)\)/);
+    expect(AUTH_CODE, 'الخروجُ المبكِّر عاد')
+      .not.toMatch(/if \(!user \|\| !user\.isActive\) throw bad\(\)/);
+    /* والتجزئةُ خارج أيّ معاملة: `scrypt` يحتجز خانةً من بِركة libuv نحو مئة
+       مِلّي، وداخل معاملةٍ يحتجز معها اتّصالاً من بِركة العشرة. */
+    const iTx = AUTH_CODE.indexOf('مصادقة: البحث عن المستخدم بالبريد');
+    const iClose = AUTH_CODE.indexOf('.limit(1));', iTx);
+    const iHash = AUTH_CODE.indexOf('verifyPassword(password');
+    expect(iHash, 'التجزئةُ داخل المعاملة').toBeGreaterThan(iClose);
+  });
+
   it('★ الحدُّ قبل قراءة المستخدم — فلا يكشف أيَّ بريدٍ مسجَّل', () => {
     const iRate = AUTH_CODE.indexOf('enforceRate(');
     const iLookup = AUTH_CODE.indexOf('مصادقة: البحث عن المستخدم بالبريد');
