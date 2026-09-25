@@ -456,8 +456,39 @@ export async function registerBot(app: FastifyInstance) {
           409,
         );
       }
+      /* ★ **ولا تراجعَ وفي الطابور نسخةٌ تُضمَّن الآن.**
+         `embed.ts` يكتب `publishedVersionId = job.versionId` **بلا شرط** عند
+         الجهوز، فتراجعٌ يقع قبله يُمحى من تحت المالك بعد دقيقة: الشاشةُ قالت
+         «عاد بوتك إلى v3» ثمّ صارت الحيّةُ v7 بلا فعلٍ ولا رسالة — وهو أسوأ
+         من رفضٍ صريح. والفحصُ أعلاه يحرس **النسخةَ المقصودة** وحدها، وهذا
+         يحرس الطابور. وفتحُ زرّ التراجع في الشاشة هو ما يجعل هذا السباقَ
+         قابلاً للوقوع كلَّ يوم: نشرٌ كبيرُ المعرفة ثمّ تراجعٌ خلال دقيقة. */
+      const busy = (await tx.select({ v: botVersions.version }).from(botVersions)
+        .where(and(eq(botVersions.tenantId, tenantId), eq(botVersions.embedStatus, 'pending')))
+        .orderBy(desc(botVersions.version)).limit(1))[0];
+      if (busy) {
+        throw new AppError(
+          ErrorCode.VALIDATION,
+          `v${busy.v} تُجهَّز معرفتها الآن — انتظر جهوزها ثمّ تراجَع، `
+          + 'وإلّا أعادها التجهيزُ نسخةً حيّةً بعد دقائق من تحتك.',
+          409,
+        );
+      }
+
       await tx.update(botConfigs).set({ publishedVersionId: ver.id })
         .where(eq(botConfigs.tenantId, tenantId));
+
+      /* وصفُّ تدقيقٍ كصفِّ `bot.config`: التراجع يبدّل من يردّ على كلّ زبائن
+         الحساب، فلا يكون الفعلَ الوحيدَ الذي لا يُعرف فاعلُه ولا وقتُه.
+         و`updatedAt` في `bot_configs` **لا تُلمَس**: هي طابعُ المسوّدة الذي
+         تُقارنه الشاشةُ في `PUT /bot/draft`، ولمسُها تُطلق «تغيّرت المسوّدة من
+         مكانٍ آخر» على مالكٍ لم يكتب حرفاً. */
+      await tx.insert(auditLog).values({
+        tenantId, actorUserId: req.auth!.sub,
+        action: 'bot.rollback', entity: 'bot_version', entityId: ver.id,
+        diff: { toVersion: ver.version }, ip: req.ip,
+      });
+
       return { ok: true, version: ver.version };
     });
   });

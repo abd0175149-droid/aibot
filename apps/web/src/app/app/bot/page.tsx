@@ -152,9 +152,20 @@ const TABS = [
   { id: 'kb', label: 'المعرفة' },
   { id: 'tools', label: 'الأدوات' },
   { id: 'behave', label: 'السلوك' },
+  /* ★ والسجلُّ بيتٌ ثابت: إلحاقُه بتبويب الشخصيّة يدفع الحقلَ الذي تُفتح
+     الشاشةُ لأجله تحت الطيّة. */
+  { id: 'versions', label: 'النسخ' },
 ] as const;
 
 type TabId = (typeof TABS)[number]['id'];
+
+/**
+ * ★ معرّفٌ واردٌ من **خارج** الشاشة (‏`?tab=`) يُقاس على القائمة أعلاه.
+ *   رابطٌ قديمٌ أو مصنوعٌ بقيمةٍ لا نعرفها كان سيضع الشاشة على تبويبٍ لا وجود
+ *   له: لا يُرسم شيءٌ تحت الشريط — شاشةٌ فارغةٌ بلا خطأٍ في أيّ سجلّ.
+ */
+const isTabId = (v: string | null): v is TabId =>
+  v !== null && TABS.some((t) => t.id === v);
 
 /**
  * ★ **«توكن» لا تُكتب في واجهة صاحب مطعم.** الوحدة المعروضة «وحدة قراءة»،
@@ -333,12 +344,13 @@ function usePoll(active: boolean, ms: number, max: number, fn: () => void): bool
   return active && ticks >= max;
 }
 
-type Busy = 'save' | 'publish' | 'toggle' | null;
+type Busy = 'save' | 'publish' | 'toggle' | 'rollback' | null;
 /** ورقةُ تأكيدٍ مفتوحة — واحدةٌ لا أكثر. */
 type Ask =
   | null
   | { k: 'stop' }
   | { k: 'publish' }
+  | { k: 'rollback'; id: string; version: number }
   | { k: 'tool'; id: string; name: string };
 
 export default function BotPage() {
@@ -368,6 +380,18 @@ export default function BotPage() {
   const [busyTool, setBusyTool] = useState<string | null>(null);
   const [ask, setAsk] = useState<Ask>(null);
   /**
+   * ★★★ **تعارضُ المسوّدة — وموضعُ الخُطّاف هو العطل.**
+   *
+   *   كان معرَّفاً **تحت** الارتدادَين المبكّرَين (`bot.loading && !bot.data`):
+   *   فالرسمُ الأوّلُ يرتدّ هيكلاً بعددٍ من الخُطّافات، والرسمُ التالي — لحظةَ
+   *   وصول `/bot` — يمرّ فيستدعي خُطّافاً إضافيّاً. وReact ترفض ذلك رفضاً
+   *   قاطعاً («خُطّافاتٌ أكثرُ من الرسم السابق») فتسقط شاشةُ البوت كلُّها إلى
+   *   حدّ الخطأ لحظةَ وصول بياناتها — أي **دائماً**.
+   *
+   *   ولذلك يسكن هنا مع بقيّة الخُطّافات، بلا شرطٍ قبله.
+   */
+  const [conflict, setConflict] = useState(false);
+  /**
    * قفلٌ متزامن على الحفظ. الضغط على «احفظ المسوّدة» يُخرج التركيز من الحقل
    * أوّلاً، فيقع حفظُ المغادرة ثمّ حفظُ النقرة في نفس الدورة — طلبان ورسالتان
    * لفعلٍ واحد. و`busy` حالةٌ لا تُقرأ قبل إعادة الرسم، فالمرجع هو ما يمنعه.
@@ -396,6 +420,24 @@ export default function BotPage() {
       full: Boolean(d && typeof d.persona === 'string' && typeof d.knowledgeBase === 'string'),
     });
   }, [bot.data]);
+
+  /**
+   * ★ **وِجهةٌ من شاشةٍ أخرى — والرابطُ كان يَحمل ولا يُقرأ.**
+   *
+   *   «افتح المعرفة» في الرئيسيّة (وكلُّ صفِّ سؤالٍ عجز عنه بوتك) و«معرفتُها»
+   *   و«أدواتُها» في الساحة كلُّها تؤدّي إلى هنا بـ`?tab=kb` أو `?tab=tools`،
+   *   وهذه الشاشةُ كانت تُفتح على «الشخصيّة» في كلّ مرّة. فمن ضغط «افتح
+   *   المعرفة» وهو يقرأ سؤالاً عجز عنه بوتُه يجد نفسَه في حقلٍ آخر ويبحث عن
+   *   التبويب بنفسه — وتلك حلقةُ المنتج الأساسيّة: «أخطأ ← أضِف ← جرّب ← انشر».
+   *
+   * ⚠️ ويُقرأ المرشّح **بعد** التركيب لا في أثناء الرسم: قراءةُ `location` في
+   *    الرسم تُخالف ما رسمه الخادمُ فيسقط الترطيب. ولا وميضَ من ذلك هنا:
+   *    أوّلُ رسمٍ هيكلٌ عظميّ، والتبويبُ مضبوطٌ قبل أن يظهر أيُّ محتوى.
+   */
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('tab');
+    if (isTabId(t)) setTab(t);
+  }, []);
 
   /* ── ما يُحسب قبل أيّ ارتدادٍ مبكّر: الخُطّافات لا تُشترَط ── */
   const cfg = bot.data?.config ?? null;
@@ -529,6 +571,14 @@ export default function BotPage() {
     ?? (!changed ? 'لا فرق عن النسخة المنشورة — لا شيء لتنشره.' : null)
     ?? (unsaved ? 'على الشاشة تغييرٌ غير محفوظ. احفظ المسوّدة أوّلاً — النشر ينشر المحفوظة.' : null);
   const saveReason = lockReason ?? (!unsaved ? 'لا تغييرَ غير محفوظ.' : null);
+  /**
+   * ★ سببُ منع التراجع — والثاني منه ليس تجميلاً: `embed.ts` يكتب النسخةَ
+   *   الحيّةَ بلا شرطٍ عند الجهوز، فتراجعٌ الآن يُمحى بعد دقيقةٍ بلا رسالة.
+   */
+  const rollbackReason = lockReason
+    ?? (pendingEmbed
+      ? `v${pendingVersion} تُجهَّز معرفتها الآن — والتراجع يُتاح بعد جهوزها.`
+      : null);
 
   /**
    * ★ **الحفظُ يُرسل ما تعرفه هذه الشاشة، ويحمل معه طابعَ ما قرأته.**
@@ -538,9 +588,10 @@ export default function BotPage() {
    *   بحفظٍ تلقائيٍّ من تبويبٍ آخرَ ما زال مفتوحاً — والساحةُ قالت «أُضيف».
    *   ثمّ يعود البوتُ إلى الخطأ نفسه أمام الزبون، فتنكسر حلقةُ «أخطأ ← أضِف
    *   ← جرّب ← انشر» كلُّها، وهي حلقةُ المنتج الأساسيّة.
+   *
+   * ⚠️ و`conflict` معرَّفٌ مع بقيّة الخُطّافات في أعلى المكوّن لا هنا: خُطّافٌ
+   *    بعد ارتدادٍ مبكّرٍ يُسقط الشاشة كلَّها.
    */
-  const [conflict, setConflict] = useState(false);
-
   async function saveDraft(force = false) {
     if (saving.current) return;
     saving.current = true;
@@ -692,6 +743,32 @@ export default function BotPage() {
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'تعذّر الحذف');
     } finally { setBusyTool(null); }
+  }
+
+  /**
+   * ★ **التراجع — المسارُ في الخادم منذ كُتب ولم يكن له زرٌّ في أيّ شاشة.**
+   *
+   *   `POST /bot/versions/:id/rollback` قائمٌ ومحصَّنٌ (يرفض `pending` و`failed`)،
+   *   و`/bot/versions` كان يُجلَب ليُشتقّ منه حالُ التضمين وحدَه — فالصفوفُ لا
+   *   تُعرض، ولا نسخةَ غيرُ الحيّة تُسمّى ولا تُختار من أيّ شاشة. والتعليقُ نفسُه
+   *   في هذا الملفّ كان يقول «فقدٌ لا يستطيع العميل التراجع عنه من هذه الشاشة».
+   *
+   *   وهو **نشرُ نسخةٍ قديمة** لا تعديلٌ في مكانه: لا تُحذف نسخةٌ ولا يُفقد
+   *   تاريخ. ولا يمسّ المسوّدة — فما على الشاشة يبقى، ويُنشر متى شاء المالك.
+   */
+  async function rollback(id: string, version: number) {
+    setBusy('rollback');
+    try {
+      await post(`/bot/versions/${id}/rollback`);
+      setAsk(null);
+      /* وذاكرةُ «نسخةٌ تُجهَّز» تُطفأ: بقاؤها يُعطّل زرَّ النشر بحجّةٍ زالت. */
+      setPending(null);
+      toast(`عاد بوتك إلى v${version} — وهي التي تردّ على زبائنك الآن`);
+      await bot.reload();
+      await vers.reload();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'تعذّر التراجع');
+    } finally { setBusy(null); }
   }
 
   /* شارةُ التبويب للمعطَّل آليّاً وحده: عددُ الأدوات ليس تنبيهاً، والتعطيل هو. */
@@ -855,6 +932,10 @@ export default function BotPage() {
   } else if (tab === 'tools') {
     dockPrimary = newToolBtn(true);
     dockHint = 'كلّ أداةٍ نداءٌ إلى نظامك — والبوت يستعملها بوصفها، فالوصف نصف الأداة.';
+  } else if (tab === 'versions') {
+    /* ولا `dockPrimary` هنا: الفعلُ في صفّ النسخة نفسِها لا في الرصيف —
+       فعلٌ لكلّ سطرٍ لا فعلٌ واحدٌ للشاشة. */
+    dockHint = 'التراجع نشرُ نسخةٍ قديمة — لا يُحذف شيءٌ، ومسوّدتك على الشاشة تبقى كما هي.';
   } else if (tab === 'behave') {
     dockHint = 'لا شيء في هذا التبويب يُعدَّل من هنا — وما تُعدّله أنت في «الشخصيّة» و«المعرفة».';
     dockPrimary = <Button onClick={() => setTab('persona')}>اذهب إلى الشخصيّة</Button>;
@@ -1554,6 +1635,73 @@ export default function BotPage() {
             />
           )
         )}
+
+        {/* ═══════════════ النسخ ═══════════════ */}
+        {tab === 'versions' && (
+          <Stack gap="md">
+            <Note tone="brand">
+              <b>التراجع نشرُ نسخةٍ قديمة</b> — لا تُحذف نسخةٌ ولا يُفقد تاريخ، ومسوّدتك على
+              الشاشة تبقى كما هي. ولا تُقطع محادثةٌ جاريةٌ مع زبون.
+            </Note>
+            <DataView
+              state={vers}
+              skeletonRows={4}
+              empty={{
+                when: (d) => d.length === 0,
+                title: 'لا نسخةَ بعد',
+                hint: 'كلُّ نشرٍ يُنشئ نسخةً تبقى هنا، ومنها تعود إلى أيّ نسخةٍ سابقة. اكتب الشخصيّة والمعرفة ثمّ انشر.',
+                action: <Button onClick={() => setTab('persona')}>اذهب إلى الشخصيّة</Button>,
+              }}
+            >
+              {(rows) => (
+                <div className="sect">
+                  <div className="sect-h">
+                    <h2>نسخُ بوتك</h2>
+                    <span className="sect-c">الأحدث أوّلاً</span>
+                  </div>
+                  <div className="rows bot-rows">
+                    {rows.map((v) => {
+                      const isLive = v.version === pubVersion;
+                      /* سببُ المنع يُقال في موضعه: الخادم يرفض `pending`
+                         و`failed` برسالتَيه، والشاشةُ تقولهما قبل النقرة. */
+                      const why = isLive
+                        ? 'هذه النسخة تخدم زبائنك الآن.'
+                        : v.embedStatus === 'pending'
+                          ? 'ما زالت معرفتها تُجهَّز — انتظر جهوزها.'
+                          : v.embedStatus === 'failed'
+                            ? 'فشل تجهيز معرفتها، فلو عادت أجاب بوتك «لا أعرف» عن كلّ شيء. انشر مسوّدتك من جديد.'
+                            : rollbackReason;
+                      return (
+                        <div className="row-m" key={v.id}>
+                          <span className="rm-k">
+                            <span className="num">{`v${v.version}`}</span>
+                            <span className="rm-note" dir="auto">{v.note?.trim() || 'بلا ملاحظة'}</span>
+                          </span>
+                          <span className="rm-v">{fmt.when(v.publishedAt)}</span>
+                          <span className="rm-c">
+                            {isLive && <Tag tone="ok" label="تخدم زبائنك الآن" />}
+                            {!isLive && v.embedStatus === 'pending' && <Tag tone="warn" label="تُجهَّز معرفتها" />}
+                            {!isLive && v.embedStatus === 'failed' && <Tag tone="crit" label="فشل تجهيز معرفتها" />}
+                            {!isLive && (
+                              <Button
+                                size="sm"
+                                disabled={Boolean(why)}
+                                reason={why ?? undefined}
+                                onClick={() => setAsk({ k: 'rollback', id: v.id, version: v.version })}
+                              >
+                                عُد إليها
+                              </Button>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+            </DataView>
+          </Stack>
+        )}
       </div>
 
       {/* ═══ الرصيف: آخرُ صفٍّ في العمود، لاصقٌ بأسفل المُمرِّر ═══ */}
@@ -1684,6 +1832,44 @@ export default function BotPage() {
         </p>
         <p className="muted-p">
           وإن كان العطل مؤقّتاً عند نظامك فالأفضل تعطيلها لا حذفها — تعود بنقرةٍ بعد الإصلاح.
+        </p>
+      </Sheet>
+
+      <Sheet
+        open={ask?.k === 'rollback'}
+        title="عُد إلى نسخةٍ سابقة؟"
+        onClose={() => setAsk(null)}
+        hint="التراجع نشرُ نسخةٍ قديمة — لا تُحذف نسخةٌ ولا تُقطع محادثةٌ جارية."
+        footer={(
+          <Row gap="sm">
+            <Button
+              variant="primary"
+              wide
+              busy={busy === 'rollback'}
+              disabled={Boolean(rollbackReason)}
+              reason={rollbackReason ?? undefined}
+              onClick={() => { if (ask?.k === 'rollback') void rollback(ask.id, ask.version); }}
+            >
+              عُد إليها الآن
+            </Button>
+            <Button onClick={() => setAsk(null)}>أبقِ الحالية</Button>
+          </Row>
+        )}
+      >
+        <p className="muted-p">
+          {ask?.k === 'rollback'
+            ? (
+              <>
+                يردّ بوتك بـ<span className="num">{`v${ask.version}`}</span> على كلّ رسالةٍ قادمة
+                بدل <span className="num">{`v${pubVersion}`}</span> — بشخصيّتها ومعرفتها كما
+                كانت يومَ نُشرت.
+              </>
+            )
+            : null}
+        </p>
+        <p className="muted-p">
+          ومسوّدتك على الشاشة <b>لا تُمسّ</b>: بعد التراجع يعود شريطُ «تغييراتك لم تصل زبائنك
+          بعد» لأنّ ما كتبتَه صار مختلفاً عن النسخة الحيّة — وتنشره متى شئت.
         </p>
       </Sheet>
     </div>

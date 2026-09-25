@@ -184,3 +184,140 @@ describe('الحزمةُ المشتركة تُحلّ في بناء الواجه�
     expect(readFileSync(join(APP, 'rev', 'route.ts'), 'utf8')).toContain('process.env.GIT_REV');
   });
 });
+
+/**
+ * ★ **رابطٌ يحمل مرشّحاً لا تقرؤه شاشتُه الوجهة — عطلٌ لا يصرخ.**
+ *
+ *   ستّةُ روابطَ من الرئيسيّة والساحة تؤدّي إلى `/app/bot?tab=kb|tools`، وشاشةُ
+ *   البوت لم تكن تقرأ `tab` إطلاقاً: تُفتح على «الشخصيّة» دائماً، ولا خطأَ في
+ *   سجلٍّ ولا في بناء. ومن ضغط «افتح المعرفة» وهو يقرأ سؤالاً عجز عنه بوتُه
+ *   يجد نفسَه في حقلٍ آخر — وتلك حلقةُ المنتج: «أخطأ ← أضِف ← جرّب ← انشر».
+ *
+ *   وعطلُ الطرفَين لا يُلتقط إلّا بحارسٍ يقرأ الطرفَين معاً.
+ */
+describe('كلُّ مرشّحٍ في رابطٍ داخليٍّ تقرؤه شاشتُه الوجهة', () => {
+  const tsxFiles = (dir: string): string[] => readdirSync(dir, { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory()
+      ? tsxFiles(join(dir, e.name))
+      : e.name.endsWith('.tsx') ? [join(dir, e.name)] : []));
+
+  /* التعليقاتُ تُنزع قبل المسح: رابطٌ مذكورٌ في شرحٍ ليس رابطاً في الشجرة،
+     وماسحٌ لا يُعمي التعليقات يبلّغ عن شرحه هو. */
+  const strip = (t: string) => t
+    .replace(/\/\*[\s\S]*?\*\//g, ' ')
+    .replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+
+  const links = tsxFiles(APP).flatMap((f) => [
+    ...strip(readFileSync(f, 'utf8'))
+      .matchAll(/href=[{]?["'`](\/[a-z0-9/_-]+)\?([a-zA-Z_]+)=([^"'`&]*)/g),
+  ].map((m) => ({ file: f.slice(APP.length), route: m[1]!, param: m[2]!, value: m[3]! })));
+
+  it('الماسحُ يجد الروابطَ فعلاً — فلا يمرّ الحارسُ بالفراغ', () => {
+    expect(links.length, 'صفرُ روابطَ يعني ماسحاً معطوباً لا شجرةً نظيفة').toBeGreaterThanOrEqual(4);
+    expect(links.some((l) => l.route === '/app/bot' && l.param === 'tab')).toBe(true);
+  });
+
+  it('★ والشاشةُ الوجهة تقرأ المرشّح باسمه', () => {
+    const deaf = [...new Set(links.filter((l) => {
+      const page = join(APP, l.route, 'page.tsx');
+      if (!existsSync(page)) return true;
+      return !readFileSync(page, 'utf8').includes(`get('${l.param}')`);
+    }).map((l) => `${l.route}?${l.param}= (من ${l.file})`))];
+    expect(deaf, 'رابطٌ يحمل مرشّحاً تُهمله شاشتُه: يُقرأ عطلاً ولا يظهر في سجلّ').toEqual([]);
+  });
+
+  it('★ وقيمةُ `?tab=` من تبويبات شاشة البوت نفسها — لا معرّفٌ مختلَق', () => {
+    const bot = readFileSync(join(APP, 'app', 'bot', 'page.tsx'), 'utf8');
+    const decl = /const TABS = \[([\s\S]*?)\] as const;/.exec(bot)?.[1] ?? '';
+    const ids = [...decl.matchAll(/id: '([a-z]+)'/g)].map((m) => m[1]!);
+    expect(ids, 'تغيّر شكلُ TABS — حدِّث هذا الحارس').toContain('persona');
+    for (const l of links.filter((x) => x.param === 'tab')) {
+      expect(ids, `«${l.value}» في ${l.file} ليس تبويباً في شاشة البوت`).toContain(l.value);
+    }
+  });
+});
+
+/**
+ * ★★★ **خُطّافٌ بعد ارتدادٍ مبكّرٍ يُسقط الشاشة كلَّها — وقد وقع فعلاً.**
+ *
+ *   `apps/web/src/app/app/bot/page.tsx` عرّف `useState` بعد
+ *   `if (bot.loading && !bot.data) return <Skeleton/>`: فالرسمُ الأوّل يرتدّ
+ *   بعددٍ من الخُطّافات، والرسمُ التالي — لحظةَ وصول `/bot` — يمرّ فيستدعي
+ *   خُطّافاً إضافيّاً، وReact ترفض ذلك رفضاً قاطعاً. فكانت شاشةُ البوت تسقط إلى
+ *   حدّ الخطأ **لحظةَ وصول بياناتها**، أي دائماً — ولا `tsc` ولا البناءُ ولا
+ *   أيُّ حارسٍ قائمٍ يقول ذلك.
+ *
+ * ⚠️ والمسحُ **مُقيَّدٌ بكلّ دالّةٍ على حدة**: `readUnits` في نفس الملفّ تبدأ
+ *    بـ`if (!s) return 0;`، وماسحٌ يقرأ الملفَّ كتلةً واحدةً يعدّها ارتداداً
+ *    مبكّراً فيبلّغ عن كلّ خُطّافٍ بعدها — ثمانيةُ إنذاراتٍ كاذبةٍ تُخرس الحارس.
+ */
+describe('لا خُطّافَ بعد ارتدادٍ مبكّرٍ في أيّ شاشة', () => {
+  const HOOK = /^ {2}(?:const|let) .*=\s*use[A-Z]\w*\(/;
+  const EFFECT = /^ {2}use(?:Effect|LayoutEffect|Memo|Callback|ImperativeHandle)\(/;
+  /* ارتدادٌ على مستوى الدالّة: مسافتان بالضبط. أعمقُ من ذلك جسمُ حَلقةٍ أو
+     دالّةٍ داخليّةٍ، ولا شأنَ لترتيب الخُطّافات به. */
+  const EARLY = /^ {2}if \(.*\)\s*return\b/;
+  const START = /^(?:export\s+)?(?:default\s+)?function\s+\w+|^(?:export\s+)?const\s+\w+\s*=\s*(?:function\b|\()/;
+
+  /** يُعيد مواضعَ كلّ خُطّافٍ يتلو ارتداداً مبكّراً **في الدالّة نفسِها**. */
+  const hooksAfterEarlyReturn = (src: string): number[] => {
+    const lines = src
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|[^:])\/\/[^\n]*/g, '$1')
+      .split(/\r?\n/);
+    const starts = lines.flatMap((t, i) => (START.test(t) ? [i] : []));
+    starts.push(lines.length);
+    const out: number[] = [];
+    for (let k = 0; k + 1 < starts.length; k += 1) {
+      const seg = lines.slice(starts[k]!, starts[k + 1]!);
+      const early = seg.findIndex((t) => EARLY.test(t));
+      if (early < 0) continue;
+      const hook = seg.slice(early + 1).findIndex((t) => HOOK.test(t) || EFFECT.test(t));
+      if (hook >= 0) out.push(starts[k]! + early + hook + 2);
+    }
+    return out;
+  };
+
+  it('الماسحُ يجد العطلَ فعلاً — وهذه هي صورتُه التي وقعت', () => {
+    const sample = [
+      'export default function P() {',
+      "  const a = useApi('/x');",
+      '  if (a.loading && !a.data) return null;',
+      '  const [b, setB] = useState(false);',
+      '  return <div>{b}</div>;',
+      '}',
+    ].join('\n');
+    expect(hooksAfterEarlyReturn(sample)).toEqual([4]);
+  });
+
+  it('ولا يُنذر كاذباً على ارتدادٍ في دالّةٍ **أخرى**', () => {
+    const sample = [
+      'function readUnits(s: string) {',
+      '  if (!s) return 0;',
+      '  return s.length;',
+      '}',
+      'export default function P() {',
+      '  const [b, setB] = useState(false);',
+      '  return <div>{b}</div>;',
+      '}',
+    ].join('\n');
+    expect(hooksAfterEarlyReturn(sample)).toEqual([]);
+  });
+
+  const tsx = (dir: string): string[] => readdirSync(dir, { withFileTypes: true })
+    .flatMap((e) => (e.isDirectory()
+      ? tsx(join(dir, e.name))
+      : e.name.endsWith('.tsx') ? [join(dir, e.name)] : []));
+
+  const files = [...tsx(APP), ...tsx(join(APP, '..', 'components'))];
+
+  it('والماسحُ يقرأ الشجرةَ فعلاً', () => {
+    expect(files.length).toBeGreaterThan(10);
+  });
+
+  it('★ وكلُّ خُطّافٍ يسبق كلَّ ارتدادٍ مبكّرٍ في دالّته', () => {
+    const bad = files.flatMap((f) => hooksAfterEarlyReturn(readFileSync(f, 'utf8'))
+      .map((n) => `${f.slice(APP.length)}:${n}`));
+    expect(bad, 'خُطّافٌ بعد ارتدادٍ مبكّر: React تُسقط الشاشة لحظةَ وصول بياناتها').toEqual([]);
+  });
+});
