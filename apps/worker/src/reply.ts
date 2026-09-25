@@ -18,6 +18,7 @@ import { RagKnowledge } from './retrieval.js';
 import { execTenantTool } from './tools.js';
 import { raiseIncident, resolveOpenOfKinds } from './incidents.js';
 import { resolveAiKey, priceAt } from './pricing.js';
+import { acquireConvLock, releaseConvLock, scheduleFollowUp } from './enqueue.js';
 
 /**
  * عامل الردّ.
@@ -25,7 +26,46 @@ import { resolveAiKey, priceAt } from './pricing.js';
  * البوّابات تُفحص بالترتيب قبل أيّ نداءٍ للنموذج — ونداءٌ واحدٌ بلا داعٍ
  * هو كلفةٌ حقيقيّة على هامشك، لا مجرّد بطء.
  */
+/**
+ * ★★★ **ردٌّ واحدٌ لكلّ محادثةٍ في وقتٍ واحد — وقفلُ BullMQ لا يكفي.**
+ *
+ *   قفلُ BullMQ لكلّ **معرّفِ مهمّة** لا لكلّ محادثة، وتزامنُ `bot-reply`
+ *   ثلاثة. فمهمّتان بمعرّفَين مختلفَين على المحادثة نفسها تعملان معاً — قِيس
+ *   ذلك على طابورٍ مؤقّت: `MAX_CONCURRENT_ON_SAME_CONVERSATION=2`. ونتيجتُه
+ *   نداءان للنموذج يقرأ كلٌّ منهما تاريخاً لا يحوي ردَّ الآخر: يصل الزبونَ
+ *   ترحيبان متداخلان، ويدفع المالكُ مرّتين لسؤالٍ واحد، وقد يكتب الاثنان
+ *   `pendingAction` مختلفَين على الصفّ نفسه فينفّذ زرٌّ واحدٌ غيرَ ما يظنّه.
+ *
+ *   والمحجوبُ **لا يُهمَل ولا يُعاد**: `acquireConvLock` تكتب علامةً ذرّيّاً
+ *   عند فشل الأخذ، وحاملُ القفل يقرؤها عند تحرّره فيجدول متابعةً واحدةً ترى
+ *   التاريخَ كاملاً بما فيه ردُّه. فردّان **متسلسلان** لا أربعةٌ متوازية.
+ *
+ * ⚠️ والإفراجُ في `finally`: مهمّةٌ تفشل وتُعاد لا بدّ أن تجد القفلَ حرّاً،
+ *    وإلّا حجب العاملُ نفسَه ثلاثَ مرّاتٍ حتّى تنتهي مهلةُ القفل.
+ * ⚠️ ولا يُفرَج إلّا عن قفلِنا: الرمزُ يُطابَق داخل السكربت. `DEL` أعمى
+ *    يُفرِج عن قفلِ غيرِنا إن انتهت مهلتُنا وأخذه سواه — فيعود التوازي.
+ */
 export async function handleReply(job: { conversationId: string }): Promise<void> {
+  const token = await acquireConvLock(job.conversationId);
+  if (!token) {
+    console.log(JSON.stringify({
+      level: 'info', svc: 'worker',
+      msg: 'ردٌّ آخرُ يعمل على المحادثة — وُسمت وتُستأنف عند تحرّره',
+      conversationId: job.conversationId,
+    }));
+    return;
+  }
+  try {
+    await replyLocked(job);
+  } finally {
+    /* لا يُسقط المهمّة: خطأُ ريدِس هنا لا يُبطل ردّاً أُرسل، ومهلةُ القفل
+       تُفرِج عنه بعد ثلاث دقائقَ في أسوأ الحالات. */
+    const dirty = await releaseConvLock(job.conversationId, token).catch(() => false);
+    if (dirty) await scheduleFollowUp(job.conversationId, 500).catch(() => false);
+  }
+}
+
+async function replyLocked(job: { conversationId: string }): Promise<void> {
   const db = getDb();
 
   /* ★ استنتاج المستأجر من المحادثة — عمليّةٌ عابرةٌ للمستأجرين بطبيعتها.
@@ -138,6 +178,35 @@ export async function handleReply(job: { conversationId: string }): Promise<void
       .where(and(eq(messages.conversationId, conv.id), eq(messages.direction, 'out')))
       .orderBy(desc(messages.createdAt))
       .limit(1))[0]?.at;
+
+    /* ★★★ **لا ردَّ بلا جديد — وهي البوّابةُ التي تجعل المتابعةَ مجّانيّة.**
+
+       متابعةٌ زائدةٌ قد تُجدوَل: المسحُ الدوريّ يوقظ محادثةً موسومة، أو
+       يتسابق حاملُ القفل مع محجوبٍ فيُجدوَل ردٌّ لا جديدَ له. وبلا هذه
+       البوّابة يعني ذلك نداءَ نموذجٍ مدفوعاً ورسالةً مكرّرةً للزبون.
+
+       ⚠️ والمقارنةُ بأحدثِ **واردٍ رآه المخطِّط** لا بآخر صادر. صفُّ الردّ
+          يُحجَز **بعد** التوليد، فتاريخُه أحدثُ من رسالةٍ وصلت في أثنائه —
+          فبوّابةٌ تقارن بالصادر تُسقط تلك الرسالةَ صامتةً ولا يُجاب عليها
+          أبداً. أي لاستبدلنا ردّاً مكرّراً برسالةٍ مهجورة، وهذا أسوأُ. */
+    const newestIn = (await tx
+      .select({ at: messages.createdAt })
+      .from(messages)
+      .where(and(
+        eq(messages.conversationId, conv.id),
+        eq(messages.direction, 'in'),
+        isNull(messages.deletedAt),
+      ))
+      .orderBy(desc(messages.createdAt))
+      .limit(1))[0]?.at;
+    if (!newestIn) return null;                                   // لا واردَ إطلاقاً
+    if (conv.botAnsweredAt && newestIn <= conv.botAnsweredAt) return null;
+
+    /* والعلامةُ تُقدَّم **قبل** التوليد وفي معاملتِه نفسِها: تراجعُ المعاملة
+       يُرجعها فتُعاد المحاولة، وإيداعُها يمنع ردّاً ثانياً على ما أُجيب. */
+    await tx.update(conversations)
+      .set({ botAnsweredAt: newestIn })
+      .where(eq(conversations.id, conv.id));
 
     const pressed = await tx
       .select({ payload: messages.payload })

@@ -44,6 +44,8 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
   /* هل وصلت رسالةُ زبونٍ فعلاً في هذه الدفعة؟ حالاتُ التسليم وحدها لا تُثبت
      أنّ الويبهوك يحمل رسائل، والحادثة التي تُحَلّ أدناه عن الرسائل لا عنها. */
   let sawInbound = false;
+  /* ★ المحادثاتُ التي تستحقّ ردّاً — تُجمع هنا وتُجدوَل **بعد** الإيداع. */
+  const toReply = new Set<string>();
 
   await withTenant(db, job.tenantId, async (tx) => {
     for (const m of job.parsed.messages) {
@@ -141,9 +143,8 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
       });
       emitToTenant(job.tenantId, 'conversation:update', { id: conv.id });
 
-      /* ⑤ جدولة الردّ بتأخيرٍ ومعرّفٍ ثابت — دمج الرسائل المتتالية. */
-      const { enqueueReply } = await import('./enqueue.js');
-      await enqueueReply(conv.id);
+      /* ⑤ المحادثةُ تستحقّ ردّاً — والجدولةُ نفسُها بعد الإيداع أدناه. */
+      toReply.add(conv.id);
       sawInbound = true;
     }
 
@@ -166,6 +167,28 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
       }
     }
   });
+
+  /* ★★★ **جدولةُ الردّ خارج المعاملة** — وكانت داخلها. سببان، كلاهما وقع:
+
+     ① **نداءُ شبكةٍ داخل معاملةٍ يحتجز اتّصالاً.** `enqueueReply` نداءُ
+        ريدِس، والمعاملةُ تنتظره وهي ممسكةٌ باتّصالٍ من بِركةٍ حجمُها عشرة
+        وتزامنُ `ch-inbound` عشرة أيضاً. فحين يسقط ريدِس تتجمّد الاتّصالاتُ
+        كلُّها في `idle in transaction` وتتوقّف القاعدةُ عن خدمة أيّ شيء —
+        وهذا ما يقيسه `drill-redis.ts` بصفٍّ من `pg_stat_activity`، لا بقراءة
+        الكود. والقاعدةُ المكتوبةُ في `reply.ts` صريحة: **لا نداءَ شبكةٍ
+        داخل معاملة.**
+
+     ② **ومعاملةٌ تتراجع تترك مهمّةَ ردٍّ على رسالةٍ لا وجودَ لها.** المهمّةُ
+        في ريدِس لا تتراجع مع المعاملة: يقرأ العاملُ محادثةً بلا الرسالة
+        التي وُلد من أجلها، فيردّ على ما قبلها أو لا يجد شيئاً.
+
+     ⚠️ والفشلُ هنا لا يُبلع: مهمّةٌ لم تُجدوَل تعني رسالةَ زبونٍ بلا ردّ،
+        وهو أحقُّ ما يُعاد له رمي الخطأ — تُعاد المهمّةُ كلُّها، وإدراجُ
+        الرسائل متماثلٌ على القيد الفريد فلا يتكرّر صفٌّ. */
+  if (toReply.size) {
+    const { enqueueReply } = await import('./enqueue.js');
+    for (const id of toReply) await enqueueReply(id);
+  }
 
   /* ⑥ أحداث الحساب (جودة الرقم، مراجعة WABA) خارج معاملة المستأجر —
      تُنتج حوادث لا رسائل. تُنفَّذ في المرحلة الخامسة. */

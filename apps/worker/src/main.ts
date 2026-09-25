@@ -4,6 +4,7 @@ import IORedis from 'ioredis';
 import { closeDb } from '@aibot/db';
 import { handleInbound } from './inbound.js';
 import { handleReply } from './reply.js';
+import { sweepStrandedConversations } from './enqueue.js';
 import { handleEmbed } from './embed.js';
 import { sendOutbound } from './outbound.js';
 import { runHealthPoll, closeExpiredWindows, negativeSignals } from './health.js';
@@ -85,6 +86,11 @@ const workers = [
       log('احتفاظ', Object.fromEntries(r.map((x) => [x.table, x.deleted])));
     } else if (job.name === 'digest') {
       await flushDigest();
+    } else if (job.name === 'stranded') {
+      const n = await sweepStrandedConversations();
+      /* صفرٌ هو الحالةُ السليمة ولا يُسجَّل: سطرٌ كلَّ دقيقةٍ ضجيجٌ يملأ قرصاً
+         هو على ٨٦٪. وما يُقرأ هو الشذوذ — محادثةٌ أُنقذت. */
+      if (n > 0) log('محادثاتٌ موسومةٌ بلا حارسٍ أُعيدت جدولتُها', { n });
     }
   }, { connection, concurrency: 1 }),
 ];
@@ -111,6 +117,12 @@ const SCHED = [
      يُحذف في الدورة التالية — فلا حاجةَ إلى تواترٍ أعلى، والتواترُ العالي
      يعني قفلَ صفوفٍ أكثر بلا فائدة. */
   { q: QUEUE.maintenance, name: 'retention', jobId: 'retention', every: 6 * 60 * 60_000 },
+  /* ★ مسحُ المحادثات الموسومة كلَّ دقيقة — وهو شبكةُ أمانٍ لا آليّةُ عمل.
+     الطريقُ العاديّ أنّ حاملَ القفل يقرأ العلامةَ عند تحرّره؛ وهذا المسحُ
+     لمن مات حاملُه في الأثناء (نشرةٌ، أو قاتلُ الذاكرة). ودقيقةٌ لأنّها
+     تأخيرُ ردٍّ مقبولٌ في أسوأ حالةٍ، والمسحُ `SCAN` على مفاتيحَ قليلةٍ
+     فكلفتُه لا تُذكر. */
+  { q: QUEUE.maintenance, name: 'stranded', jobId: 'stranded-convs', every: 60_000 },
 ] as const;
 
 export const SCHED_EXPECTED = SCHED.length;

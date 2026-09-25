@@ -75,7 +75,12 @@ describe('التفاعلُ حدثٌ لا رسالة', () => {
     const before = i.slice(0, at);
     /* الحارسُ **قبل** فتح النافذة وجدولة الردّ — وإلّا فهو حارسٌ متأخّر. */
     expect(before, 'الحارسُ بعد فتح النافذة لا يمنع الفوترة').not.toContain('openOrExtendWindow(tx');
-    expect(before).not.toContain('enqueueReply(conv.id)');
+    /* ★ والسلسلةُ تُثبَت **موجودةً** أوّلاً: جدولةُ الردّ انتقلت إلى خارج
+       المعاملة (`toReply.add`) فصار `enqueueReply(conv.id)` غائباً عن الملفّ
+       كلِّه — و`not.toContain` على سلسلةٍ غائبةٍ حارسٌ يمرّ على لا شيء. وهذه
+       فئةُ العطل الأخطر في الحرّاس السكونيّة: يمرّ دائماً فيُطَمئن دائماً. */
+    expect(i, 'جدولةُ الردّ غيّرت شكلها — حدّث هذا الحارس').toContain('toReply.add(conv.id)');
+    expect(before).not.toContain('toReply.add(conv.id)');
   });
 
   it('ومع ذلك يُبثّ ويُحفظ — الموظّف يرى أنّ الزبون تفاعل', () => {
