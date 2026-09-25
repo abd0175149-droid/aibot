@@ -260,3 +260,67 @@ describe('★ ترتيبُ ملفّات الترحيل — النشرُ يطبّ
     expect(dup, 'رقمٌ مكرَّر — والترتيبُ بينهما يقرّره الاسمُ العشوائيّ').toEqual([]);
   });
 });
+
+describe('★★★ الوراثةُ كانت تُبطل كلَّ REVOKE على دور التطبيق', () => {
+  /**
+   * كُشف في **أوّل تشغيلٍ** لـ`packages/db/test/rls-leak.sql` — ملفٌّ مكتوبٌ
+   * منذ دفعاتٍ بأحدَ عشرَ تأكيداً لم يُشغّله شيءٌ قطّ. سقط التأكيدُ السابع
+   * فوراً: «✘ خطر: سجلّ التدقيق قابلٌ للتعديل».
+   *
+   * والآليّةُ قِيست على قاعدة الإنتاج نفسِها:
+   *   · المنحُ المباشر لـ`aibot_app` على `audit_log` هو SELECT + INSERT فقط
+   *     — أي أنّ `REVOKE` نجح.
+   *   · لكنّ `0003` يمنح `aibot_platform` صلاحيّاتٍ على **كلّ** الجداول ثمّ
+   *     يمنح عضويّتَه لـ`aibot_app`، والأدوارُ تُنشأ بالافتراض `INHERIT`.
+   *   · فالنتيجة المقيسة:
+   *       has_table_privilege('aibot_app','audit_log','UPDATE') = t
+   *     رغم `REVOKE` صريحَين في ملفَّين. سجلُّ التدقيق يُزوَّر.
+   *
+   * وهذا يخالف التصميمَ الموصوفَ في `0003` بالنصّ: «يُنتقل إليه بـ
+   * `SET LOCAL ROLE` داخل المعاملة وحدها» — والوراثةُ تجعله متاحاً دائماً.
+   */
+  const sql = readdirSync(DIR)
+    .filter((f) => f.endsWith('.sql'))
+    .map((f) => readFileSync(join(DIR, f), 'utf8'))
+    .join('\n');
+
+  it('★ دورُ التطبيق NOINHERIT — صلاحيّاتُ المنصّة بانتقالٍ صريحٍ لا بالوراثة', () => {
+    expect(
+      sql,
+      'بلا NOINHERIT يرث aibot_app كلَّ صلاحيّات aibot_platform، فيُبطل كلَّ REVOKE عليه.',
+    ).toMatch(/ALTER ROLE aibot_app NOINHERIT/);
+  });
+
+  it('★★ وسجلُّ التدقيق يُمنع من **الدورَين** لا من دور التطبيق وحده', () => {
+    /* منعٌ من واحدٍ فقط هو بعينه ما أبطلته الوراثة. ولا سطرَ في الشيفرة
+       كلِّها يعدّل `auditLog` أو يحذف منه، فالمنعُ لا يكلّف شيئاً. */
+    expect(sql).toMatch(/REVOKE UPDATE, DELETE ON audit_log FROM aibot_app/);
+    expect(sql).toMatch(/REVOKE UPDATE, DELETE ON audit_log FROM aibot_platform/);
+  });
+
+  it('★★ وترتيبُ الملفّات يجعل المنعَ **بعد** المنح — وإلّا أُعيد منحُه', () => {
+    /* `0002` يمنح ثمّ يمنع، و`0003` يمنح للمنصّة ويمنح العضويّة. فالمنعُ
+       النهائيُّ يجب أن يقع في ملفٍّ لاحقٍ لكليهما. */
+    const files = readdirSync(DIR).filter((f) => f.endsWith('.sql')).sort();
+    const grantsMembership = files.find((f) =>
+      readFileSync(join(DIR, f), 'utf8').includes('GRANT aibot_platform TO aibot_app'));
+    const noinherit = files.find((f) =>
+      readFileSync(join(DIR, f), 'utf8').includes('ALTER ROLE aibot_app NOINHERIT'));
+    expect(grantsMembership).toBeTruthy();
+    expect(noinherit).toBeTruthy();
+    /* المقارنةُ بالترتيب الأبجديّ — وهو نفسُه ترتيبُ تطبيق `deploy.sh`
+       (‏`for f in …/*.sql`). لا بالقيمة العدديّة: الأسماءُ نصوص. */
+    expect(
+      files.indexOf(noinherit!),
+      'NOINHERIT قبل منح العضويّة — فقد يُعاد ضبطُه',
+    ).toBeGreaterThan(files.indexOf(grantsMembership!));
+  });
+
+  it('★ و`withPlatform` ينتقل صراحةً — فالتصميمُ متّسقٌ مع NOINHERIT', () => {
+    /* NOINHERIT يمنع الاكتسابَ التلقائيّ لا الانتقال: العضويّةُ تكفي
+       لـ`SET ROLE`. وأُثبت على قاعدةٍ مؤقّتة: بعد الانتقال يصير
+       `current_user = aibot_platform` و`rolbypassrls = t`. */
+    const tenant = readFileSync(join(DIR, '..', 'src', 'tenant.ts'), 'utf8');
+    expect(tenant).toContain('SET LOCAL ROLE aibot_platform');
+  });
+});
