@@ -257,7 +257,7 @@ WOK=0
 for i in $(seq 1 60); do
   WBODY="$(curl -fsS -m 5 "http://127.0.0.1:${API_PORT}/api/health" 2>/dev/null || true)"
   WREVOK="$(echo "$WBODY" | grep -c '"worker":true' || true)"
-  WSCHED="$(echo "$WBODY" | sed -n 's/.*"workerSched":\([0-9]*\).*//p')"
+  WSCHED="$(echo "$WBODY" | sed -n 's/.*"workerSched":\([0-9]*\).*/\1/p')"
   if [ "$WREVOK" != "0" ] && [ -n "$WSCHED" ] && [ "$WSCHED" -ge 4 ]; then
     WOK=1; echo "  ✔ العامل حيٌّ و${WSCHED} مجدوِلات مسجَّلة"; break
   fi
