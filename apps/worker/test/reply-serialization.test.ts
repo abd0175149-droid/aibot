@@ -102,18 +102,18 @@ describe('بوّابةُ «لا ردَّ بلا جديد»', () => {
     expect(at, 'العلامةُ لا تُقدَّم').toBeGreaterThan(0);
   });
 
-  it('★ والعلامةُ تُقدَّم في معاملة التخطيط نفسِها', () => {
+  it('★ والعلامةُ تُقدَّم في معاملة القراءة نفسِها (الطور ①)', () => {
     /* تراجعُ المعاملة يُرجعها فتُعاد المحاولة؛ وكتابتُها في معاملةٍ مستقلّةٍ
        تُقدّمها على ردٍّ لم يُخطَّط بعد فتُهجَر الرسالة. */
-    const plan = rep.slice(rep.indexOf('const plan = await withTenant'));
-    const gate = plan.indexOf('botAnsweredAt: newestIn');
-    const close = plan.indexOf('  });', gate);
+    const phase1 = rep.slice(rep.indexOf('const prep: Prep = await withTenant'));
+    const gate = phase1.indexOf('botAnsweredAt: newestIn');
+    const close = phase1.indexOf('\n  });', gate);
     expect(gate).toBeGreaterThan(0);
-    expect(close, 'الكتابةُ خارج معاملة التخطيط').toBeGreaterThan(gate);
+    expect(close, 'الكتابةُ خارج معاملة القراءة').toBeGreaterThan(gate);
   });
 
   it('★ والبوّابةُ قبل نداء النموذج لا بعده', () => {
-    const gate = rep.indexOf('if (!newestIn) return null;');
+    const gate = rep.indexOf("if (!newestIn) return { step: 'stop' };");
     const model = rep.indexOf('await runAgent(');
     expect(gate).toBeGreaterThan(0);
     expect(model).toBeGreaterThan(0);

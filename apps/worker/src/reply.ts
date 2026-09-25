@@ -134,29 +134,88 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
      `ai_error` حلّاً صادقاً. */
   let modelOk = false;
 
-  const plan = await withTenant(db, tenantId, async (tx): Promise<SendPlan | null> => {
+/**
+ * ★★★ **ثلاثةُ أطوارٍ لا معاملةٌ واحدة — وهذا نفادُ بِركةٍ لا تنظيمُ شيفرة.**
+ *
+ *   كان نداءُ النموذج **وحلقةُ الأدوات كلُّها** يجريان داخل معاملةٍ مفتوحة.
+ *   والبِركةُ عشرةُ اتّصالات، وتزامنُ `bot-reply` ثلاثة، وتزامنُ `ch-inbound`
+ *   عشرة. فثلاثةُ ردودٍ تولّد معاً تحتجز ثلاثةَ اتّصالاتٍ **طوالَ التوليد** —
+ *   من ثلاث ثوانٍ إلى دقائقَ مع حلقةِ أدواتٍ تنادي HTTP خارجيّاً — والواردُ
+ *   والصادرُ ينتظران خلفها على ما تبقّى.
+ *
+ *   والقاعدةُ مكتوبةٌ في هذا الملفّ نفسِه منذ القفل الذاتيّ: **لا نداءَ شبكةٍ
+ *   داخل معاملة.** وكانت تُطبَّق على الإرسال وحده، بينما أكبرُ نداءٍ شبكيٍّ في
+ *   النظام — النموذجُ نفسُه — يجري داخلها.
+ *
+ * ⚠️ والثمنُ المقبول: الأطوارُ لا تُودَع معاً. فسقوطُ العامل بين ② و③ يُنفّذ
+ *    أدواتٍ ولا يكتب صفَّ `ai_runs` (كلفةٌ لا تُحاسَب). وهو أهونُ بكثيرٍ من
+ *    بِركةٍ تنفد فيتوقّف استقبالُ الرسائل كلِّه — والنمطُ نفسُه مطبَّقٌ أصلاً في
+ *    هذا الملفّ على حجزِ صفوف الإرسال بعد التخطيط.
+ */
+type Prep =
+  /** بوّابةٌ منعت: لا ردّ، ولا نداءَ نموذج. */
+  | { step: 'stop' }
+  /** فرعٌ حتميّ (زرٌّ · خارج الدوام · سقفٌ بلغ): خطّةٌ جاهزةٌ بلا نموذج. */
+  | { step: 'plan'; plan: SendPlan }
+  /** يحتاج النموذج: كلُّ ما يلزمه، **بلا** مقبضِ معاملة. */
+  | { step: 'model'; run: ModelRun; ctx: ModelCtx }
+  /**
+   * ضغطةُ «أكّد»: الإجراءُ معروفٌ تماماً ولا نموذجَ فيه — لكنّه أداةُ مستأجرٍ
+   * قد تنادي HTTP خارجيّاً. فيخرج تنفيذُها من معاملة التخطيط كما خرج النموذج.
+   */
+  | { step: 'confirm'; call: ToolCall; actionKey: string; ctx: ConfirmCtx };
+
+/** ما تحتاجه خطوةُ التأكيد خارج المعاملة — قيمٌ لا مقبضُ معاملة. */
+interface ConfirmCtx {
+  convId: string;
+  verId: string;
+  caps: Parameters<typeof execTenantTool>[0]['caps'];
+  tools: Parameters<typeof execTenantTool>[0]['tools'];
+}
+
+/** وسائطُ الوكيل، مفصولةً عن أيّ مقبضِ معاملة. */
+type ModelRun = Omit<Parameters<typeof runAgent>[0], 'execTool'>;
+
+/** ما تحتاجه معاملةُ الكتابة (③) — قيمٌ لا صفوفٌ حيّة. */
+interface ModelCtx {
+  convId: string;
+  verId: string;
+  provider: string;
+  model: string;
+  winId: string;
+  pauseMinutes: number;
+  keyOwner: 'platform' | 'tenant';
+  meta: unknown;
+  caps: Parameters<typeof execTenantTool>[0]['caps'];
+  toolRows: Parameters<typeof execTenantTool>[0]['tools'];
+}
+
+  let plan: SendPlan | null = null;
+  try {
+  /* ── ① طورُ القراءة والقرار: معاملةٌ **بلا أيّ نداءِ شبكة** ── */
+  const prep: Prep = await withTenant(db, tenantId, async (tx): Promise<Prep> => {
     const conv = head[0]!.conv;
     const ch = head[0]!.ch;
 
     /* ── البوّابات ── */
     const cfgRows = await tx.select().from(botConfigs).where(eq(botConfigs.tenantId, tenantId)).limit(1);
     const cfg = cfgRows[0];
-    if (!cfg?.enabled) return null;                                   // البوت مطفأ عامّاً
-    if (!conv.botEnabled) return null;                                 // مطفأ لهذه المحادثة
-    if (conv.botPausedUntil && conv.botPausedUntil > new Date()) return null; // موظّفٌ تولّاها
+    if (!cfg?.enabled) return { step: 'stop' };                                   // البوت مطفأ عامّاً
+    if (!conv.botEnabled) return { step: 'stop' };                                 // مطفأ لهذه المحادثة
+    if (conv.botPausedUntil && conv.botPausedUntil > new Date()) return { step: 'stop' }; // موظّفٌ تولّاها
 
     const verRows = cfg.publishedVersionId
       ? await tx.select().from(botVersions).where(eq(botVersions.id, cfg.publishedVersionId)).limit(1)
       : [];
     const ver = verRows[0];
-    if (!ver) return null;                  // لا نسخةَ منشورة — البوت الحيّ لا يقرأ المسوّدة أبداً
-    if (ver.embedStatus === 'pending') return null; // المعرفة قيد التجهيز — النسخة القديمة تخدم
+    if (!ver) return { step: 'stop' };                  // لا نسخةَ منشورة — البوت الحيّ لا يقرأ المسوّدة أبداً
+    if (ver.embedStatus === 'pending') return { step: 'stop' }; // المعرفة قيد التجهيز — النسخة القديمة تخدم
 
     const win = await tx.select().from(conversationWindows).where(and(
       eq(conversationWindows.conversationId, conv.id),
       isNull(conversationWindows.closedAt),
     )).limit(1);
-    if (!win[0] || new Date(win[0].expiresAt) <= new Date()) return null; // نافذةٌ مغلقة: لا نداء نموذج
+    if (!win[0] || new Date(win[0].expiresAt) <= new Date()) return { step: 'stop' }; // نافذةٌ مغلقة: لا نداء نموذج
 
     /* ═══ المعالج الحتميّ لضغط الأزرار ═══
        يسبق النموذج عن قصد. نمط الزرّ كان نصفَ نمط: الأزرار تُرسَل، وضغط
@@ -199,8 +258,8 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
       ))
       .orderBy(desc(messages.createdAt))
       .limit(1))[0]?.at;
-    if (!newestIn) return null;                                   // لا واردَ إطلاقاً
-    if (conv.botAnsweredAt && newestIn <= conv.botAnsweredAt) return null;
+    if (!newestIn) return { step: 'stop' };                                   // لا واردَ إطلاقاً
+    if (conv.botAnsweredAt && newestIn <= conv.botAnsweredAt) return { step: 'stop' };
 
     /* والعلامةُ تُقدَّم **قبل** التوليد وفي معاملتِه نفسِها: تراجعُ المعاملة
        يُرجعها فتُعاد المحاولة، وإيداعُها يمنع ردّاً ثانياً على ما أُجيب. */
@@ -227,8 +286,11 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
     if (press.startsWith('cancel:')) {
       await tx.update(conversations).set({ pendingAction: null }).where(eq(conversations.id, conv.id));
       return {
-        conversationId: conv.id,
-        sends: [{ source: 'system', message: { kind: 'text', body: 'تمّ الإلغاء. في خدمتك لو احتجت شي تاني.' } }],
+        step: 'plan' as const,
+        plan: {
+          conversationId: conv.id,
+          sends: [{ source: 'system', message: { kind: 'text', body: 'تمّ الإلغاء. في خدمتك لو احتجت شي تاني.' } }],
+        },
       };
     }
 
@@ -242,11 +304,14 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
     if (press.startsWith('edit:')) {
       await tx.update(conversations).set({ pendingAction: null }).where(eq(conversations.id, conv.id));
       return {
-        conversationId: conv.id,
-        sends: [{
-          source: 'system',
-          message: { kind: 'text', body: 'تمام. اكتبلي شو بدّك تعدّل ورح جهّزلك الطلب من جديد.' },
-        }],
+        step: 'plan' as const,
+        plan: {
+          conversationId: conv.id,
+          sends: [{
+            source: 'system',
+            message: { kind: 'text', body: 'تمام. اكتبلي شو بدّك تعدّل ورح جهّزلك الطلب من جديد.' },
+          }],
+        },
       };
     }
 
@@ -256,13 +321,18 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
 
       const stale = isPendingStale(pending, wanted);
 
+      /* ⚠️ المسحُ يُودَع مع هذه المعاملة ولو فشل التنفيذ لاحقاً: استهلاكُ
+         الضغطة يجب أن يثبت، وإلّا نفّذت ضغطةٌ ثانيةٌ الطلبَ مرّتَين. */
       await tx.update(conversations).set({ pendingAction: null }).where(eq(conversations.id, conv.id));
 
       // `!pending?.key` مكرّرٌ عمداً: هو ما يُضيّق النوع، فلا نحتاج `!` يُخرس المدقّق
       if (stale || !pending?.key) {
         return {
-          conversationId: conv.id,
-          sends: [{ source: 'system', message: { kind: 'text', body: 'انتهت صلاحيّة هذا الطلب. اكتب لي تفاصيلك من جديد ورح جهّزه إلك.' } }],
+          step: 'plan' as const,
+          plan: {
+            conversationId: conv.id,
+            sends: [{ source: 'system', message: { kind: 'text', body: 'انتهت صلاحيّة هذا الطلب. اكتب لي تفاصيلك من جديد ورح جهّزه إلك.' } }],
+          },
         };
       }
       const actionKey = pending.key;
@@ -270,11 +340,14 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
       const confirmTools = await tx.select().from(botTools).where(and(
         eq(botTools.tenantId, tenantId), eq(botTools.enabled, true), isNull(botTools.disabledReason),
       ));
-      const confirmCaps = getAdapter(ch.kind as ChannelKind).capabilities;
-      const confirmEmits: OutboundMessage[] = [];
 
-      const exec = await execTenantTool({
-        tx,
+      /* ★★ **والتنفيذُ خارج هذه المعاملة.** أداةُ المستأجر تنادي HTTP خارجيّاً
+         بمهلةٍ تبلغ خمسَ عشرةَ ثانية، ومعاملةُ التخطيط تحمل أقفالَ صفّ المحادثة.
+         فتنفيذٌ هنا يحتجز اتّصالاً **وأقفالاً** طوالَ نداءِ نظامِ العميل — وهي
+         العلّةُ نفسُها التي أخرجت النموذجَ من المعاملة. */
+      return {
+        step: 'confirm' as const,
+        actionKey,
         /* نداءٌ نُصنّعه نحن لا النموذج: `raw` فارغٌ لأنّه لا يعود لمزوّد،
            و`id` وسمُ مصدرٍ يميّزه في أيّ تشخيصٍ لاحق. */
         call: {
@@ -283,43 +356,12 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
           args: { ...pending.args, __confirmed: true },
           raw: null,
         } satisfies ToolCall,
-        tenantId,
-        conversationId: conv.id,
-        versionId: ver.id,
-        caps: confirmCaps,
-        tools: confirmTools,
-        emits: confirmEmits,
-        deferred: [],
-      });
-
-      const titleAr = confirmTools.find((t) => t.key === actionKey)?.titleAr ?? actionKey;
-      const data = (exec.result as { data?: Record<string, unknown> } | null)?.data ?? {};
-      const reference = data.reference ?? data.id ?? null;
-
-      if (exec.failed) {
-        /* فشل التنفيذ **بعد** أن أكّد الزبون: لا نبتلعه ولا نُجمّله.
-           نصدُق معه ونحوّله لموظّف — ونوسم المحادثة فلا تضيع. */
-        await tx.update(conversations).set({ needsAttention: true }).where(eq(conversations.id, conv.id));
-        return {
-          conversationId: conv.id,
-          sends: [{ source: 'system', message: { kind: 'text', body: `تعذّر تسجيل «${titleAr}» حالياً لخلل تقني. حوّلتك لموظّف ورح يتواصل معك.` } }],
-        };
-      }
-
-      return {
-        conversationId: conv.id,
-        sends: [
-          ...confirmEmits.map((message) => ({ source: 'system' as const, message })),
-          {
-            source: 'system',
-            message: {
-              kind: 'text',
-              body: reference
-                ? `تمّ تسجيل «${titleAr}». الرقم المرجعي: ${String(reference)}. موظّفنا رح يتواصل معك.`
-                : `تمّ تسجيل «${titleAr}». موظّفنا رح يتواصل معك.`,
-            },
-          },
-        ],
+        ctx: {
+          convId: conv.id,
+          verId: ver.id,
+          caps: getAdapter(ch.kind as ChannelKind).capabilities,
+          tools: confirmTools,
+        },
       };
     }
 
@@ -337,10 +379,13 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
         .where(eq(conversations.id, conv.id));
       return gate.policy === 'handoff_only' && cfg.failMessage
         ? {
-          conversationId: conv.id,
-          sends: [{ source: 'system' as const, message: { kind: 'text' as const, body: cfg.failMessage } }],
+          step: 'plan' as const,
+          plan: {
+            conversationId: conv.id,
+            sends: [{ source: 'system' as const, message: { kind: 'text' as const, body: cfg.failMessage } }],
+          },
         }
-        : null;
+        : { step: 'stop' as const };
     }
 
     /**
@@ -357,7 +402,7 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
      *   أو الموظّف في الدوام التالي.
      */
     if (!withinBusinessHours(cfg.businessHours as BusinessHours | null)) {
-      if (!cfg.outsideHoursMessage) return null;
+      if (!cfg.outsideHoursMessage) return { step: 'stop' };
 
       const lastOutbound = (await tx
         .select({ body: messages.body })
@@ -370,11 +415,14 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
         .orderBy(desc(messages.createdAt))
         .limit(1))[0];
 
-      if (lastOutbound?.body?.trim() === cfg.outsideHoursMessage.trim()) return null;
+      if (lastOutbound?.body?.trim() === cfg.outsideHoursMessage.trim()) return { step: 'stop' };
 
       return {
-        conversationId: conv.id,
-        sends: [{ source: 'system', message: { kind: 'text', body: cfg.outsideHoursMessage } }],
+        step: 'plan' as const,
+        plan: {
+          conversationId: conv.id,
+          sends: [{ source: 'system', message: { kind: 'text', body: cfg.outsideHoursMessage } }],
+        },
       };
     }
 
@@ -460,27 +508,114 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
     }
     const { apiKey, owner: keyOwner } = key;
 
+    /* ★ ونهايةُ المعاملة هنا — **قبل** نداء النموذج. كلُّ ما يلزم الوكيلَ
+       يُسلَّم قيماً عاديّة، ولا يعبر مقبضُ المعاملة (`tx`) هذا الحدّ: عبورُه
+       هو بعينه العطلُ الذي وُلد منه هذا التقسيم. */
+    return {
+      step: 'model',
+      run: {
+        provider: getProvider(ver.provider),
+        apiKey,
+        model: ver.model || DEFAULT_CHAT_MODEL,
+        system: built.system,
+        contents: built.contents,
+        tools: decls,
+        maxLoops: cfg.maxToolLoops,
+        fallbackText: cfg.failMessage ?? 'ما قدرت أجاوب على هالسؤال — بحوّلك لموظّف.',
+        guard: {
+          allowedLinkHosts: ((ver.params ?? {}) as { linkHosts?: string[] }).linkHosts ?? [],
+          maxLen: Math.min(caps.maxTextLen, 900),
+          lastOutboundText: lastOut,
+          toolNames: decls.map((d) => d.name),
+        },
+      },
+      ctx: {
+        convId: conv.id,
+        verId: ver.id,
+        provider: ver.provider,
+        model: ver.model,
+        winId: win[0]!.id,
+        pauseMinutes: cfg.pauseMinutes,
+        keyOwner,
+        meta: built.meta,
+        caps,
+        toolRows,
+      },
+    };
+  });
+
+  if (prep.step === 'plan') {
+    plan = prep.plan;
+  } else if (prep.step === 'confirm') {
+    const { call, actionKey, ctx: X } = prep;
+    const emits: OutboundMessage[] = [];
+
+    /* معاملةٌ قصيرةٌ للأداة وحدها — لا معاملةُ التخطيط الطويلة. */
+    const exec = await withTenant(db, tenantId, (tx) => execTenantTool({
+      tx, call, tenantId, conversationId: X.convId, versionId: X.verId,
+      caps: X.caps, tools: X.tools, emits, deferred: [],
+    }));
+
+    const titleAr = X.tools.find((t) => t.key === actionKey)?.titleAr ?? actionKey;
+    const data = (exec.result as { data?: Record<string, unknown> } | null)?.data ?? {};
+    const reference = data.reference ?? data.id ?? null;
+
+    if (exec.failed) {
+      /* فشل التنفيذ **بعد** أن أكّد الزبون: لا نبتلعه ولا نُجمّله.
+         نصدُق معه ونحوّله لموظّف — ونوسم المحادثة فلا تضيع. */
+      await withTenant(db, tenantId, (tx) => tx.update(conversations)
+        .set({ needsAttention: true }).where(eq(conversations.id, X.convId)));
+      plan = {
+        conversationId: X.convId,
+        sends: [{ source: 'system', message: { kind: 'text', body: `تعذّر تسجيل «${titleAr}» حالياً لخلل تقني. حوّلتك لموظّف ورح يتواصل معك.` } }],
+      };
+    } else {
+      plan = {
+        conversationId: X.convId,
+        sends: [
+          ...emits.map((message) => ({ source: 'system' as const, message })),
+          {
+            source: 'system',
+            message: {
+              kind: 'text',
+              body: reference
+                ? `تمّ تسجيل «${titleAr}». الرقم المرجعي: ${String(reference)}. موظّفنا رح يتواصل معك.`
+                : `تمّ تسجيل «${titleAr}». موظّفنا رح يتواصل معك.`,
+            },
+          },
+        ],
+      };
+    }
+  } else if (prep.step === 'model') {
+    const { run: R, ctx: X } = prep;
     const emits: OutboundMessage[] = [];
     const deferred: Array<{ key: string; args: Record<string, unknown> }> = [];
+
+    /* ── ② الوكيل — **خارج أيّ معاملة**. لا اتّصالَ محجوزٌ أثناء التوليد ── */
     const result = await runAgent({
-      provider: getProvider(ver.provider),
-      apiKey,
-      model: ver.model || DEFAULT_CHAT_MODEL,
-      system: built.system,
-      contents: built.contents,
-      tools: decls,
-      maxLoops: cfg.maxToolLoops,
-      fallbackText: cfg.failMessage ?? 'ما قدرت أجاوب على هالسؤال — بحوّلك لموظّف.',
-      guard: {
-        allowedLinkHosts: ((ver.params ?? {}) as { linkHosts?: string[] }).linkHosts ?? [],
-        maxLen: Math.min(caps.maxTextLen, 900),
-        lastOutboundText: lastOut,
-        toolNames: decls.map((d) => d.name),
-      },
-      execTool: (call: ToolCall) =>
-        execTenantTool({ tx, call, tenantId, conversationId: conv.id, versionId: ver.id, caps, tools: toolRows, emits, deferred }),
+      ...R,
+      /* ★ ولكلّ أداةٍ معاملتُها القصيرة: الأداةُ تكتب (ملاحظةٌ · سمةُ جهةِ
+         اتّصال · إجراءٌ مؤجَّل) فتحتاج سياقَ مستأجرٍ حقيقيّاً — لكنّها تفتحه
+         وتُغلقه في حدودها هي، فلا تحتجز اتّصالاً بين أداةٍ وأخرى ولا أثناء
+         انتظار النموذج بينهما. */
+      execTool: (call: ToolCall) => withTenant(db, tenantId, (tx) => execTenantTool({
+        tx, call, tenantId, conversationId: X.convId, versionId: X.verId,
+        caps: X.caps, tools: X.toolRows, emits, deferred,
+      })),
     });
     modelOk = true;
+
+    /* ── ③ طورُ الكتابة: معاملةٌ قصيرةٌ تُقيّد ما جرى ── */
+    plan = await withTenant(db, tenantId, async (tx): Promise<SendPlan | null> => {
+      /* الأسماءُ نفسُها التي كانت في المعاملة الواحدة — فالكتلةُ أدناه منقولةٌ
+         حرفيّاً، وإعادةُ تسميتها تُفقد الشروحَ مراجعَها. */
+      const conv = { id: X.convId };
+      const ver = { id: X.verId, provider: X.provider, model: X.model };
+      const cfg = { pauseMinutes: X.pauseMinutes };
+      const win = [{ id: X.winId }];
+      const built = { meta: X.meta };
+      const keyOwner = X.keyOwner;
+
 
     /* ── القياس: صفٌّ لكلّ ردّ، وكلفةٌ بالسعر **السارِي** لحظةَ العرض ──
        و«السارِي» شرطٌ لا زينة: كان الاستعلام يأخذ أحدثَ `effective_from`
@@ -557,7 +692,9 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
       sends: [...emits, ...(result.text ? [{ kind: 'text', body: result.text } as OutboundMessage] : [])]
         .map((message) => ({ source: 'bot' as const, message, aiRunId: run!.id })),
     };
-  }).catch(async (e: unknown): Promise<SendPlan | null> => {
+    });
+  }
+  } catch (e: unknown) {
     /* ★ فشلُ المزوّد كان **صامتاً تماماً**: النوع `ai_error` مسجَّلٌ في
        `AUTO_RESOLVABLE` وفي شاشة الحوادث ولا موضعَ واحد يرفعه. فمزوّدٌ يعيد
        ٥٠٠ يُفشل المهمّة، وBullMQ يستهلك المحاولتَين، ثمّ لا شيء: لا صفَّ في
@@ -621,10 +758,11 @@ async function replyLocked(job: { conversationId: string }): Promise<void> {
           sends: [{ source: 'system' as const, message: { kind: 'text', body } as OutboundMessage }],
         } satisfies SendPlan;
       }).catch(() => null);
-      return fail;
+      plan = fail;
     }
     throw e; // إعادة المحاولة تتولّاها BullMQ — والحادثة لا تُلغي الفشل
-  });
+  }
+
 
   /* نجاحٌ لاحقٌ يُبطل ما قبله: نداءُ نموذجٍ تمّ يعني أنّ العطل العابر مضى.
      و`price_missing` تُغلق معه **إن وُجد سعر**: الحادثة تقول «الكلفة تُحسب

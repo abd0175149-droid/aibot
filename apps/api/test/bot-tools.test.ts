@@ -101,7 +101,10 @@ describe('رسالةُ خارج الدوام تُقال مرّةً', () => {
   });
 
   it('والخروجُ المبكّر حين لا رسالة — لا إرسالَ فارغ', () => {
-    expect(w).toMatch(/if \(!cfg\.outsideHoursMessage\) return null;/);
+    /* ★ الشكلُ تبدّل مع تقسيم `handleReply` إلى أطوار: المعاملةُ صارت تُرجع
+       `Prep` لا `SendPlan | null`، فالخروجُ المبكّر `{ step: 'stop' }`.
+       والمعنى واحد: لا خطّةَ إرسالٍ حين لا رسالةَ مضبوطة. */
+    expect(w).toMatch(/if \(!cfg\.outsideHoursMessage\) return \{ step: 'stop' \};/);
   });
 
   it('★ وتُقال من جديدٍ بعد أن يردّ البوتُ أو الموظّف — الشرطُ على آخر صادر', () => {
