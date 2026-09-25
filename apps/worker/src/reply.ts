@@ -1,7 +1,7 @@
 import {
   getDb, withTenant, withPlatform, conversations, messages, botConfigs, botVersions, botTools,
   aiRuns, contacts, tenantChannels, conversationWindows,
-  eq, and, desc, isNull, sql,
+  eq, and, desc, isNull, sql, gt,
 } from '@aibot/db';
 import { getAdapter, type ChannelKind } from '@aibot/channels';
 import {
@@ -273,7 +273,17 @@ interface ModelCtx {
       .where(and(
         eq(messages.conversationId, conv.id),
         eq(messages.direction, 'in'),
-        ...(lastOutAt ? [sql`${messages.createdAt} > ${lastOutAt}`] : []),
+        /* 🔴 **`gt()` لا `sql` خامّة** — وهذا عطلٌ وقع في الإنتاج.
+           `sql`${col} > ${date}`` يُمرّر كائن `Date` معاملاً خامّاً إلى
+           postgres.js، وهو يطلب نصّاً أو Buffer فيرمي:
+             The "string" argument must be of type string … Received an
+             instance of Date
+           ولأنّ `lastOutAt` لا يكون موجوداً إلّا بعد أوّل صادر، **نجحت أوّلُ
+           رسالةٍ في كلّ محادثةٍ وفشل كلُّ ما بعدها**: مهمّةُ الردّ تسقط قبل
+           نداء النموذج، فلا ردَّ ولا حادثةَ ذاتِ معنى — والرسالةُ عامّةٌ لا
+           تدلّ على موضع. كشفه `drill-reply-cost.ts` على الخادم.
+           و`gt()` مُعامِلٌ مطبوع: drizzle يعرف نوعَ العمود فيُسلسل التاريخ. */
+        ...(lastOutAt ? [gt(messages.createdAt, lastOutAt)] : []),
       ))
       .orderBy(desc(messages.createdAt))
       .limit(10);

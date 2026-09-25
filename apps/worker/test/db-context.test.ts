@@ -218,3 +218,58 @@ describe('لا نداءَ نموذجٍ داخل معاملة — البِركة�
     expect(MODEL_CALL.test(blocks[0]!)).toBe(false);
   });
 });
+
+/**
+ * ★★★ **تاريخٌ خامٌّ داخل `sql` — عطلٌ وقع في الإنتاج ولم يكشفه شيء.**
+ *
+ *   `sql`${col} > ${someDate}`` يُمرّر كائن `Date` معاملاً خامّاً إلى
+ *   postgres.js، وهو يطلب نصّاً أو `Buffer` فيرمي:
+ *
+ *       The "string" argument must be of type string or an instance of
+ *       Buffer or ArrayBuffer. Received an instance of Date
+ *
+ *   ولا `tsc` يمسكه (النوعُ `unknown` في قالب `sql`) ولا اختبارٌ ساكنٌ كان
+ *   يبحث عنه. وفي `reply.ts` كان الشرطُ `lastOutAt` — أي «بعد آخر صادر» —
+ *   فلا يُنفَّذ إلّا بعد أوّل ردّ: **نجحت أوّلُ رسالةٍ في كلّ محادثةٍ وفشل كلُّ
+ *   ما بعدها**، ومهمّةُ الردّ تسقط قبل نداء النموذج بلا أثرٍ يدلّ على السبب.
+ *   كشفه `drill-reply-cost.ts` على الخادم بعد أن أضيف الأثرُ إلى سجلّ الفشل.
+ *
+ *   والعلاجُ مُعامِلٌ مطبوع (`gt`/`lt`/`gte`/`lte`) — drizzle يعرف نوعَ العمود
+ *   فيُسلسل التاريخ — أو `.toISOString()` صراحةً إن لزم `sql` خامّة.
+ */
+describe('لا تاريخَ خامٌّ داخل قالب sql — السائقُ يطلب نصّاً', () => {
+  /** أسماءٌ تحمل تاريخاً بالعُرف: `*At`, `since`, `until`, `expires*`. */
+  const DATEISH = /\$\{\s*(?:[A-Za-z_$][\w$]*\.)?(?:[a-z][\w$]*(?:At|Date)|since|until|from|to|now|cutoff)\s*\}/;
+
+  it('كلُّ مقارنةٍ زمنيّةٍ في sql تُسلسَل أو تستعمل مُعامِلاً مطبوعاً', () => {
+    const offences: string[] = [];
+    for (const { file, src } of sources()) {
+      for (const m of src.matchAll(/sql`[^`]*`/g)) {
+        const tpl = m[0];
+        // تعبيرٌ يقارن عموداً بقيمةٍ تبدو تاريخاً، بلا toISOString
+        if (!/[<>]=?\s*\$\{/.test(tpl)) continue;
+        if (!DATEISH.test(tpl)) continue;
+        if (tpl.includes('toISOString()')) continue;
+        offences.push(`${file}: ${tpl.slice(0, 80)}`);
+      }
+    }
+    expect(
+      offences,
+      'كائنُ Date داخل قالب `sql` يصل السائقَ خامّاً فيرمي «Received an instance of Date». '
+      + 'استعمل مُعامِلاً مطبوعاً (gt/lt/gte/lte) أو `.toISOString()`.',
+    ).toEqual([]);
+  });
+
+  it('الماسحُ يمسك الشكل فعلاً — وإلّا فهو اختبارٌ يمرّ دائماً', () => {
+    /* نُعيد شكلَ العطل نفسِه الذي وقع، ونتأكّد أنّ التعبير يُطابقه. */
+    const bad = 'sql`${messages.createdAt} > ${lastOutAt}`';
+    expect(/[<>]=?\s*\$\{/.test(bad) && DATEISH.test(bad) && !bad.includes('toISOString()')).toBe(true);
+
+    const good = 'sql`${incidents.lastSeenAt} >= ${since.toISOString()}`';
+    expect(good.includes('toISOString()')).toBe(true);
+
+    // ومقارنةٌ لا تاريخَ فيها لا تُحسب — وإلّا امتلأ الحارسُ بإنذارٍ كاذب
+    const neutral = "sql`${incidents.status} <> 'resolved'`";
+    expect(/[<>]=?\s*\$\{/.test(neutral)).toBe(false);
+  });
+});
