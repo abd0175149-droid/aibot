@@ -88,6 +88,10 @@ app.get('/api/health', async (_req, reply) => {
   const body = {
     service: 'aibot' as const, rev: GIT_REV, db, redis,
     worker: beat.alive, workerAgeSec: beat.ageSec,
+    /* ★ وعددُ المجدوِلات: «العاملُ حيّ» وحدها لا تُفرّق عاملاً يعمل من عاملٍ
+       يدور بلا مهمّةٍ متكرّرةٍ واحدة — ولا فحصَ صحّةٍ حينها ولا إغلاقَ نوافذَ
+       ولا إشارةً سلبيّة، وكلُّ شاشةٍ خضراء. */
+    workerSched: beat.sched,
   };
   return reply.code(db && redis ? 200 : 503).send(body);
 });

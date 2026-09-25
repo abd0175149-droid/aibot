@@ -105,7 +105,13 @@ export async function pingRedis(): Promise<boolean> {
  *   والغياب هو الخبر: المفتاح بعمرٍ محدود يكتبه العامل كلّ خمس عشرة ثانية،
  *   فانقطاعُه — سقوطاً أو قتلاً أو حلقةً عالقة — يُقرأ هنا بلا أن يُسأل أحد.
  */
-export interface WorkerBeat { alive: boolean; ageSec: number | null; rev: string | null }
+export interface WorkerBeat {
+  alive: boolean;
+  ageSec: number | null;
+  rev: string | null;
+  /** عددُ المجدوِلات المتكرّرة كما قرأها العاملُ من ريدِس — `null` لنبضةٍ قديمة. */
+  sched: number | null;
+}
 
 export async function workerBeat(): Promise<WorkerBeat> {
   try {
@@ -113,12 +119,12 @@ export async function workerBeat(): Promise<WorkerBeat> {
       connection().get('aibot:worker:beat'),
       new Promise<null>((r) => { setTimeout(() => r(null), PING_TIMEOUT_MS); }),
     ]);
-    if (!raw) return { alive: false, ageSec: null, rev: null };
-    const b = JSON.parse(raw) as { at?: string; rev?: string };
+    if (!raw) return { alive: false, ageSec: null, rev: null, sched: null };
+    const b = JSON.parse(raw) as { at?: string; rev?: string; sched?: number };
     const ageSec = b.at ? Math.round((Date.now() - Date.parse(b.at)) / 1000) : null;
-    return { alive: true, ageSec, rev: b.rev ?? null };
+    return { alive: true, ageSec, rev: b.rev ?? null, sched: b.sched ?? null };
   } catch {
-    return { alive: false, ageSec: null, rev: null };
+    return { alive: false, ageSec: null, rev: null, sched: null };
   }
 }
 

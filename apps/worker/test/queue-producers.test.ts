@@ -51,6 +51,14 @@ export function producedQueues(sources: string[], queueMap: Record<string, strin
       const name = queueMap[m[1]!];
       if (name) out.add(name);
     }
+    /* ★ وروسترٌ معلَن: `{ q: QUEUE.health, … }` في جدولٍ يُدار بحلقة.
+       والشكلُ ضيّقٌ عن قصد — خاصّيّةٌ اسمُها `q` قيمتُها ثابتُ طابور — فلا
+       يلتقط ذكراً عابراً لـ`QUEUE.x` في تعليقٍ أو نوع. وبلا هذا يصير الحارسُ
+       عقوبةً على إخراج التكرار إلى جدول: نفسُ الإنتاج يصير غيرَ مرئيّ. */
+    for (const m of src.matchAll(/\bq:\s*QUEUE\.(\w+)/g)) {
+      const name = queueMap[m[1]!];
+      if (name) out.add(name);
+    }
   }
   return out;
 }

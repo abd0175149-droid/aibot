@@ -84,31 +84,70 @@ const workers = [
 ];
 
 /**
- * المجدوِلات المتكرّرة.
- * تُسجَّل بمعرّفاتٍ ثابتة، فإعادة التشغيل لا تُضاعفها.
+ * ★★★ **المجدوِلات — و«عاملٌ يعمل بلا مجدوِلات» كان لا يكشفه شيء.**
+ *
+ *   كان التسجيلُ `catch` يطبع سطراً ويمضي. فعاملٌ فشلت جدولتُه يبقى حيّاً
+ *   ونبضتُه خضراء، بينما: لا فحصَ صحّةٍ للقنوات، ولا إغلاقَ نوافذَ (فالفوترة
+ *   تُحسب على نوافذَ لا تُغلق)، ولا إشارةً سلبيّةً «رسائلُ بلا ردود»، ولا
+ *   تجميعَ إشعارات. أي أنّ كلَّ ما يُنبِّه أنّ شيئاً تعطّل **هو نفسُه** ما
+ *   تعطّل — وكلُّ شاشةٍ خضراء.
+ *
+ * ★ والروسترُ صريحٌ ومعدود، والعددُ المتوقَّع يأتي من **هنا** لا من رقمٍ مكتوبٍ
+ *   في bash: فإضافةُ مجدوِلٍ خامسٍ غداً لا تُفشل النشر بلا سبب.
  */
-async function scheduleRepeatables(): Promise<void> {
-  const { Queue } = await import('bullmq');
-  const health = new Queue(QUEUE.health, { connection });
-  const maint = new Queue(QUEUE.maintenance, { connection });
+const SCHED = [
+  { q: QUEUE.health, name: 'poll', jobId: 'health-poll', every: 10 * 60_000 },
+  { q: QUEUE.maintenance, name: 'windows', jobId: 'close-windows', every: 10 * 60_000 },
+  { q: QUEUE.maintenance, name: 'signals', jobId: 'negative-signals', every: 5 * 60_000 },
+  // التجميع كلّ 15 دقيقة — الحرج يخترقه ويمرّ فوراً
+  { q: QUEUE.maintenance, name: 'digest', jobId: 'digest', every: 15 * 60_000 },
+] as const;
 
-  await health.add('poll', {}, {
-    repeat: { every: 10 * 60 * 1000 }, jobId: 'health-poll', removeOnComplete: 10,
-  });
-  await maint.add('windows', {}, {
-    repeat: { every: 10 * 60 * 1000 }, jobId: 'close-windows', removeOnComplete: 10,
-  });
-  await maint.add('signals', {}, {
-    repeat: { every: 5 * 60 * 1000 }, jobId: 'negative-signals', removeOnComplete: 10,
-  });
-  await maint.add('digest', {}, {
-    // التجميع كلّ 15 دقيقة — الحرج يخترقه ويمرّ فوراً
-    repeat: { every: 15 * 60 * 1000 }, jobId: 'digest', removeOnComplete: 10,
-  });
+export const SCHED_EXPECTED = SCHED.length;
+
+/**
+ * يُسجّل المتكرّرات ثمّ **يقرأ من ريدِس كم منها سُجّل فعلاً**.
+ *
+ * ⚠️ والقراءةُ بعد الكتابة هي كلُّ الفائدة: `add` قد يُرجع بلا خطأ ولا يُنتج
+ *    متكرّراً (اتّصالٌ يُعاد، أو مفتاحٌ مُحيت عليه الكتابة)، فالنيّةُ ليست
+ *    دليلاً. والعددُ المقروء هو ما يُعلَن في النبضة وتحرس عليه بوّابةُ النشر.
+ */
+async function scheduleRepeatables(): Promise<number> {
+  const { Queue } = await import('bullmq');
+  const queues = new Map<string, InstanceType<typeof Queue>>();
+  for (const s of SCHED) {
+    if (!queues.has(s.q)) queues.set(s.q, new Queue(s.q, { connection }));
+    await queues.get(s.q)!.add(s.name, {}, {
+      repeat: { every: s.every }, jobId: s.jobId, removeOnComplete: 10,
+    });
+  }
+  let n = 0;
+  /* `getJobSchedulersCount` لا `getRepeatableJobs().length`: الثانيةُ تجلب
+     الصفوفَ كلَّها لتعدّها، والأولى عدٌّ في ريدِس. */
+  for (const [, queue] of queues) n += await queue.getJobSchedulersCount();
+  return n;
 }
 
-await scheduleRepeatables().catch((e) =>
-  console.error(JSON.stringify({ level: 'error', svc: 'worker', msg: 'فشل جدولة المتكرّرات', err: String(e) })));
+/**
+ * ★★ والفشلُ يَقتل لا يُسجَّل: عاملٌ لا يستطيع الجدولة ليس عاملاً يعمل، وبقاؤه
+ *   حيّاً بنبضةٍ خضراء هو الكذبةُ بعينها. والخروجُ يجعل compose يُعيد تشغيله،
+ *   فإن كان العطلُ عابراً شُفي، وإن كان دائماً بقيت الحاويةُ تتهاوى **ظاهرةً**
+ *   بدل أن تُعلن صحّةً كاذبة.
+ */
+const schedCount = await scheduleRepeatables().catch((e) => {
+  console.error(JSON.stringify({
+    level: 'error', svc: 'worker', msg: 'فشل جدولة المتكرّرات', err: String(e),
+  }));
+  return -1;
+});
+
+if (schedCount !== SCHED_EXPECTED) {
+  console.error(JSON.stringify({
+    level: 'fatal', svc: 'worker', msg: 'المجدوِلات ناقصة — لا إقلاع',
+    expected: SCHED_EXPECTED, got: schedCount,
+  }));
+  process.exit(1);
+}
 
 for (const w of workers) {
   w.on('completed', (job) => log('مهمّة تمّت', { queue: w.name, id: job.id }));
@@ -164,7 +203,14 @@ const BEAT_TTL_SEC = 45;
 async function beat(): Promise<void> {
   await connection.set(
     BEAT_KEY,
-    JSON.stringify({ at: new Date().toISOString(), rev: process.env.GIT_REV ?? 'unknown', pid: process.pid }),
+    /* ★ وعددُ المجدوِلات في النبضة: «حيٌّ» وحدها لا تُفرّق عاملاً يعمل من
+       عاملٍ يدور بلا شيءٍ يفعله. وهو مقروءٌ من ريدِس لا منويٌّ في الكود. */
+    JSON.stringify({
+      at: new Date().toISOString(),
+      rev: process.env.GIT_REV ?? 'unknown',
+      pid: process.pid,
+      sched: schedCount,
+    }),
     'EX', BEAT_TTL_SEC,
   ).catch(() => undefined); // نبضةٌ فائتة ليست عطلاً يُسقط العامل
 }
