@@ -329,6 +329,32 @@ describe('⑤ اللوحةُ تحتاج عاملاً ثانياً — مفروض
     expect(auth).toContain("'/auth/mfa/activate', { preHandler: requireAuth() }");
   });
 
+  it('★★ ورمزٌ يُمسح بالكاميرا — ومرسومٌ عندنا لا عند طرفٍ ثالث', () => {
+    /* نقلُ اثنين وثلاثين محرفاً بالعين هو الخطوةُ التي يُخطئ فيها الناس
+       ويتركونها، وحرفٌ واحدٌ خاطئ يُنتج رمزاً لا يُقبل أبداً بلا سببٍ ظاهر.
+       وخدمةُ QR بالرابط كانت ستعني إرسالَ `otpauth://…secret=…` إلى خادمٍ لا
+       نملكه — أي تسليمَ العامل الثاني لمن يرسم صورته. */
+    const auth = maskComments(readFileSync(join(API_SRC, 'auth.ts'), 'utf8'));
+    expect(auth, 'المصفوفةُ تُبنى عندنا وتُعاد مع السرّ مرّةً واحدة')
+      .toMatch(/qr: qrRows\(otpauth, 'M'\)/);
+
+    const web = join(API_SRC, '..', '..', 'web', 'src');
+    const screen = readFileSync(join(web, 'components', 'MfaEnroll.tsx'), 'utf8')
+      .replace(/\{\/\*[\s\S]*?\*\/\}/g, ' ')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ');
+    expect(screen, 'الشاشةُ ترسم المصفوفة').toContain('<QrCode rows={qr}');
+    expect(screen, 'ولا حقنَ نصٍّ في DOM لرسم رمزٍ يحمل سرّاً')
+      .not.toContain('dangerouslySetInnerHTML');
+    expect(screen, 'وخلفيّةٌ بيضاءُ صريحة — وإلّا صار أسودَ على أسود في السمة الداكنة')
+      .toContain('fill="#fff"');
+    expect(screen, 'ومنطقةُ هدوءٍ أربعُ خانات — قارئٌ بلا هامشٍ لا يجد حدودَ الرمز')
+      .toMatch(/const q = 4;/);
+
+    /* ولا يُرسَم عند طرفٍ ثالث: أيُّ عنوانٍ خارجيٍّ في هذه الشاشة يعني إرسال
+       السرّ إلى من يرسمه. */
+    expect(screen).not.toMatch(/https?:\/\/(?!localhost)/);
+  });
+
   it('★★ ولمسحه بابُ مشغّلٍ — فهاتفٌ ضائعٌ لا يُقفل المنصّة إلى الأبد', () => {
     /* `enroll` يردّ ٤٠٩ على حسابٍ مُفعَّلٍ عن قصد (وإلّا سجّل سارقُ الجلسة
        هاتفَه هو)، فالنتيجةُ قفلٌ دائمٌ بلا هذا السكربت. */

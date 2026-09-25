@@ -19,9 +19,45 @@ import {
  *    أنّ جلبَ الحوادث معطوبٌ في اللحظة التي الحقيقةُ فيها أنّ حسابَه هو غيرُ
  *    محميّ. فالشاشةُ تسبق أيَّ جلب.
  */
+/**
+ * ★ الرمزُ يُرسم مربّعاتٍ من مصفوفةٍ رقميّة.
+ *
+ * ⚠️ ولا `dangerouslySetInnerHTML` بنصّ SVG من الخادم: سطحُ حقنٍ لا داعيَ له
+ *    في شاشةٍ تعرض سرّاً. والمصفوفةُ أصفارٌ وآحادٌ لا تُنتج إلّا مستطيلات.
+ *
+ * ⚠️ والهامشُ الفاتح (منطقةُ الهدوء) أربعُ خاناتٍ **إلزامٌ في المعيار**: قارئٌ
+ *    بلا هامشٍ لا يجد حدودَ الرمز فيفشل المسحُ بلا أن يقول لماذا.
+ * ⚠️ والخلفيّةُ بيضاءُ صريحةٌ لا شفّافة: على السمة الداكنة يصير الرمزُ أسودَ
+ *    على أسود — أي لا رمزَ إطلاقاً.
+ */
+function QrCode({ rows, label }: { rows: string[]; label: string }) {
+  const n = rows.length;
+  const q = 4;
+  const size = n + q * 2;
+  return (
+    <figure className="qr-fig">
+      <svg
+        className="qr"
+        viewBox={`0 0 ${size} ${size}`}
+        role="img"
+        aria-label={label}
+        shapeRendering="crispEdges"
+      >
+        <rect x="0" y="0" width={size} height={size} fill="#fff" />
+        {rows.flatMap((row, y) => [...row].map((c, x) => (c === '1'
+          ? <rect key={`${y}-${x}`} x={x + q} y={y + q} width="1" height="1" fill="#000" />
+          : null)))}
+      </svg>
+      <figcaption>{label}</figcaption>
+    </figure>
+  );
+}
+
 export function MfaEnroll() {
   const [secret, setSecret] = useState<string | null>(null);
   const [otpauth, setOtpauth] = useState<string | null>(null);
+  /** مصفوفةُ رمز QR: صفوفُ أصفارٍ وآحادٍ من الخادم — تُرسم مربّعاتٍ لا أكثر. */
+  const [qr, setQr] = useState<string[] | null>(null);
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -31,9 +67,10 @@ export function MfaEnroll() {
     setBusy(true);
     setErr(null);
     try {
-      const r = await post<{ totpSecret: string; otpauth: string }>('/auth/mfa/enroll');
+      const r = await post<{ totpSecret: string; otpauth: string; qr: string[] }>('/auth/mfa/enroll');
       setSecret(r.totpSecret);
       setOtpauth(r.otpauth);
+      setQr(r.qr);
     } catch (e) {
       setErr(e instanceof ApiError ? e.message : 'تعذّر بدء التسجيل.');
     } finally { setBusy(false); }
@@ -100,11 +137,20 @@ export function MfaEnroll() {
           ) : (
             <Stack gap="sm">
               <Note tone="warn">
-                <b>يُعرض مرّةً واحدة.</b> الصقه في تطبيق المصادقة الآن — لا يُعاد إلى أيّ
+                <b>يُعرض مرّةً واحدة.</b> امسحه بتطبيق المصادقة الآن — لا يُعاد إلى أيّ
                 شاشةٍ بعدها، ولا نخزّنه نصّاً عندنا.
               </Note>
-              <CodeBlock label="السرّ" text={secret} />
-              {otpauth && <CodeBlock label="رابط otpauth (إن دعمه تطبيقك)" text={otpauth} />}
+
+              {/* ★★ المسحُ أوّلاً واللصقُ بديلاً: نقلُ اثنين وثلاثين محرفاً بالعين
+                  هو الخطوةُ التي يُخطئ فيها الناس ويتركونها، وحرفٌ واحدٌ خاطئ
+                  يُنتج رمزاً لا يُقبل أبداً بلا سببٍ ظاهر. */}
+              {qr && <QrCode rows={qr} label="امسح هذا الرمز بتطبيق المصادقة" />}
+
+              <details className="auth-fold">
+                <summary>أو الصق السرَّ يدويّاً</summary>
+                <CodeBlock label="السرّ" text={secret} />
+                {otpauth && <CodeBlock label="رابط otpauth (إن دعمه تطبيقك)" text={otpauth} />}
+              </details>
 
               <Field id="mfa-code" label="الرمز الظاهر في التطبيق الآن">
                 <FormInput

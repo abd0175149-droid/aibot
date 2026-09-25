@@ -114,6 +114,7 @@ export function publicId(): string {
 
 /** حقولٌ تُنقَّح من كلّ سجلّ — تُمرَّر إلى pino redact. */
 export * from './totp.js';
+export * from './qr.js';
 
 export const REDACT_PATHS = [
   'req.headers.authorization',
@@ -154,6 +155,8 @@ export const REDACT_PATHS = [
   '*.mfaSecretEnc',
   '*.totpSecret',
   '*.otpauth',
+  /* والمصفوفةُ هي السرُّ نفسُه مرسوماً — تسجيلُها تسجيلٌ له. */
+  '*.qr',
   '*.challenge',
   '*.code',
 ];

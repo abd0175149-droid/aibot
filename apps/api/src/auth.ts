@@ -7,7 +7,7 @@ import {
 } from '@aibot/shared';
 import { getDb, withPlatform, users, sessions, tenants, auditLog, eq, and, ne, isNull, gt, sql } from '@aibot/db';
 import {
-  sha256, seal, open, generateTotpSecret, verifyTotp, otpauthUri,
+  sha256, seal, open, generateTotpSecret, verifyTotp, otpauthUri, qrRows,
 } from '@aibot/crypto';
 import { enforceRate, enforceRateStrict, loginRules, mfaRules } from './ratelimit.js';
 
@@ -583,7 +583,18 @@ export async function registerAuth(app: FastifyInstance) {
 
     /* يُعاد نصّاً صريحاً **مرّةً واحدة** — وهذا كلُّ الغرض. ولا يُقرأ بعدها من
        أيّ مسار: `mfa_secret_enc` مختومٌ ولا يُعاد. */
-    return { totpSecret, otpauth: otpauthUri(totpSecret, me.email) };
+    const otpauth = otpauthUri(totpSecret, me.email);
+
+    /* ★★ ورمزٌ يُمسح بالكاميرا: نقلُ اثنين وثلاثين محرفاً بالعين هو الخطوةُ
+       التي يُخطئ فيها الناس ويتركونها، وحرفٌ واحدٌ خاطئ يُنتج رمزاً لا يُقبل
+       أبداً بلا سببٍ ظاهر — فيُقرأ العطلُ فينا.
+
+       ⚠️ ويُرسَم عندنا لا عند طرفٍ ثالث: خدماتُ QR بالرابط تعني إرسالَ
+          `otpauth://…secret=…` إلى خادمٍ لا نملكه — أي تسليمَ العامل الثاني
+          لمن يرسم صورته.
+       ⚠️ ومصفوفةُ أصفارٍ وآحادٍ لا نصَّ SVG: النصُّ يحتاج حقناً في DOM عند
+          الرسم، والمصفوفةُ أرقامٌ لا ترسم إلّا مربّعات. */
+    return { totpSecret, otpauth, qr: qrRows(otpauth, 'M') };
   });
 
   /**
