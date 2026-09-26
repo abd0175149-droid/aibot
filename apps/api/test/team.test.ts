@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { isUniqueViolation } from '../src/routes/team.js';
+import { isUniqueViolation, pgError } from '../src/routes/team.js';
 
 /**
  * ★ حرّاسُ شاشة الفريق — **ساكنةٌ عمداً**، وعلى نفس نمط `db-context.test.ts`.
@@ -279,6 +279,19 @@ describe('⑦ كلُّ فعلٍ في `audit_log` باسم فاعله', () => {
 describe('رمزُ القيد الفريد — فرقُ 409 مفهومةٍ عن 500 غامضة', () => {
   it('يُطابق نصَّ `23505` كما يمرّره postgres.js', () => {
     expect(isUniqueViolation({ code: '23505' })).toBe(true);
+  });
+
+  it('★★ و**تحت غلاف drizzle** — الشكلُ الوحيدُ الذي يصل فعلاً منذ 0.45', () => {
+    /* كان هذا الحارسُ يمرّر `{ code }` عارياً فمرّ، والخادمُ يردّ ٥٠٠ على كلّ
+       تكرار: drizzle يلفّ الخطأ في `DrizzleQueryError` والرمزُ في `.cause`. */
+    class DrizzleQueryError extends Error {
+      constructor(override readonly cause: unknown) { super('Failed query: insert into "users" …'); }
+    }
+    const wrapped = new DrizzleQueryError({ code: '23505', constraint_name: 'users_email_unique' });
+    expect(isUniqueViolation(wrapped)).toBe(true);
+    expect(pgError(wrapped)?.constraint_name).toBe('users_email_unique');
+    expect(isUniqueViolation(new DrizzleQueryError({ code: '23503' }))).toBe(false);
+    expect(isUniqueViolation(new DrizzleQueryError(undefined))).toBe(false);
   });
 
   it('ولا يُطابق رقماً ولا رمزاً آخر — وهذا هو الخطأ الصامت', () => {

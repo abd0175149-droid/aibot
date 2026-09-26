@@ -204,7 +204,26 @@ async function memberById(tx: Tx, tenantId: string, id: string): Promise<MemberR
  *   و`postgres.js` يمرّر الرمزَ نصّاً كما يعطيه الخادم.
  */
 export function isUniqueViolation(e: unknown): boolean {
-  return typeof e === 'object' && e !== null && (e as { code?: unknown }).code === '23505';
+  return pgError(e)?.code === '23505';
+}
+
+/**
+ * ★★ خطأُ postgres.js **تحت** غلاف drizzle.
+ *
+ *   منذ ترقية drizzle-orm إلى 0.45 (الموجة ٧) يصل كلُّ خطأ قاعدةٍ ملفوفاً في
+ *   `DrizzleQueryError` ورمزُ SQLSTATE في `.cause` — فصار `e.code` غائباً دائماً،
+ *   وكلُّ بريدٍ مكرّرٍ في الدعوة أو معرّفٍ مكرّرٍ في إنشاء عميلٍ يُردّ ٥٠٠ «خطأ داخليّ».
+ *   أمسكه تحقّقٌ حيٌّ على الخادم (٢٦ أيلول) لا اختبارٌ ساكن: الاختبارُ كان يمرّر
+ *   `{ code }` عارياً — شكلاً لم يعد يصل أبداً. فيُفكّ الغلافُ هنا مرّةً للجميع.
+ */
+export function pgError(e: unknown): { code?: string; constraint_name?: string } | null {
+  let cur: unknown = e;
+  for (let i = 0; i < 4 && cur && typeof cur === 'object'; i += 1) {
+    const o = cur as { code?: unknown; constraint_name?: unknown; cause?: unknown };
+    if (typeof o.code === 'string') return { code: o.code, constraint_name: typeof o.constraint_name === 'string' ? o.constraint_name : undefined };
+    cur = o.cause;
+  }
+  return null;
 }
 
 /** يُسقط المعرّفَ المشوّه بـ404 قبل أن يبلغ القاعدةَ فتردَّ 500 على خطأ الطالب. */

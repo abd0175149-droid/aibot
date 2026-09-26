@@ -7,7 +7,7 @@ import {
 import { AppError, ErrorCode, billingPeriod, DEFAULT_TZ } from '@aibot/shared';
 import { publicId, seal, sha256 } from '@aibot/crypto';
 import { requireAuth, signAccess, hashPassword } from '../auth.js';
-import { isUniqueViolation } from './team.js';
+import { isUniqueViolation, pgError } from './team.js';
 import { emitToPlatform } from '../realtime.js';
 
 /**
@@ -26,7 +26,7 @@ const UUID_RE = /^[0-9a-f-]{36}$/i;
  *   يُسمّى من `constraint_name` الذي يمرّره postgres.js، فتُقال العلّةُ بعينها.
  */
 function uniqueMessage(e: unknown): string {
-  const c = String((e as { constraint_name?: unknown }).constraint_name ?? '');
+  const c = pgError(e)?.constraint_name ?? '';
   if (/slug/.test(c)) return 'هذا المعرّف مستعملٌ لعميلٍ آخر — اختر معرّفاً غيره.';
   if (/email/.test(c)) return 'بريدُ المالك مستعملٌ على المنصّة سلفاً — لكلّ حسابٍ بريدٌ واحد.';
   return 'قيمةٌ مكرّرة: المعرّف أو بريد المالك مستعملٌ سلفاً.';

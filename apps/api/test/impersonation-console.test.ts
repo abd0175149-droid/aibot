@@ -108,7 +108,9 @@ describe('★★ اللوحة — متانةٌ في المسارات', () => {
   });
 
   it('★ وبريدٌ أو معرّفٌ مكرّرٌ يُقال بعينه لا 500', () => {
-    expect(con).toContain("import { isUniqueViolation } from './team.js';");
+    expect(con).toContain("import { isUniqueViolation, pgError } from './team.js';");
+    /* القيدُ يُقرأ من تحت غلاف drizzle — لا من الخطأ الملفوف مباشرةً (كان ٥٠٠ حيّاً). */
+    expect(con).toContain("const c = pgError(e)?.constraint_name ?? '';");
     expect(con).toContain('if (isUniqueViolation(e)) throw new AppError(ErrorCode.VALIDATION, uniqueMessage(e), 409);');
     expect(con).toContain('function uniqueMessage(e: unknown): string');
     expect(con).toMatch(/if \(\/slug\/\.test\(c\)\)/);
