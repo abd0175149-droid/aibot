@@ -116,6 +116,8 @@ export default function TeamPage() {
   const { toast, node: toastNode } = useToast();
 
   const [filt, setFilt] = useState<Filt>('all');
+  /* ★ السجلُّ يُفتح على آخر ثمانية: مئةُ سطرٍ ظاهرةٍ كانت أطولَ ما في الشاشة. */
+  const [auditAll, setAuditAll] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
@@ -531,8 +533,9 @@ export default function TeamPage() {
             hint="ستظهر هنا كلّ عمليّة على حسابكم."
           />
         ) : (
+          <>
           <ul className="au-list">
-            {audit.data.items.map((r) => (
+            {(auditAll ? audit.data.items : audit.data.items.slice(0, 8)).map((r) => (
               <li key={r.id} className={`au-row${r.action === 'tenant.impersonate' ? ' imp' : ''}`}>
                 <span className="au-when">{fmt.when(r.createdAt)}</span>
                 <span className="au-who" dir="auto">{auditActor(r)}</span>
@@ -543,6 +546,12 @@ export default function TeamPage() {
               </li>
             ))}
           </ul>
+          {!auditAll && audit.data.items.length > 8 && (
+            <Button size="sm" onClick={() => setAuditAll(true)}>
+              اعرض الكلّ (<span className="num">{fmt.num(audit.data.items.length)}</span>)
+            </Button>
+          )}
+          </>
         )}
       </Section>
 

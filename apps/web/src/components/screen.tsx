@@ -223,7 +223,7 @@ export function MetricRow({ k, note, value, unit, mid, href, onClick }: {
     <>
       <span className="rm-k">
         {k}
-        {note !== undefined && (isExplainer(note, 32)
+        {note !== undefined && (isExplainer(note, 22)
           ? <Hint>{note}</Hint>
           : <span className="rm-note">{note}</span>)}
       </span>
