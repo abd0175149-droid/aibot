@@ -1,6 +1,26 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+
+/* ★ حلُّ الأسماء **مزيَّفٌ ثابت** لا شبكةٌ حقيقيّة. كان الاختبارُ يحلّ `localtest.me`
+   و`api.github.com` عبر الإنترنت، فأسقط بوّابةَ النشر حين تعثّر DNS الخادم لحظةً
+   (`EAI_AGAIN`، ٢٦ أيلول) — على تغييرٍ في الواجهة لا علاقةَ له بالحارس. وما يُختبر
+   هنا قرارُ الحارس على **ما يعيده الحلّ**، لا الحلُّ نفسُه: فالجدولُ يعيد ما يعيده
+   العالمُ لهذه الأسماء، والحارسُ الحقيقيّ يقرّر. */
+const FAKE_DNS: Record<string, Array<{ address: string; family: number }>> = {
+  'localtest.me': [{ address: '127.0.0.1', family: 4 }],
+  'api.github.com': [{ address: '140.82.112.6', family: 4 }],
+};
+vi.mock('node:dns', async (orig) => {
+  const real = await orig<typeof import('node:dns')>();
+  const lookup = (host: string, _opts: unknown, cb: (e: NodeJS.ErrnoException | null, a: Array<{ address: string; family: number }>) => void) => {
+    const hit = FAKE_DNS[host];
+    if (hit) return queueMicrotask(() => cb(null, hit));
+    const err = Object.assign(new Error(`getaddrinfo ENOTFOUND ${host}`), { code: 'ENOTFOUND' }) as NodeJS.ErrnoException;
+    return queueMicrotask(() => cb(err, []));
+  };
+  return { ...real, lookup, default: { ...real, lookup } };
+});
 import {
   assertPublicUrl, guardedLookup, ownHeadersOnly, tenantHeaderNames,
 } from '../src/tools/http.js';
