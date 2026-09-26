@@ -74,6 +74,10 @@ describe('★ تسميةُ سجلّ الأفعال — تنفيذٌ لا نصّ'
     expect(auditActor({ action: 'tenant.impersonate', actorName: null, actorEmail: null })).toBe('فريق المنصّة');
     expect(auditActor({ action: 'team.invite', actorName: null, actorEmail: null })).toBe('حسابٌ أُزيل من الفريق');
     expect(auditActor({ action: 'team.invite', actorName: 'سارة', actorEmail: 's@x.jo' })).toBe('سارة');
+    /* ★ رُئي حيّاً: «نُشرت نسخة» بذرها فريقُ المنصّة وُسمت «حسابٌ أُزيل». الخادمُ
+       يقول الآن إنّ للصفّ فاعلاً — فاعلٌ بلا اسمٍ مرئيٍّ هو المنصّة. */
+    expect(auditActor({ action: 'bot.publish', actorName: null, actorEmail: null, hasActor: true })).toBe('فريق المنصّة');
+    expect(auditActor({ action: 'bot.publish', actorName: null, actorEmail: null, hasActor: false })).toBe('حسابٌ أُزيل من الفريق');
     expect(isPlatformEntry('tenant.kill_bot')).toBe(true);
     expect(isPlatformEntry('contact.block')).toBe(false);
   });

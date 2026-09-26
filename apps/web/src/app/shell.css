@@ -297,6 +297,10 @@
   .opts-x { display: none; }
   /* وشارةُ المِصرف كذلك: عددٌ يجمع ما صار ظاهراً بجانبه مباشرةً يُربك. */
   .side .navi-more .bdg { display: none; }
+  /* ★ ووسمُ «نشط» على المِصرف كذلك: الشاشةُ الحاليّةُ ظاهرةٌ في الرصيف ومُضاءة،
+     فإضاءةُ «المزيد» معها بندان نشطان في رصيفٍ واحد (رُئي في لقطة «الفريق»). */
+  .side .navi-more[aria-current='page'] { background: none; font-weight: inherit; }
+  .side .navi-more[aria-current='page']::after { content: none; }
 
   .side .navi {
     flex: 0 0 auto; flex-direction: row; justify-content: flex-start;

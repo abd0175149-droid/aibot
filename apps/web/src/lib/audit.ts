@@ -16,6 +16,8 @@ export interface AuditRow {
   /** فارغٌ حين الفاعلُ من فريق المنصّة (صفُّه خارج RLS المستأجر) أو حسابٌ أُزيل. */
   actorName: string | null;
   actorEmail: string | null;
+  /** للصفّ فاعلٌ (لا يُرسَل معرّفُه). موجودٌ بلا اسمٍ = فريقُ المنصّة؛ غائبٌ = حسابٌ حُذف. */
+  hasActor?: boolean;
 }
 
 /** الأفعالُ التي لا يقوم بها إلّا فريقُ المنصّة — فاعلُها الفارغُ يُسمّى به. */
@@ -74,9 +76,14 @@ export function auditKnown(action: string): boolean {
  * فريقُ المنصّة (صفُّه لا يُرى تحت RLS المستأجر — وهذا مقصود)، وغيرُه حسابٌ
  * أُزيل من الفريق بعد فعله.
  */
-export function auditActor(row: Pick<AuditRow, 'action' | 'actorName' | 'actorEmail'>): string {
+export function auditActor(row: Pick<AuditRow, 'action' | 'actorName' | 'actorEmail' | 'hasActor'>): string {
   if (row.actorName) return row.actorName;
   if (row.actorEmail) return row.actorEmail;
+  /* ★ الحقيقةُ من الخادم أوّلاً: فاعلٌ موجودٌ بلا اسمٍ مرئيٍّ لا يكون إلّا من فريق
+     المنصّة. واسمُ الفعل احتياطٌ لصفوفٍ قديمةٍ بلا الحقل — وكان وحده يُخطئ في
+     «نُشرت نسخة» بذرها فريقُ المنصّة. */
+  if (row.hasActor === true) return 'فريق المنصّة';
+  /* بلا فاعل: سكربتُ منصّةٍ (`platform.reprice`) أو حسابٌ حُذف بعد فعله. */
   return PLATFORM_ACTIONS.has(row.action) ? 'فريق المنصّة' : 'حسابٌ أُزيل من الفريق';
 }
 

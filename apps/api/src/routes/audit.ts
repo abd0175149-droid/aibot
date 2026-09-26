@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { getDb, withTenant, auditLog, users, eq, desc } from '@aibot/db';
+import { getDb, withTenant, auditLog, users, eq, desc, sql } from '@aibot/db';
 import { requireAuth, tenantOf } from '../auth.js';
 
 /**
@@ -40,6 +40,11 @@ export async function registerAudit(app: FastifyInstance) {
           ip: auditLog.ip,
           actorName: users.name,
           actorEmail: users.email,
+          /* ★ هل للصفّ فاعلٌ أصلاً — نعم/لا لا المعرّف. فاعلٌ موجودٌ لا يُرى اسمُه
+             تحت RLS هو فريقُ المنصّة بالتعريف (صفُّه بلا tenant_id)، وفاعلٌ `NULL`
+             حسابٌ حُذف بعد فعله. وبلا هذا كانت الشاشةُ تخمّن من اسم الفعل، فقالت
+             عن نشرٍ بذره فريقُ المنصّة «حسابٌ أُزيل من الفريق». */
+          hasActor: sql<boolean>`${auditLog.actorUserId} is not null`,
         })
         .from(auditLog)
         .leftJoin(users, eq(users.id, auditLog.actorUserId))
