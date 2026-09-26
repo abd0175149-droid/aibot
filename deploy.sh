@@ -219,7 +219,17 @@ else
   LOCK_NOW="$(sha256sum pnpm-lock.yaml | cut -d" " -f1)"
   if [ ! -d node_modules ] || [ "$(cat "$LOCK_STAMP" 2>/dev/null)" != "$LOCK_NOW" ]; then
     echo "  ℹ المثبَّت لا يطابق القفل — تثبيت التبعيّات"
-    if ! gate_run "$GATE_INSTALL_TIMEOUT" "تثبيت التبعيّات" \
+    # ★★★ **`CI=true` — وبلاها كان التثبيت لا-عمليّةً صامتةً برمز نجاح.**
+    #    pnpm يسأل تفاعليّاً حين يقرّر إعادةَ بناء `node_modules`:
+    #      ? The modules directories will be removed and reinstalled
+    #        from scratch. Proceed? (Y/n)
+    #    ومع `< /dev/null` يصل EOF فيمضي **بلا تثبيت** ويُعيد صفراً. فتُكتب
+    #    بصمةُ القفل على تثبيتٍ لم يقع، ويتخطّى النشرُ التالي التثبيتَ أصلاً.
+    #    ووقع هذا: بقيت `xlsx@0.18.5` وسقط اختبارٌ يفحص المثبَّت.
+    #    و`CI=true` هي الصيغةُ التي يفهمها pnpm للاعملٍ بلا سؤال.
+    # ⚠️ ولا تُحذف `< /dev/null`: هي التي منعت الانتظارَ إلى الأبد قبل ذلك.
+    #    الاثنتان معاً: لا سؤالَ يُطرح، ولو طُرح لم يُنتظر جوابُه.
+    if ! CI=true gate_run "$GATE_INSTALL_TIMEOUT" "تثبيت التبعيّات" \
          npx --yes pnpm@9 install --frozen-lockfile; then
       echo "  ✘ فشل تثبيت التبعيّات — لا يُنشر. ولم يُلمس شيءٌ بعد."
       exit 1
