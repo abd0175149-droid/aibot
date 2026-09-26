@@ -5,6 +5,7 @@ import {
   AppError, ErrorCode, tenantBlocked, TENANT_BLOCKED_AR, MfaVerifyBody, MfaActivateBody,
   type Role,
 } from '@aibot/shared';
+import type { MeDTO } from '@aibot/shared';
 import { getDb, withPlatform, users, sessions, tenants, auditLog, eq, and, ne, isNull, gt, sql } from '@aibot/db';
 import {
   sha256, seal, open, generateTotpSecret, verifyTotp, otpauthUri, qrRows,
@@ -644,7 +645,7 @@ export async function registerAuth(app: FastifyInstance) {
     return reply.header('set-cookie', clearRefreshCookie()).send({ ok: true });
   });
 
-  app.get('/me', { preHandler: requireAuth() }, async (req) => {
+  app.get('/me', { preHandler: requireAuth() }, async (req): Promise<MeDTO> => {
     const db = getDb();
     const { user, tenant } = await withPlatform(db, 'قراءة بطاقة المستخدم الحاليّ', async (tx) => {
       const u = (await tx.select().from(users).where(eq(users.id, req.auth!.sub)).limit(1))[0]!;
@@ -668,7 +669,9 @@ export async function registerAuth(app: FastifyInstance) {
         id: user.id, name: user.name, email: user.email, role: user.role,
         mustChangePassword: user.mustChangePassword,
       },
-      tenant: tenant && { id: tenant.id, name: tenant.name, status: tenant.status, capabilities: tenant.capabilities },
+      tenant: tenant
+        ? { id: tenant.id, name: tenant.name, status: tenant.status, capabilities: tenant.capabilities as Record<string, boolean> }
+        : null,
       permissions: PERMISSIONS[user.role],
       impersonating: req.auth!.imp ?? null,
       /* ★ والأجلُ يُعلَن: القشرةُ تعدّ تنازليّاً وتخرج قبله. وبلاه ينقضي التوكنُ

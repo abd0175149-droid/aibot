@@ -9,6 +9,7 @@ import { capabilitiesFor, getAdapter, type ChannelKind } from '@aibot/channels';
 import { open as decrypt, seal, fingerprint, publicId } from '@aibot/crypto';
 import { requireAuth, tenantOf } from '../auth.js';
 import { AppError, ErrorCode, capConsequence, billingPeriod, DEFAULT_TZ } from '@aibot/shared';
+import type { OverviewDTO } from '@aibot/shared';
 import {
   MIN_FOR_TREND, PRESET_DAYS, parseRange, shiftDay, fillDays,
   type Range,
@@ -77,7 +78,7 @@ async function limitsOf(tx: never, tenantId: string): Promise<Record<string, num
 
 export async function registerReports(app: FastifyInstance) {
   /** نبض اليوم — تُقرأ في كلّ تحميلٍ للوحة، فكلّ استعلامٍ هنا مفهرس. */
-  app.get('/reports/overview', { preHandler: requireAuth() }, async (req) => {
+  app.get('/reports/overview', { preHandler: requireAuth() }, async (req): Promise<OverviewDTO> => {
     const tenantId = tenantOf(req);
     return withTenant(getDb(), tenantId, async (tx) => {
       const lim = await limitsOf(tx as never, tenantId);
@@ -150,7 +151,7 @@ export async function registerReports(app: FastifyInstance) {
         /* ★ حالةُ العتبة: متى أُنذر العميل وبأيّ عتبة. الشاشةُ تفرّق بين
            «أنت على 84٪» و«أنذرناك عند 80٪ يوم الثلاثاء» — والثانية هي التي
            تُسقط «ما حذّرني أحد». */
-        quotaAlerts: alerts,
+        quotaAlerts: alerts.map((a) => ({ threshold: a.threshold, firedAt: a.firedAt.toISOString() })),
         channels,
       };
     });

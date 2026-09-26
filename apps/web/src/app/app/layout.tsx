@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import type { OverviewDTO } from '@aibot/shared';
 import { Shell, type NavItem } from '@/components/Shell';
 import { Meter, Pill, Skeleton, Button } from '@/components/ui';
 import { useApi, fmt } from '@/lib/useApi';
@@ -30,11 +31,7 @@ import { useSession, useCan } from '@/lib/session';
  */
 
 /** ما نستعمله من `/reports/overview` — لا أكثر، فالعقد ما يُقرأ لا ما يُرسَل. */
-interface Overview {
-  windowsUsed: number;
-  windowsLimit: number;
-  needsAttention: number;
-}
+type Overview = Pick<OverviewDTO, 'windowsUsed' | 'windowsLimit' | 'needsAttention'>;
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const { me } = useSession();

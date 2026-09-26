@@ -1,31 +1,13 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import type { MeDTO } from '@aibot/shared';
 import { bootstrap, get, watchExpired, watchResumed } from './api';
 import { SessionGate } from '@/components/SessionGate';
 
-export interface Me {
-  user: {
-    id: string; name: string; email: string;
-    role: 'platform_owner' | 'tenant_owner' | 'tenant_agent';
-    /** ★ كلمةٌ مؤقّتةٌ يعرفها من عيّنها — والقشرةُ تحبس صاحبَها في شاشة التغيير. */
-    mustChangePassword: boolean;
-  };
-  tenant: { id: string; name: string; status: string; capabilities: Record<string, boolean> } | null;
-  permissions: { write: boolean; settings: boolean; billing: boolean; console: boolean };
-  impersonating: string | null;
-  /** أجلُ الانتحال (ISO) — القشرةُ تعدّ تنازليّاً وتخرج قبله بقليل. */
-  impersonationExpiresAt: string | null;
-  /**
-   * ★ حالةُ العامل الثاني — ثلاثٌ لا علَمٌ ثنائيّ.
-   *  · `pending` لم يُسجّل بعد ⟶ شاشةُ التسجيل.
-   *  · `stale`   سجَّل وهذا التوكن لم يخطُ الخطوةَ الثانية ⟶ دخولٌ من جديد.
-   *  · `ok`      اللوحة مفتوحة.
-   * وجمعُ الأوّلَين في `false` يقول لمن سجَّل «سجِّل» — وتلك أسرعُ طريقٍ إلى
-   * إطفاء الميزة.
-   */
-  mfa: 'ok' | 'stale' | 'pending';
-}
+/* ★ الشكلُ من العقد المشترك لا من نسخةٍ يدويّة: `/me` يُعلن `MeDTO` في الخادم
+   والقشرةُ تقرؤها — فحقلٌ يُضاف هناك ولا يُقرأ هنا يرفضه المُصرِّف لا المستخدم. */
+export type Me = MeDTO;
 
 interface Ctx {
   me: Me | null;

@@ -225,7 +225,10 @@ export const aiKeys = pgTable('ai_keys', {
   lastError: text('last_error'),
 }, (t) => [uniqueIndex('ai_keys_uq').on(t.tenantId, t.provider)]);
 
-/** التسعير لحظة العرض — فتصحيح سعرٍ يصحّح التاريخ كلّه. */
+/**
+ * أسعارُ النماذج بتاريخِ سريان. ★ الكلفةُ تُجمَّد لحظةَ النداء في `ai_runs` —
+ * فصفٌّ جديدٌ يسري على ما بعده، وإعادةُ تسعير ما مضى فعلٌ صريحٌ (`ops/reprice.ts`).
+ */
 export const prices = pgTable('prices', {
   provider: text('provider').notNull(),
   model: text('model').notNull(),

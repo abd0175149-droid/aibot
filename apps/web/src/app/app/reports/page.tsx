@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useApi, useToast, fmt, AR_LOCALE } from '@/lib/useApi';
+import { validateRange } from '@/lib/range';
 import { download, ApiError } from '@/lib/api';
 import {
   PageHead, Stack, Row, Pill, Tag, Note, Meter, Button, Sheet, Table, Empty,
@@ -336,8 +337,11 @@ export default function ReportsPage() {
   const { data, loading, error, reload } = useApi<Trend>(ready ? `/reports/trend?${qs}` : null);
 
   function applyCustom() {
-    if (!draftFrom || !draftTo) {
-      toast('اختر تاريخَ بدايةٍ وتاريخَ نهاية.');
+    /* ★ التحقّقُ قبل الإرسال: نهايةٌ قبل بدايةٍ أو في المستقبل أو مدًى فوق سنةٍ
+       كانت تُرسَل كما هي وتعود تقريراً فارغاً يُقرأ «لا نشاط». */
+    const v = validateRange(draftFrom, draftTo);
+    if (!v.ok) {
+      toast(v.message);
       return;
     }
     setFrom(draftFrom);
@@ -363,7 +367,7 @@ export default function ReportsPage() {
 
   const rangeLabel = data
     ? `${data.range.from} → ${data.range.to}`
-    : preset != null ? `${preset}d` : `${from} → ${to}`;
+    : preset != null ? `${preset} يوماً` : `${from} → ${to}`;
 
   return (
     <Stack gap="lg">
@@ -1064,7 +1068,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 )}
               >
                 <Line
-                  label={`كلفةُ الذكاء يوماً بيوم — المجموع ${cost.total.toFixed(4)} دولار`}
+                  label={`كلفةُ الذكاء يوماً بيوم — المجموع ${fmt.money(cost.total)}`}
                   values={costSeries}
                   prev={prevCostSeries}
                   max={costMax}

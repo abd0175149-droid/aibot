@@ -408,24 +408,6 @@ CREATE TABLE IF NOT EXISTS "push_subscriptions" (
 	CONSTRAINT "push_subscriptions_endpoint_unique" UNIQUE("endpoint")
 );
 --> statement-breakpoint
-CREATE TABLE IF NOT EXISTS "usage_daily" (
-	"tenant_id" uuid NOT NULL,
-	"channel_id" uuid NOT NULL,
-	"day" date NOT NULL,
-	"windows_opened" integer DEFAULT 0 NOT NULL,
-	"windows_billed" integer DEFAULT 0 NOT NULL,
-	"messages_in" integer DEFAULT 0 NOT NULL,
-	"messages_out" integer DEFAULT 0 NOT NULL,
-	"bot_replies" integer DEFAULT 0 NOT NULL,
-	"agent_replies" integer DEFAULT 0 NOT NULL,
-	"handoffs" integer DEFAULT 0 NOT NULL,
-	"unknown_answers" integer DEFAULT 0 NOT NULL,
-	"ai_tokens" integer DEFAULT 0 NOT NULL,
-	"ai_cost_usd" numeric(12, 6) DEFAULT '0' NOT NULL,
-	"avg_latency_ms" integer,
-	CONSTRAINT "usage_daily_tenant_id_channel_id_day_pk" PRIMARY KEY("tenant_id","channel_id","day")
-);
---> statement-breakpoint
 DO $$ BEGIN
   ALTER TABLE "audit_log" ADD CONSTRAINT "audit_log_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN NULL;
@@ -624,14 +606,6 @@ EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;--> statement-breakpoint
 DO $$ BEGIN
   ALTER TABLE "push_subscriptions" ADD CONSTRAINT "push_subscriptions_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;--> statement-breakpoint
-DO $$ BEGIN
-  ALTER TABLE "usage_daily" ADD CONSTRAINT "usage_daily_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
-EXCEPTION WHEN duplicate_object THEN NULL;
-END $$;--> statement-breakpoint
-DO $$ BEGIN
-  ALTER TABLE "usage_daily" ADD CONSTRAINT "usage_daily_channel_id_tenant_channels_id_fk" FOREIGN KEY ("channel_id") REFERENCES "public"."tenant_channels"("id") ON DELETE cascade ON UPDATE no action;
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "audit_tenant_idx" ON "audit_log" USING btree ("tenant_id","created_at");--> statement-breakpoint

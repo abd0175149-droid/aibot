@@ -67,7 +67,7 @@ describe('المخطّط — ما يُفحص بالكود لا بالمراجع�
   it('النقود والكلفة numeric لا float — أبداً', () => {
     const money = [
       ['conversation_windows', 'aiCostUsd'], ['ai_runs', 'costUsd'],
-      ['plans', 'priceMonthly'], ['usage_daily', 'aiCostUsd'],
+      ['plans', 'priceMonthly'],
     ] as const;
     for (const [table, col] of money) {
       const t = named.find((x) => x.name === table)!;

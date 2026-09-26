@@ -184,14 +184,6 @@ CREATE POLICY tenant_isolation ON push_subscriptions
   WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
 GRANT SELECT, INSERT, UPDATE, DELETE ON push_subscriptions TO aibot_app;
 
-ALTER TABLE usage_daily ENABLE ROW LEVEL SECURITY;
-ALTER TABLE usage_daily FORCE ROW LEVEL SECURITY;
-DROP POLICY IF EXISTS tenant_isolation ON usage_daily;
-CREATE POLICY tenant_isolation ON usage_daily
-  USING (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid)
-  WITH CHECK (tenant_id = nullif(current_setting('app.tenant_id', true), '')::uuid);
-GRANT SELECT, INSERT, UPDATE, DELETE ON usage_daily TO aibot_app;
-
 ALTER TABLE quota_alerts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE quota_alerts FORCE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS tenant_isolation ON quota_alerts;

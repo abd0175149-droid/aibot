@@ -135,10 +135,10 @@ quality_drop|webhook_silent|ai_error|tool_error|quota_exceeded|send_failed|worke
 `read_at` · `created_at`. فريدٌ جزئيّ على `(user_id, tag)` حيث `read_at IS NULL` —
 **دورة حياةٍ واحدة لكلّ موضوع** (الدرس المدفوع في المافيا: صفٌّ لكلّ دفعة أغرق الصندوق).
 
-**`usage_daily`** — تجميعٌ يوميّ لكلّ مستأجر (يجعل التقارير فوريّة).
-`tenant_id` · `day` · `windows_opened` · `windows_billed` · `messages_in` · `messages_out` ·
-`bot_replies` · `agent_replies` · `handoffs` · `unknown_answers` · `ai_tokens` ·
-`ai_cost_usd` · `avg_latency_ms`. مفتاح: `(tenant_id, day)`.
+**`usage_daily`** — ~~تجميعٌ يوميّ لكلّ مستأجر~~ **أُزيل** (٢٦ أيلول ٢٠٢٦ — من `0001`/`0002` والمخطَّط، وحُذف الجدولُ على الخادم يدويّاً لأنّ `DROP` في ترحيلٍ يُعاد كلَّ نشرةٍ ممنوع):
+لم يكتبه أيُّ مسارٍ قطّ، والتقاريرُ تُحسب من `conversation_windows` و`messages` و`ai_runs`
+مباشرةً عند كلّ تحميل وتعمل بذلك. يُعاد النظرُ في تجميعٍ يوميٍّ حين يصير التحميلُ بطيئاً
+فعلاً — لا قبله، ولا بجدولٍ لا يكتبه أحد.
 
 ## ٦.٥ قواعد المخطّط الملزِمة
 

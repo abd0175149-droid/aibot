@@ -1,6 +1,5 @@
 import {
-  pgTable, uuid, text, varchar, boolean, integer, timestamp, jsonb, numeric, date,
-  index, uniqueIndex, primaryKey,
+  pgTable, uuid, text, varchar, boolean, integer, timestamp, jsonb, numeric, index, uniqueIndex, primaryKey,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 import { uuid7, now } from './_common';
@@ -77,24 +76,6 @@ export const notifications = pgTable('notifications', {
   readAt: timestamp('read_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(now),
 }, (t) => [index('notif_user_idx').on(t.userId, t.createdAt)]);
-
-/** تجميعٌ يوميّ لكلّ مستأجر وقناة — يجعل التقارير فوريّة. */
-export const usageDaily = pgTable('usage_daily', {
-  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
-  channelId: uuid('channel_id').notNull().references(() => tenantChannels.id, { onDelete: 'cascade' }),
-  day: date('day').notNull(),
-  windowsOpened: integer('windows_opened').notNull().default(0),
-  windowsBilled: integer('windows_billed').notNull().default(0),
-  messagesIn: integer('messages_in').notNull().default(0),
-  messagesOut: integer('messages_out').notNull().default(0),
-  botReplies: integer('bot_replies').notNull().default(0),
-  agentReplies: integer('agent_replies').notNull().default(0),
-  handoffs: integer('handoffs').notNull().default(0),
-  unknownAnswers: integer('unknown_answers').notNull().default(0),
-  aiTokens: integer('ai_tokens').notNull().default(0),
-  aiCostUsd: numeric('ai_cost_usd', { precision: 12, scale: 6 }).notNull().default('0'),
-  avgLatencyMs: integer('avg_latency_ms'),
-}, (t) => [primaryKey({ columns: [t.tenantId, t.channelId, t.day] })]);
 
 /**
  * عتباتُ السقف التي أُنذر بها العميل — صفٌّ لكلّ (مستأجر · دورة · عتبة).

@@ -126,8 +126,15 @@ export const AR_LOCALE = 'ar-JO-u-nu-latn';
 export const fmt = {
   num: (n: number | string | null | undefined) =>
     n == null ? '—' : Number(n).toLocaleString('en-US'),
-  money: (n: number | string | null | undefined, cur = '$') =>
-    n == null ? '—' : `${cur}${Number(n).toFixed(Number(n) < 1 ? 5 : 2)}`,
+  /* ★ ثلاثُ منازلَ تحت الدولار لا خمس: «$0.13230» رقمٌ لا يقرؤه صاحبُ مطعم،
+     و«$0.132» يقول الشيءَ نفسَه. وما دون المِلّي («$0.0004») يبقى بأربعٍ فلا
+     يُقرأ صفراً — الكلفةُ الصغيرةُ ليست كلفةً معدومة. */
+  money: (n: number | string | null | undefined, cur = '$') => {
+    if (n == null) return '—';
+    const v = Number(n);
+    const digits = v >= 1 ? 2 : v >= 0.001 || v === 0 ? 3 : 4;
+    return `${cur}${v.toFixed(digits)}`;
+  },
   pct: (n: number) => `${Math.round(n * 100)}%`,
   when: (iso: string | null | undefined) => {
     if (!iso) return '—';

@@ -21,7 +21,7 @@ export interface AuditRow {
 /** الأفعالُ التي لا يقوم بها إلّا فريقُ المنصّة — فاعلُها الفارغُ يُسمّى به. */
 const PLATFORM_ACTIONS = new Set([
   'tenant.create', 'tenant.impersonate', 'tenant.kill_bot', 'tenant.unlock_bot', 'tenant.status',
-  'tenant.owner_password_reset', 'tenant.channel_secrets_read', 'bot.seed',
+  'tenant.owner_password_reset', 'tenant.channel_secrets_read', 'bot.seed', 'platform.reprice',
 ]);
 
 const LABELS: Record<string, string> = {
@@ -54,6 +54,7 @@ const LABELS: Record<string, string> = {
   'contact.optin': 'أُعيد اشتراكُ زبون',
   'contact.merge': 'دُمجت جهتا اتّصال',
   'contact.merge_undo': 'أُلغي دمجُ جهتَي اتّصال',
+  'platform.reprice': 'أعاد فريقُ المنصّة تسعيرَ أشواطٍ سابقة بسعرٍ مصحَّح',
   'contact.export': 'صُدّر ملفُّ جهة اتّصال',
   'contact.delete': 'حُذفت جهةُ اتّصال وكلُّ بياناتها نهائيّاً',
   'tenant.export': 'صُدّرت بياناتُ الحساب كاملةً',

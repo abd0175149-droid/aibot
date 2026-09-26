@@ -1,5 +1,6 @@
 'use client';
 
+import type { OverviewDTO } from '@aibot/shared';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { useApi, fmt } from '@/lib/useApi';
@@ -34,22 +35,8 @@ import { Band, Hero, Section, Rows, MetricRow, Fold, ScreenDock, type Sev } from
  *   العميل بسقفه، وهي أشيع شكوى في هذا النوع من المنتجات.
  */
 
-interface Overview {
-  conversationsToday: number;
-  botReplies: number;
-  windowsUsed: number;
-  windowsLimit: number;
-  selfResolvedRate: number;
-  medianLatencyMs: number;
-  needsAttention: number;
-  botEnabled: boolean;
-  channels: Array<{ kind: string; status: string; displayName: string | null }>;
-  overagePolicy: string;
-  /** نصُّ العاقبة من الخادم — نفسُ نصّ الإشعار الذي يدفعه العامل. */
-  capConsequence: string;
-  /** عتباتٌ أُنذر بها فعلاً في هذه الدورة (من `quota_alerts`)، تصاعديّاً. */
-  quotaAlerts: Array<{ threshold: number; firedAt: string }>;
-}
+/* ★ الشكلُ من العقد المشترك — `/reports/overview` يُعلنه في الخادم. */
+type Overview = OverviewDTO;
 
 interface Gap {
   query: string;
