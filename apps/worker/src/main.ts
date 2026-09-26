@@ -8,7 +8,7 @@ import { sweepStrandedConversations } from './enqueue.js';
 import { handleEmbed } from './embed.js';
 import { sendOutbound } from './outbound.js';
 import { runHealthPoll, closeExpiredWindows, negativeSignals } from './health.js';
-import { handleNotify, flushDigest, checkAlerting } from './notify.js';
+import { handleNotify, flushDigest, checkAlerting, checkKeyCoverage } from './notify.js';
 import { runRetention } from './retention.js';
 import { handleIngest } from './extract.js';
 import { runPlayground } from './playground.js';
@@ -86,6 +86,11 @@ const workers = [
       log('احتفاظ', Object.fromEntries(r.map((x) => [x.table, x.deleted])));
     } else if (job.name === 'digest') {
       await flushDigest();
+    } else if (job.name === 'keycover') {
+      const k = await checkKeyCoverage();
+      /* يُسجَّل في الحالتَين: «كلُّ إصدارٍ مغطّى» خبرٌ يُقرأ بعد تدوير، و
+         «إصدارٌ بلا مفتاح» هو الخبرُ الذي كان يضيع في صمتٍ تامّ. */
+      log(k.ok ? 'مفاتيحُ التشفير تغطّي كلَّ الصفوف' : '🔴 صفوفٌ بإصدارٍ بلا مفتاح', k);
     } else if (job.name === 'alerting') {
       const a = await checkAlerting();
       /* ويُسجَّل في الحالتَين: «القناة تعمل» خبرٌ يُقرأ بعد إصلاحٍ، و«صفر
@@ -132,6 +137,9 @@ const SCHED = [
      حدثٍ يُعلنه (إذنٌ يُسحب، مفتاحُ VAPID يُبدَّل، جهازٌ يُمسح)، فالعمياءُ
      تُولد في منتصف الطريق لا عند البداية. */
   { q: QUEUE.maintenance, name: 'alerting', jobId: 'alerting-check', every: 60 * 60_000 },
+  /* ★ تغطيةُ مفاتيح التشفير كلَّ ساعة — مع فحص التنبيه وبنفس السبب: كلاهما
+     يسأل «هل ما نعتمد عليه موجودٌ أصلاً؟»، وكلاهما يكشف صمتاً لا عطلاً. */
+  { q: QUEUE.maintenance, name: 'keycover', jobId: 'keycover-check', every: 60 * 60_000 },
 ] as const;
 
 export const SCHED_EXPECTED = SCHED.length;

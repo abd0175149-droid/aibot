@@ -33,7 +33,17 @@ export async function runHealthPoll(job: { channelId?: string } = {}): Promise<v
         .where(inArray(tenantChannels.status, ['connected', 'error'])));
 
   for (const ch of rows) {
-    await pollChannel(ch).catch(() => undefined); // عطلُ قناةٍ لا يوقف فحص البقيّة
+    /* عطلُ قناةٍ لا يوقف فحص البقيّة — **لكنّه يُسجَّل**.
+       ⚠️ كان `catch(() => undefined)` بلا سطرٍ إطلاقاً. وأوّلُ ما يمرّ من هنا
+          فكُّ `token_enc`: فمفتاحٌ خاطئٌ يُسقط كلَّ فحصٍ صحّيٍّ لكلّ قناةٍ
+          **بلا أثرٍ واحد** — والشاشةُ تُظهر «موصولة» لأنّ الحالة لا تتبدّل.
+          صمتٌ مزدوج: لا فحصَ يجري، ولا أحدَ يعلم أنّه لا يجري. */
+    await pollChannel(ch).catch((e) => {
+      console.error(JSON.stringify({
+        level: 'error', svc: 'worker', msg: 'فشل فحصُ صحّة قناة',
+        channelId: ch.id, tenantId: ch.tenantId, kind: ch.kind, err: String(e),
+      }));
+    });
   }
   await negativeSignals();
 }

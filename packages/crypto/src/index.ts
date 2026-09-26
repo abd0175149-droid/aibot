@@ -62,6 +62,20 @@ function decodeKey(raw: string, name: string): Buffer {
   return buf;
 }
 
+/**
+ * ★ أرقامُ الإصدارات التي **يملك** هذا التشغيلُ مفاتيحَها.
+ *
+ *   يُستعمل في الفحص الدوريّ: كلُّ صفٍّ مشفَّرٍ يحمل رقمَ إصداره، فإن حمل
+ *   رقماً ليس هنا رمى `open()` — والرميُ يُبتلع في مسار الويبهوك (الردُّ 200
+ *   يسبق الفكّ) فتضيع الرسائلُ بلا أثر. فالسؤالُ يُطرح قبل أن تصل رسالة.
+ *
+ * ⚠️ ويُحسب من `loadKeys()` نفسِها لا من مسحٍ ثانٍ للبيئة: نسختان للمنطق
+ *    تتباعدان، فيُقال «مغطّى» عن إصدارٍ يرميه الفكُّ فعلاً.
+ */
+export function configuredKeyVersions(): number[] {
+  return [...keys().keys()].sort((a, b) => a - b);
+}
+
 export function currentKeyVersion(): number {
   return Number(process.env.MASTER_KEY_VERSION ?? '1');
 }

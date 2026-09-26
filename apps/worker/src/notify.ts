@@ -4,6 +4,7 @@ import {
   eq, and, isNull, sql, desc, inArray,
 } from '@aibot/db';
 import { resolveOpenOfKinds } from './incidents.js';
+import { configuredKeyVersions } from '@aibot/crypto';
 
 /**
  * الإشعارات — Web Push بـVAPID، ولا شيء غيره.
@@ -257,4 +258,85 @@ export async function checkAlerting(): Promise<{ ok: boolean; owners: number; su
   }).catch(() => undefined);
 
   return { ok: false, owners: state.owners, subs: state.subs };
+}
+
+/**
+ * ★★★ **هل يُفكُّ كلُّ سرٍّ في القاعدة بالمفاتيح المضبوطة؟**
+ *
+ *   `packages/crypto` يحمل خريطةَ إصداراتٍ، وكلُّ صفٍّ مشفَّرٍ يحمل رقمَ
+ *   إصداره. فإن حمل صفٌّ إصداراً لا مفتاحَ له، رمى `open()` — **ولا أحدَ
+ *   يرى الرميَ**:
+ *
+ *   · في الويبهوك: الردُّ 200 يُرسَل **أوّلاً** (وهو الصواب مع ميتا)، ثمّ
+ *     يُفكّ `app_secret_enc` داخل المعالجة. فالرميُ يُبتلع في `catch` يسجّل
+ *     سطراً، وميتا استلمت 200 فلا تُعيد الإرسال. **كلُّ رسالةٍ تضيع بلا أثر.**
+ *   · وفي فحص الصحّة: `pollChannel(ch).catch(() => undefined)` كان يبتلع
+ *     بلا سطرٍ أصلاً.
+ *
+ *   فالمفتاحُ الخاطئ لا يُنتج عطلاً مرئيّاً: يُنتج صمتاً كاملاً. وهذا الفحصُ
+ *   يقلبه إلى خبر — يسأل القاعدةَ عن الإصداراتِ الموجودة فعلاً ويقارنها
+ *   بالمضبوط، قبل أن تصل رسالةُ زبونٍ واحدة.
+ *
+ * ⚠️ ولا يُقلع الخادمُ على هذا الفحص ولا يسقط عليه: حارسُ إقلاعٍ يعتمد على
+ *    استعلامِ قاعدةٍ تحت `restart: always` يحوّل عطلاً قابلاً للإصلاح إلى
+ *    حلقةِ انهيار. الحادثةُ تُرى في الشاشة، والسطرُ يُرى في السجلّ، وذلك
+ *    يكفي — والمنصّةُ تبقى تعمل لما لا يزال يعمل.
+ */
+export async function checkKeyCoverage(): Promise<{
+  ok: boolean; configured: number[]; missing: Array<{ table: string; version: number; rows: number }>;
+}> {
+  const db = getDb();
+  const configured = configuredKeyVersions();
+
+  /* الأزواجُ الأربعة: كلُّ عمودٍ مشفَّرٍ ورقمُ إصداره. وتُعدّ الصفوفُ التي
+     فيها قيمةٌ فعلاً — عمودٌ فارغٌ لا يحتاج مفتاحاً. */
+  const PAIRS: Array<{ table: string; col: string; ver: string }> = [
+    { table: 'tenant_channels', col: 'token_enc', ver: 'key_version' },
+    { table: 'tenant_channels', col: 'app_secret_enc', ver: 'key_version' },
+    { table: 'bot_tools', col: 'secrets_enc', ver: 'key_version' },
+    { table: 'ai_keys', col: 'key_enc', ver: 'key_version' },
+    { table: 'users', col: 'mfa_secret_enc', ver: 'mfa_key_version' },
+  ];
+
+  const missing: Array<{ table: string; version: number; rows: number }> = [];
+  await withPlatform(db, 'مفاتيح: تغطيةُ إصدارات التشفير', async (tx) => {
+    for (const p of PAIRS) {
+      const rows = await tx.execute(sql`
+        SELECT ${sql.identifier(p.ver)} AS v, count(*)::int AS n
+          FROM ${sql.identifier(p.table)}
+         WHERE ${sql.identifier(p.col)} IS NOT NULL
+           AND ${sql.identifier(p.ver)} IS NOT NULL
+         GROUP BY 1
+      `);
+      for (const r of rows as unknown as Array<{ v: number; n: number }>) {
+        if (!configured.includes(Number(r.v))) {
+          missing.push({ table: `${p.table}.${p.col}`, version: Number(r.v), rows: Number(r.n) });
+        }
+      }
+    }
+  });
+
+  if (!missing.length) {
+    await resolveOpenOfKinds(null, ['key_version_uncovered']).catch(() => 0);
+    return { ok: true, configured, missing };
+  }
+
+  console.error(JSON.stringify({
+    level: 'error', svc: 'worker',
+    msg: '🔴 صفوفٌ مشفَّرةٌ بإصدارٍ لا مفتاحَ له — تُفكّ برميٍ يُبتلع',
+    configured, missing,
+  }));
+  const { raiseIncident } = await import('./incidents.js');
+  await raiseIncident({
+    tenantId: null,
+    kind: 'key_version_uncovered',
+    severity: 'critical',
+    title: `صفوفٌ مشفَّرةٌ بإصداراتٍ غيرِ مضبوطة: ${missing.map((m) => m.version).join(', ')}`,
+    detail: { configured, missing },
+    /* بصمةٌ بالإصدارات الناقصة: ضبطُ مفتاحٍ يُغيّرها فتُرفع حادثةٌ جديدةٌ
+       لما بقي، ولا تبقى القديمةُ تُعمي عن الباقي. */
+    causeKey: missing.map((m) => m.version).sort().join(','),
+  }).catch(() => undefined);
+
+  return { ok: false, configured, missing };
 }

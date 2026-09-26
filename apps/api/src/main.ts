@@ -14,6 +14,7 @@ import { registerPlayground } from './routes/playground.js';
 import { registerTeam } from './routes/team.js';
 import { registerPush } from './routes/push.js';
 import { registerNotifications, alertingReachable } from './routes/notifications.js';
+import { configuredKeyVersions, currentKeyVersion } from '@aibot/crypto';
 import { attachRealtime, closeRealtime } from './realtime.js';
 import { pingRedis, closeQueues, queueDepths, workerBeat } from './queues.js';
 import { closeRateLimiter } from './ratelimit.js';
@@ -111,6 +112,11 @@ app.get('/api/health', async (_req, reply) => {
  *    وحدها فلا فرق أمنيّ، والتسجيلُ على مستوى المسار يُبقيه خارج موجّه
  *    `/api` المُسجَّل أدناه — فلا يتغيّر عنوانُه.
  */
+/** تهيئةُ المفاتيح كما يراها هذا التشغيل — بلا أيّ قيمةٍ سرّيّة. */
+function keyCoverage(): { current: number; configured: number[] } {
+  return { current: currentKeyVersion(), configured: configuredKeyVersions() };
+}
+
 app.get('/api/health/deep', { preHandler: requireAuth({ console: true }) }, async () => ({
   service: 'aibot' as const,
   rev: GIT_REV,
@@ -124,6 +130,10 @@ app.get('/api/health/deep', { preHandler: requireAuth({ console: true }) }, asyn
      فالتنبيهُ الحرج «يُرسَل» بنجاحٍ إلى لا أحد، بلا سطرٍ في السجلّ.
      ومنصّةٌ عمياءُ عن أعطالها حالةٌ تُعلَن لا تُفترض — فتظهر هنا حيث تُقرأ. */
   alerting: await alertingReachable(),
+  /* ★ وتغطيةُ مفاتيح التشفير: صفٌّ بإصدارٍ لا مفتاحَ له يُفكّ برميٍ يُبتلع —
+     في الويبهوك بعد إرسال 200 (فميتا لا تُعيد)، وفي فحص الصحّة بلا سطر.
+     فالعطلُ صمتٌ كامل، وهذا يجعله رقماً يُقرأ. */
+  keys: keyCoverage(),
   uptimeSec: Math.round(process.uptime()),
 }));
 
