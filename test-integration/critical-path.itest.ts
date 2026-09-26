@@ -45,12 +45,20 @@ describe('ويبهوك ← وارد ← ردّ ← صادر', () => {
     const { inboundJob } = await import('../apps/worker/scripts/drill-kit');
 
     const db = getDb();
+    /* ⚠️ ولا `as never` هنا: أوّلُ نسخةٍ مرّرت `enableBot: true` — وهو اسمٌ
+       لا وجودَ له (‏الحقلُ `bot`) — فأخرسَ الكاستُ المدقّقَ ومرّت بلا نسخةٍ
+       منشورة، فردَّت البوّابةُ «مطفأ» والاختبارُ اتّهم الشيفرة. الكاستُ الذي
+       يُسكت المدقّقَ في اختبارٍ يُحوّل عطلَ اختبارٍ إلى عطلٍ موهومٍ في المنتج. */
     const t = await ensureDrillTenant(db, {
       slug: 'itest-critical',
       name: 'تكامل: المسار الحرج',
-      enableBot: true,
-      model: 'gemini-3.5-flash-lite',
-    } as never);
+      bot: {
+        provider: 'google',
+        model: 'gemini-3.5-flash-lite',
+        persona: 'موظّفُ خدمةِ عملاءٍ مختصر.',
+        knowledgeBase: 'ساعاتُ العمل من ٩ صباحاً إلى ٥ مساءً.',
+      },
+    });
 
     /** يدفع رسالةَ زبونٍ ثمّ يُشغّل الردَّ ويُعيد ما خرج. */
     async function turn(text: string, n: number): Promise<number> {
@@ -61,7 +69,7 @@ describe('ويبهوك ← وارد ← ردّ ← صادر', () => {
         externalId: `wamid.IN_${n}`,
         from: '962790000001',
         text,
-      } as never) as never);
+      }));
 
       const conv = (await withPlatform(db, 'تكامل: إيجادُ المحادثة', (tx) => tx
         .select({ id: conversations.id })
@@ -95,7 +103,7 @@ describe('ويبهوك ← وارد ← ردّ ← صادر', () => {
 
     /* وما **خرج فعلاً** يُقرأ من سجلّ المزيَّف لا من القاعدة وحدها:
        القاعدةُ تقول ما حُجز، والسجلُّ يقول ما وصل ميتا. */
-    expect(env.fakes.graphSends.length, 'لم يخرج شيءٌ إلى ميتا').toBeGreaterThanOrEqual(2);
-    expect(env.fakes.modelCalls.length, 'لم يُنادَ النموذج مرّتَين').toBeGreaterThanOrEqual(2);
+    expect(env.fakes.log.graphSends.length, 'لم يخرج شيءٌ إلى ميتا').toBeGreaterThanOrEqual(2);
+    expect(env.fakes.log.modelCalls.length, 'لم يُنادَ النموذج مرّتَين').toBeGreaterThanOrEqual(2);
   }, 240_000);
 });

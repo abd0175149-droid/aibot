@@ -1,6 +1,7 @@
 {
+  "//2": "★ و`test-integration/` مثلُها: ليست حزمةً ولا يجمعها `npx vitest run` (لاحقة .itest.ts)، فبلا هذا السطر لا يفحصها مدقّقٌ إطلاقاً — وقد أمسك أوّلُ فحصٍ لها خطأَين حقيقيَّين (`fakes.graphSends` والصحيحُ `fakes.log.graphSends`).",
   "//": "★ ops/ ليست حزمةً ولا تدخل صورةَ دوكر، فلم تكن تحت tsc إطلاقاً — ونفسُ الغفلة شحنت مرجعاً ميّتاً من apps/worker/scripts يوماً. تُشغَّل بـ`pnpm typecheck:ops`.",
   "extends": "./tsconfig.base.json",
   "compilerOptions": { "noEmit": true },
-  "include": ["ops"]
+  "include": ["ops", "test-integration"]
 }
