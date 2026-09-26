@@ -3,7 +3,7 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { Dock, Meter, isMachineString, type Tone } from '@/components/ui';
+import { Dock, Hint, Meter, isMachineString, type Tone } from '@/components/ui';
 
 /**
  * نحوُ الشاشة — بنًى مشتركةٌ بين شاشات المستأجر ولوحة المالك.
@@ -158,6 +158,14 @@ export function Hero({ value, unit, label, ctx, sev = 'plain', href, meter, goal
  * في الأخرى، وهو السطرُ نفسُه يحمل عدّاً أو تعريفاً: فالاسمُ يصف **الموضعَ**
  * لا أحدَ ما يوضع فيه.
  */
+/**
+ * هل هذا السطرُ شرحٌ يُؤجَّل؟ — نصٌّ خالصٌ أطولُ من حدٍّ قصير. العقدُ المركّبةُ
+ * (فيها أعدادٌ أو روابط) خبرٌ يبقى ظاهراً دائماً.
+ */
+function isExplainer(v: ReactNode, min = 30): v is string {
+  return typeof v === 'string' && v.length > min;
+}
+
 export function Section({ title, sub, actions, children, id, anchor }: {
   title: string;
   children: ReactNode;
@@ -171,7 +179,12 @@ export function Section({ title, sub, actions, children, id, anchor }: {
     <section className={anchor ? 'sect cn-anchor' : 'sect'} id={id}>
       <div className="sect-h">
         <h2>{title}</h2>
-        {sub !== undefined && <span className="sect-c">{sub}</span>}
+        {/* ★ الشرحُ خلف «؟» والخبرُ ظاهر: سطرٌ نصّيٌّ طويلٌ تحت العنوان كان يعلّل
+            القسمَ في كلّ فتحة («كلّ رقم معه مداه — لا رقم عاريا»)؛ أمّا سطرٌ يحمل
+            عدداً أو حالةً قصيرة («2 من 2»، «لا مرشّح») فيبقى في مكانه. */}
+        {sub !== undefined && (isExplainer(sub)
+          ? <Hint label={`عن «${title}»`}>{sub}</Hint>
+          : <span className="sect-c">{sub}</span>)}
         {actions && <div className="sect-a">{actions}</div>}
       </div>
       {children}
@@ -210,7 +223,9 @@ export function MetricRow({ k, note, value, unit, mid, href, onClick }: {
     <>
       <span className="rm-k">
         {k}
-        {note !== undefined && <span className="rm-note">{note}</span>}
+        {note !== undefined && (isExplainer(note, 32)
+          ? <Hint>{note}</Hint>
+          : <span className="rm-note">{note}</span>)}
       </span>
       {value !== undefined && (
         <span className="rm-v"><NumUnit value={value} unit={unit} /></span>

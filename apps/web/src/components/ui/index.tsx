@@ -819,7 +819,11 @@ export function Dock({ children, hint }: {
   return (
     <div className="dock">
       {children}
-      {hint && <p className="dock-h">{hint}</p>}
+      {/* ★ أثرُ الفعل القصيرُ يبقى مكتوباً؛ والشرحُ الطويلُ خلف «؟» — كان سطرُه يأخذ
+          من الرصيف على الهاتف أكثرَ ممّا يأخذ الزرُّ نفسُه. */}
+      {hint && (hint.length > 60
+        ? <p className="dock-h"><Hint label="ماذا يحدث؟">{hint}</Hint></p>
+        : <p className="dock-h">{hint}</p>)}
     </div>
   );
 }

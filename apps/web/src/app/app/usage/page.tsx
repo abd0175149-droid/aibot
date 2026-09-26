@@ -94,8 +94,8 @@ type Filt = 'all' | 'billed' | 'free' | 'whatsapp_cloud' | 'instagram';
 
 const FILTS: Array<{ f: Filt; label: string }> = [
   { f: 'all', label: 'الكلّ' },
-  { f: 'billed', label: 'مفوترة' },
-  { f: 'free', label: 'بلا ردّ — لم تفوتر' },
+  { f: 'billed', label: 'محسوبة' },
+  { f: 'free', label: 'بلا ردّ — غير محسوبة' },
 ];
 
 export default function UsagePage() {
@@ -326,10 +326,10 @@ export default function UsagePage() {
     { key: 'open', head: 'فتحت', cell: (w) => fmt.when(w.openedAt) },
     {
       key: 'billed',
-      head: 'فوترت',
+      head: 'محسوبة',
       cell: (w) => (w.billedAt
         ? fmt.when(w.billedAt)
-        : <Pill tone="neutral" label="لم تفوتر — لا ردّ" />),
+        : <Pill tone="neutral" label="غير محسوبة — لا ردّ" />),
     },
     { key: 'msgs', head: 'رسائل', num: true, cell: (w) => w.messagesIn + w.messagesOut },
     { key: 'cost', head: 'كلفة الذكاء', num: true, cell: (w) => fmt.money(w.aiCostUsd) },
@@ -389,7 +389,7 @@ export default function UsagePage() {
             value={fmt.num(data.windowsOpened)}
             mid={(
               <span className="sc-ctx">
-                منها <span className="num">{fmt.num(unbilled)}</span> لم تفوتر — لم يردّ فيها أحد
+                منها <span className="num">{fmt.num(unbilled)}</span> غير محسوبة — لم يردّ فيها أحد
               </span>
             )}
           />
@@ -504,29 +504,23 @@ export default function UsagePage() {
                 يُجبر العميل على الجمع بيده — وذاك يُنتج نزاعاً لا يحسمه. */}
             <div className="sc-sum">
               <span className="sc-sum-i">صفوف معروضة <b className="num">{fmt.num(view.length)}</b></span>
-              <span className="sc-sum-i">منها مفوترة <b className="num">{fmt.num(sum.billed)}</b></span>
+              <span className="sc-sum-i">منها محسوبة <b className="num">{fmt.num(sum.billed)}</b></span>
               <span className="sc-sum-i">مجموع الرسائل <b className="num">{fmt.num(sum.msgs)}</b></span>
               <span className="sc-sum-i">مجموع كلفة الذكاء <b className="num">{fmt.money(sum.cost)}</b></span>
             </div>
           </>
         )}
 
-        {!!data.items.length && (
-          <p className="muted-p">
-            اضغط أيّ صفّ ليفتح تفصيله — ومنه إلى المحادثة التي أنشأته. فلا سطر فاتورة
-            بلا دليل تقرؤه بعينك.
-          </p>
-        )}
       </Section>
 
       <Fold summary="متى تحسب المحادثة من باقتي؟">
         <Note>
-          <b>المحادثة تُحسب لكلّ قناة على حدة.</b> زبون يراسلك على واتساب وإنستجرام يستهلك
-          نافذتين — لأنّهما محادثتان منفصلتان عند ميتا، وكلفتهما علينا منفصلة.
+          <b>المحادثة تُحسب لكلّ قناة على حدة.</b> زبون يراسلك على واتساب وإنستجرام يُحسب
+          مرّتين — لأنّهما محادثتان منفصلتان عند ميتا، وكلفتهما علينا منفصلة.
         </Note>
         <Note>
           <b>ومتى تُحسب المحادثة؟</b> عند <b>أوّل ردّ منك داخلها</b>، لا عند وصول رسالة الزبون.
-          فرسالة لم يردّ عليها أحد لا تحسب عليك — وذاك ما يعنيه صفّ «لم تفوتر».
+          فرسالة لم يردّ عليها أحد لا تحسب عليك — وذاك ما يعنيه «غير محسوبة».
           العدّاد كلّه أمامك لتراجعه، وتصدّره متى شئت.
         </Note>
       </Fold>
@@ -626,10 +620,10 @@ export default function UsagePage() {
                 />
               </KVRow>
               <KVRow k="فتحت">{fmt.when(detail.openedAt)}</KVRow>
-              <KVRow k="فوترت">
+              <KVRow k="محسوبة">
                 {detail.billedAt
                   ? fmt.when(detail.billedAt)
-                  : <Pill tone="neutral" label="لم تفوتر — لا ردّ" />}
+                  : <Pill tone="neutral" label="غير محسوبة — لا ردّ" />}
               </KVRow>
               <KVRow k="رسائل الزبون"><span className="num">{fmt.num(detail.messagesIn)}</span></KVRow>
               <KVRow k="رسائلكم"><span className="num">{fmt.num(detail.messagesOut)}</span></KVRow>

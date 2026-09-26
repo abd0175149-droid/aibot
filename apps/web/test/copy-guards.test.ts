@@ -39,9 +39,27 @@ describe('مصطلحاتُ الزبون في شاشات العميل', () => {
       .map((l) => `${p.slice(SRC.length)}: ${l.trim().slice(0, 90)}`));
     expect(bad).toEqual([]);
   });
+
+  it('★ ولا «مفوترة/فوترت/لم تفوتر» ولا «نافذتين» — المفردُ فات الحارسَ الأوّل', () => {
+    const bad = CLIENT.flatMap((p) => (code(p).match(/[^\n]*(مفوتر|فوترت|تفوتر|نافذتين)[^\n]*/g) ?? [])
+      .map((l) => `${p.slice(SRC.length)}: ${l.trim().slice(0, 90)}`));
+    expect(bad, '«محسوبة» و«غير محسوبة»').toEqual([]);
+  });
 });
 
 describe('نصٌّ أخفّ', () => {
+  it('★ لا «اضغط أيّ صفّ» — الصفُّ القابلُ للضغط يُعلن عن نفسه', () => {
+    const bad = CLIENT.filter((p) => /اضغط أيّ صفّ/.test(code(p))).map((p) => p.slice(SRC.length));
+    expect(bad).toEqual([]);
+  });
+
+  it('★★ ولا عددٌ مكتوبٌ قبل مثنّى — «2 يومان» و«2 محادثتان»', () => {
+    /* المثنّى يحمل عددَه؛ فكتابةُ الرقم قبله خطأٌ يُرى. `Count` يُسقطه. */
+    const bad = CLIENT.flatMap((p) => (code(p).match(/<\/span>\s*(\{' '\})?\s*\{plural\(/g) ?? [])
+      .map(() => p.slice(SRC.length)));
+    expect(bad).toEqual([]);
+  });
+
   it('★ التشكيلُ أقلّ من ٢٪ من الحروف — كان ٩٪', () => {
     let letters = 0; let marks = 0;
     for (const p of ALL) {

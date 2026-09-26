@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { useApi, useToast, fmt } from '@/lib/useApi';
 import { post, patch, download, ApiError } from '@/lib/api';
 import { useSession, useCan } from '@/lib/session';
+import { Count, ACCOUNTS, OWNERS, AGENTS, SESSIONS, INVITES, arCount } from '@/lib/plural';
 import { readTeam, daysSince, type TeamRole } from '@/lib/team';
 import { auditLabel, auditActor, auditKnown, type AuditRow } from '@/lib/audit';
 import {
@@ -165,7 +166,7 @@ export default function TeamPage() {
     await reload();
     toast(next
       ? `أعيد تفعيل حساب ${m.name} — يستطيع الدخول بكلمته السابقة.`
-      : `عطّل حساب ${m.name} وأبطلت ${r.sessionsRevoked} جلسة — لا يستطيع الدخول الآن.`);
+      : `عطّل حساب ${m.name} وأبطلت ${r.sessionsRevoked === 0 ? 'لا جلسات' : arCount(r.sessionsRevoked, SESSIONS)} — لا يستطيع الدخول الآن.`);
   }
 
   async function runRole(m: Member, next: TeamRole) {
@@ -173,7 +174,7 @@ export default function TeamPage() {
     await reload();
     toast(next === 'tenant_owner'
       ? `${m.name} صار مالكا — يضبط البوت والقنوات والفوترة ويدعو موظّفين.`
-      : `${m.name} صار موظّفا وأبطلت ${r.sessionsRevoked} جلسة — لن يرى الإعدادات بعد دخوله من جديد.`);
+      : `${m.name} صار موظّفا وأبطلت ${r.sessionsRevoked === 0 ? 'لا جلسات' : arCount(r.sessionsRevoked, SESSIONS)} — لن يرى الإعدادات بعد دخوله من جديد.`);
   }
 
   async function runReset(m: Member) {
@@ -239,7 +240,7 @@ export default function TeamPage() {
     rusty: {
       sev: 'bad',
       head: <>
-        <span className="num">{fmt.num(t.rusty.length)}</span> حسابا نشطا لم يستعمل منذ أكثر من {stale} يوما
+        <Count n={t.rusty.length} f={ACCOUNTS} /> نشطة لم تستعمل منذ أكثر من {stale} يوما
       </>,
       sub: <>
         من ترك العمل ولم يعطّل حسابه يبقى يقرأ محادثات زبائنك ويردّ عليهم باسمك.
@@ -249,7 +250,7 @@ export default function TeamPage() {
     never: {
       sev: 'warn',
       head: <>
-        <span className="num">{fmt.num(t.never.length)}</span> دعوة لم تستعمل بعد
+        <Count n={t.never.length} f={INVITES} /> لم تستعمل بعد
       </>,
       sub: <>
         كلمتها المؤقّتة صالحة لمن يعرفها — وهي لا تخزّن نصّا عندنا.
@@ -285,9 +286,9 @@ export default function TeamPage() {
       sev: 'good',
       head: 'كلّ حساب في فريقك مستعمل وحديث',
       sub: <>
-        <span className="num">{fmt.num(t.active.length)}</span> حسابا يستطيع الدخول ·
-        {' '}منهم <span className="num">{fmt.num(t.owners.length)}</span> مالكا
-        {' '}و<span className="num">{fmt.num(t.agents.length)}</span> موظّفا
+        <Count n={t.active.length} f={ACCOUNTS} /> تستطيع الدخول ·
+        {' '}منها <Count n={t.owners.length} f={OWNERS} />
+        {t.agents.length > 0 && <>{' '}و<Count n={t.agents.length} f={AGENTS} /></>}
         {lastSeen && <> · وآخر دخول {fmt.when(lastSeen)}</>}
       </>,
     },
@@ -391,11 +392,11 @@ export default function TeamPage() {
         <Hero
           sev="bad"
           value={fmt.num(t.rusty.length)}
-          label={<>حسابا نشطا لم يستعمل منذ أكثر من {stale} يوما</>}
+          label={<>{t.rusty.length === 1 ? 'حساب نشط لم يستعمل' : t.rusty.length === 2 ? 'حسابان نشطان لم يستعملا' : 'حسابات نشطة لم تستعمل'} منذ أكثر من {stale} يوما</>}
           ctx={(
             <>
-              من <span className="num">{fmt.num(t.active.length)}</span> حسابا يستطيع الدخول ·
-              {' '}وعلى <span className="num">{fmt.num(t.liveOn)}</span> منها جلسة حيّة لا تسأل كلمة سرّ ·
+              من <Count n={t.active.length} f={ACCOUNTS} /> تستطيع الدخول ·
+              {' '}وعلى <Count n={t.liveOn} f={ACCOUNTS} /> منها جلسة حيّة لا تسأل كلمة سرّ ·
               {' '}والتعطيل يبطل الجلسة في نفس اللحظة
             </>
           )}
@@ -407,7 +408,7 @@ export default function TeamPage() {
           label="دعوة أنشئت ولم تستعمل بعد"
           ctx={(
             <>
-              من <span className="num">{fmt.num(t.active.length)}</span> حسابا نشطا
+              من <Count n={t.active.length} f={ACCOUNTS} /> نشطة
               {oldestInvite && <> · وأقدمها {fmt.when(oldestInvite)}</>} ·
               {' '}وكلمتها المؤقّتة لا تخزّن نصّا عندنا فلا تستعاد
             </>
@@ -422,10 +423,9 @@ export default function TeamPage() {
           meter={data.seats !== null ? { pct: seatPct } : undefined}
           ctx={(
             <>
-              منهم <span className="num">{fmt.num(t.owners.length)}</span> مالكا
-              {' '}و<span className="num">{fmt.num(t.agents.length)}</span> موظّفا ·
-              {' '}و<span className="num">{fmt.num(t.live)}</span> جلسة حيّة على
-              {' '}<span className="num">{fmt.num(t.liveOn)}</span> حسابا
+              منهم <Count n={t.owners.length} f={OWNERS} />
+              {t.agents.length > 0 && <>{' '}و<Count n={t.agents.length} f={AGENTS} /></>}
+              {t.live > 0 && <> · و<Count n={t.live} f={SESSIONS} /> حيّة</>}
               {lastSeen && <> · وآخر دخول {fmt.when(lastSeen)}</>}
             </>
           )}
@@ -513,16 +513,6 @@ export default function TeamPage() {
             <div className="sc-tbl">
               <Table columns={columns} rows={view} keyOf={(m) => m.id} onRowClick={openMember} />
             </div>
-            <div className="sc-sum">
-              <span className="sc-sum-i">يستطيعون الدخول <b className="num">{fmt.num(t.active.length)}</b></span>
-              <span className="sc-sum-i">مالكون <b className="num">{fmt.num(t.owners.length)}</b></span>
-              <span className="sc-sum-i">موظّفون <b className="num">{fmt.num(t.agents.length)}</b></span>
-              <span className="sc-sum-i">جلسات حيّة <b className="num">{fmt.num(t.live)}</b></span>
-              <span className="sc-sum-i">معطّلة <b className="num">{fmt.num(t.off.length)}</b></span>
-            </div>
-            <p className="muted-p">
-              اضغط أيّ صفّ لتفتح حساب صاحبه — ومنه التعطيل وتغيير الدور وإعادة تعيين كلمة مؤقّتة.
-            </p>
           </>
         )}
       </Section>

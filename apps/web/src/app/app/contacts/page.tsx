@@ -644,10 +644,6 @@ export default function ContactsPage() {
                 </Button>
               </div>
             )}
-            <p className="muted-p">
-              اضغط أيّ صفّ ليفتح ملفّه: مقابضه ومحادثاته، ومنه إلى المحادثة في الإنبوكس،
-              ومنه يقترح دمجه إن شابه غيره.
-            </p>
           </>
         )}
       </Section>

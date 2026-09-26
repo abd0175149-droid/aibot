@@ -1,3 +1,4 @@
+/** @jsxRuntime automatic @jsxImportSource react */
 import { fmt } from './useApi';
 
 /**
@@ -21,3 +22,20 @@ export function arCount(n: number, forms: Forms): string {
 
 export const INCIDENT_OPEN: Forms = ['حادثة مفتوحة واحدة', 'حادثتان مفتوحتان', 'حوادث مفتوحة', 'حادثة مفتوحة'];
 export const CLIENTS: Forms = ['عميل واحد', 'عميلان', 'عملاء', 'عميلا'];
+
+/**
+ * ★ والصيغةُ نفسُها عقدةَ عرض: العددُ في `.num` حين يُكتب، ويسقط في المفرد
+ *   والمثنّى — «2 يومان» و«1 مالكا» كانا يظهران في التقارير والفريق.
+ */
+export function Count({ n, f }: { n: number; f: Forms }) {
+  if (n === 1) return <>{f[0]}</>;
+  if (n === 2) return <>{f[1]}</>;
+  const m = n % 100;
+  return <><span className="num">{fmt.num(n)}</span> {n === 0 || (m >= 3 && m <= 10) ? f[2] : f[3]}</>;
+}
+
+export const ACCOUNTS: Forms = ['حساب واحد', 'حسابان', 'حسابات', 'حسابا'];
+export const OWNERS: Forms = ['مالك واحد', 'مالكان', 'ملّاك', 'مالكا'];
+export const AGENTS: Forms = ['موظّف واحد', 'موظّفان', 'موظّفين', 'موظّفا'];
+export const SESSIONS: Forms = ['جلسة واحدة', 'جلستان', 'جلسات', 'جلسة'];
+export const INVITES: Forms = ['دعوة واحدة', 'دعوتان', 'دعوات', 'دعوة'];

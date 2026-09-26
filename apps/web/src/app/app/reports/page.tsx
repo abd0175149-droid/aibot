@@ -4,6 +4,7 @@ import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useApi, useToast, fmt, AR_LOCALE } from '@/lib/useApi';
 import { validateRange } from '@/lib/range';
+import { Count } from '@/lib/plural';
 import { download, ApiError } from '@/lib/api';
 import {
   PageHead, Stack, Row, Pill, Tag, Note, Meter, Button, Sheet, Table, Empty,
@@ -101,20 +102,6 @@ const DOW: Record<number, string> = {
 const DOW_SHORT: Record<number, string> = {
   7: 'أحد', 1: 'اثن', 2: 'ثلا', 3: 'أرب', 4: 'خمي', 5: 'جمع', 6: 'سبت',
 };
-
-/**
- * عددٌ عربيٌّ سليمُ الصيغة.
- *
- * ★ «3 نقطة» و«1 نقاط» يقرؤهما صاحبُ المطعم خللاً في المنتج لا في اللغة —
- *   وهو محقّ: نصٌّ مولَّدٌ بلا تثنيةٍ ولا جمعٍ يقول إنّ أحداً لم يقرأ الشاشة.
- */
-function plural(n: number, one: string, two: string, few: string, many: string): string {
-  const a = Math.abs(n);
-  if (a === 1) return one;
-  if (a === 2) return two;
-  if (a >= 3 && a <= 10) return few;
-  return many;
-}
 
 /** يومٌ على المحور — بتوقيت UTC كي تطابق التسميةُ نصَّ التاريخ حرفاً بحرف. */
 function dayLabel(day: string): string {
@@ -394,7 +381,7 @@ export default function ReportsPage() {
               aria-pressed={preset === d}
               onClick={() => setPreset(d)}
             >
-              <span className="num">{d}</span> {plural(d, 'يوم', 'يومان', 'أيّام', 'يوما')}
+              <Count n={d} f={['يوم واحد', 'يومان', 'أيّام', 'يوما']} />
             </button>
           ))}
           <button
@@ -487,12 +474,10 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
     band = {
       sev: 'plain',
       head: <>
-        <span className="num">{fmt.num(selfServe.billed)}</span>
-        {' '}{plural(selfServe.billed, 'محادثة', 'محادثتان', 'محادثات', 'محادثة')} لا تكفي لاتّجاه
+        <Count n={selfServe.billed} f={['محادثة واحدة', 'محادثتان', 'محادثات', 'محادثة']} /> لا تكفي لاتّجاه
       </>,
       sub: <>
-        نقرأ الاكتفاء الذاتيّ اتّجاها من <span className="num">{fmt.num(enough.minBilled)}</span>
-        {' '}محادثة مفوترة فأكثر. وما دونها نعرض العدّ ولا نرسم خطّا يوحي بمعنى.
+        يظهر الاتّجاه من <span className="num">{fmt.num(enough.minBilled)}</span> محادثات محسوبة.
       </>,
     };
   } else if (dropped) {
@@ -538,8 +523,8 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
         لا شيء يحتاجك — الاكتفاء الذاتيّ ثابت عند <span className="num">{fmt.pct(rate ?? 0)}</span>
       </>,
       sub: <>
-        على <span className="num">{fmt.num(selfServe.billed)}</span> محادثة مفوترة في
-        {' '}<span className="num">{fmt.num(range.days)}</span> {plural(range.days, 'يوم', 'يومين', 'أيّام', 'يوما')}،
+        على <span className="num">{fmt.num(selfServe.billed)}</span> محادثة محسوبة في
+        {' '}<Count n={range.days} f={['يوم واحد', 'يومين', 'أيّام', 'يوما']} />،
         {' '}مقابل <span className="num">{fmt.pct(prevRate ?? 0)}</span> في المدى السابق.
       </>,
     };
@@ -581,8 +566,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
   const timeLegend = (extra?: ReactNode) => (
     <>
       <Leg kind="line">
-        هذا المدى (<span className="num">{fmt.num(range.days)}</span>{' '}
-        {plural(range.days, 'يوم', 'يومين', 'أيّام', 'يوما')})
+        هذا المدى (<Count n={range.days} f={['يوم واحد', 'يومين', 'أيّام', 'يوما']} />)
       </Leg>
       <Leg kind="prev">
         المدى السابق — <span className="num">{prev.from}</span> إلى <span className="num">{prev.to}</span>
@@ -639,7 +623,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
           ctx={(
             <>
               <span className="num">{fmt.num(selfServe.solo)}</span> من
-              {' '}<span className="num">{fmt.num(selfServe.billed)}</span> محادثة مفوترة ·
+              {' '}<span className="num">{fmt.num(selfServe.billed)}</span> محادثة محسوبة ·
               {' '}
               {rateDelta && ratePts != null
                 ? (
@@ -649,15 +633,14 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                     <Delta dir={rateDelta.dir}>
                       {ratePts === 0
                         ? 'بلا تغيير'
-                        : <><span className="num">{`${Math.abs(ratePts)}`}</span>{' '}
-                          {plural(Math.abs(ratePts), 'نقطة', 'نقطتان', 'نقاط', 'نقطة')}</>}
+                        : <><Count n={Math.abs(ratePts)} f={['نقطة واحدة', 'نقطتان', 'نقاط', 'نقطة']} /></>}
                     </Delta>
                   </>
                 )
                 : (
                   <>
                     ولا مقارنة بعد: المدى السابق فيه
-                    {' '}<span className="num">{fmt.num(selfServe.prevBilled)}</span> محادثة مفوترة فقط
+                    {' '}<span className="num">{fmt.num(selfServe.prevBilled)}</span> محادثة محسوبة فقط
                   </>
                 )}
             </>
@@ -672,8 +655,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
           ctx={(
             <>
               فتحت <span className="num">{fmt.num(total.opened)}</span> محادثة، ومنها
-              {' '}<span className="num">{fmt.num(selfServe.billed)}</span> ردّ فيها فصارت مفوترة.
-              {' '}ولا نرسم اتّجاها على هذا العدد — الخطّ عليه يوحي بمعنى لا يملكه.
+              {' '}<span className="num">{fmt.num(selfServe.billed)}</span> ردّ فيها فصارت محسوبة.
             </>
           )}
         />
@@ -750,11 +732,10 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 what="المدى أقصر من أن يرسم عليه خطّ"
                 have={(
                   <>
-                    فيه <span className="num">{fmt.num(enough.liveDays)}</span>
-                    {' '}{plural(enough.liveDays, 'يوم', 'يومان', 'أيّام', 'يوما')} فيها رسائل
+                    فيه <Count n={enough.liveDays} f={['يوم واحد', 'يومان', 'أيّام', 'يوما']} /> فيها رسائل
                   </>
                 )}
-                need="ونحتاج ثلاثة على الأقلّ. والعدّ أدناه مقيس وصحيح — الخطّ وحده هو ما لا نرسمه."
+                need="نحتاج ثلاثة أيّام على الأقلّ."
                 onWiden={range.days < 90 ? onWiden : undefined}
               />
             )}
@@ -837,11 +818,10 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 what="وأوقات الانشغال تحتاج رسائل أكثر"
                 have={(
                   <>
-                    عندك <span className="num">{fmt.num(total.cust)}</span>
-                    {' '}{plural(total.cust, 'رسالة', 'رسالتان', 'رسائل', 'رسالة')} من الزبائن
+                    عندك <Count n={total.cust} f={['رسالة واحدة', 'رسالتان', 'رسائل', 'رسالة']} /> من الزبائن
                   </>
                 )}
-                need="ونحتاج عشرين على الأقلّ قبل أن نقول «الخميس مساء» — وإلّا فالذروة مصادفة لا نمط."
+                need="نحتاج 20 رسالة على الأقلّ."
                 onWiden={range.days < 90 ? onWiden : undefined}
               />
             )}
@@ -910,7 +890,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 )}
                 note={(
                   <>
-                    ويوم بلا محادثة مفوترة يهبط إلى الأرضيّة — لا «صفر اكتفاء» بل
+                    ويوم بلا محادثة محسوبة يهبط إلى الأرضيّة — لا «صفر اكتفاء» بل
                     «لا مقياس يومها». والنسبة الجامعة أعلى الشاشة هي ما يقرّر عليه.
                   </>
                 )}
@@ -929,12 +909,11 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 what="لا خطّ اتّجاه على هذا العدد"
                 have={(
                   <>
-                    <span className="num">{fmt.num(enough.billedDays)}</span>
-                    {' '}{plural(enough.billedDays, 'يوم', 'يومان', 'أيّام', 'يوما')} فيها محادثة
-                    مفوترة، ومجموعها <span className="num">{fmt.num(selfServe.billed)}</span>
+                    <Count n={enough.billedDays} f={['يوم واحد', 'يومان', 'أيّام', 'يوما']} /> فيها محادثة
+                    محسوبة، ومجموعها <span className="num">{fmt.num(selfServe.billed)}</span>
                   </>
                 )}
-                need={`ونحتاج ثلاثة أيّام و${enough.minBilled} محادثة. والعدّ أدناه مقيس وصحيح.`}
+                need={`نحتاج 3 أيّام و${enough.minBilled} محادثات.`}
                 onWiden={range.days < 90 ? onWiden : undefined}
               />
             )}
@@ -942,7 +921,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
             <Rows>
               <MetricRow
                 k="أنهاها البوت وحده"
-                note="من المحادثات المفوترة في هذا المدى"
+                note="من المحادثات المحسوبة في هذا المدى"
                 value={fmt.num(selfServe.solo)}
                 unit={`/ ${fmt.num(selfServe.billed)}`}
                 mid={(
@@ -1081,11 +1060,10 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 what="والكلفة اليوميّة تحتاج أيّاما أكثر"
                 have={(
                   <>
-                    فيه <span className="num">{fmt.num(enough.liveDays)}</span>
-                    {' '}{plural(enough.liveDays, 'يوم', 'يومان', 'أيّام', 'يوما')} فيها حركة
+                    فيه <Count n={enough.liveDays} f={['يوم واحد', 'يومان', 'أيّام', 'يوما']} /> فيها حركة
                   </>
                 )}
-                need="ونحتاج ثلاثة على الأقلّ. والمجموع أدناه مقيس وصحيح."
+                need="نحتاج ثلاثة أيّام على الأقلّ."
                 onWiden={range.days < 90 ? onWiden : undefined}
               />
             )}
@@ -1108,7 +1086,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                   : (
                     <span className="sc-ctx">
                       لا مقارنة بعد — المدى السابق فيه
-                      {' '}<span className="num">{fmt.num(selfServe.prevBilled)}</span> محادثة مفوترة
+                      {' '}<span className="num">{fmt.num(selfServe.prevBilled)}</span> محادثة محسوبة
                     </span>
                   )}
               />
@@ -1155,7 +1133,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
             </Note>
             <Note tone="warn">
               <b>ولا نرسم ما لا نقيس.</b> دون <span className="num">{fmt.num(enough.minBilled)}</span>
-              {' '}محادثة مفوترة لا نرسم اتّجاه اكتفاء، ودون ثلاثة أيّام فيها حركة لا
+              {' '}محادثة محسوبة لا نرسم اتّجاه اكتفاء، ودون ثلاثة أيّام فيها حركة لا
               نرسم خطّا، ودون <span className="num">20</span> رسالة لا نسمّي ساعة ذروة.
               {openEnd && (
                 <> واليوم الجاري نقطة ناقصة: قطعته الأخيرة مقطّعة في كلّ رسم،
