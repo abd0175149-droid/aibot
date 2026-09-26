@@ -159,8 +159,13 @@ async function main(): Promise<void> {
   }
 }
 
-try {
-  await main();
-} finally {
-  await closeDb();
-}
+/* ⚠️ لا `await` في المستوى الأعلى: `tsx` على الخادم يُحوّل إلى CJS، و
+   «Top-level await is currently not supported with the cjs output format».
+   ونفسُ الشكل في بقيّة سكربتات `ops` — لا اجتهادَ جديد. */
+main()
+  .then(() => closeDb())
+  .catch(async (e) => {
+    console.error('فشل:', (e as Error).message);
+    await closeDb().catch(() => undefined);
+    process.exit(1);
+  });
