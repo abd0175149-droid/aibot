@@ -18,10 +18,19 @@
 # ════════════════════════════════════════════════════════════════
 name: aibot-itest
 
+# ⚠️ **ولا شبكةَ جديدة**: الخادمُ مشتركٌ وعليه ٣٣ شبكةَ دوكر، ومجمَّعُ
+#    العناوين الافتراضيّ نفد فعلاً:
+#      Error response from daemon: all predefined address pools have been
+#      fully subnetted
+#    وتقليمُ شبكاتِ مشاريعَ أخرى على خادمٍ مشتركٍ ليس قرارَنا. والخدمتان هنا
+#    لا تتكلّمان ببعضهما أصلاً — الاختبارُ يبلغهما من المضيف بمنفذَين — فـ
+#    `network_mode: bridge` يكفي ولا يطلب مجمَّعاً جديداً.
+
 services:
   db:
     # نفسُ صورة الإنتاج: الامتدادُ والإصدارُ جزءٌ ممّا يُختبَر.
     image: pgvector/pgvector:pg16
+    network_mode: bridge
     tmpfs:
       - /var/lib/postgresql/data
     environment:
@@ -38,6 +47,7 @@ services:
 
   redis:
     image: redis:7-alpine
+    network_mode: bridge
     # `appendonly no`: لا استمرارَ يُراد هنا، والقرصُ على الخادم ضيّق.
     command: ["redis-server", "--appendonly", "no", "--save", ""]
     tmpfs:
