@@ -7,7 +7,7 @@ import { post, ApiError } from '@/lib/api';
 import { useCan } from '@/lib/session';
 import {
   PageHead, Grid, Stack, Row, Card, Pill, Tag, Note, Button, Sheet,
-  Skeleton, ErrorBox, KV, KVRow, type Tone,
+  Skeleton, ErrorBox, KV, KVRow, Hint, type Tone,
 } from '@/components/ui';
 import { Band, Hero, Vital, Fold, ScreenDock, MARK, SEV, type Sev } from '@/components/screen';
 import { ChannelConnectForm } from '@/components/ChannelConnectForm';
@@ -91,8 +91,7 @@ const QUALITY: Record<string, { label: string; sev: Sev; why: ReactNode }> = {
   GREEN: {
     label: 'أخضر',
     sev: 'good',
-    why: 'لم تشك رسائلك بما يذكر. ولو صار أصفر: أوقف أيّ إرسال جماعيّ في الحال. '
-      + 'ولو صار أحمر: تخفض ميتا سقف إرسالك اليوميّ، وهو أثر يحسّ في المبيعات لا في لوحة.',
+    why: 'لم تشك رسائلك بما يذكر.',
   },
   YELLOW: {
     label: 'أصفر',
@@ -236,7 +235,7 @@ export default function ChannelsPage() {
       : {
         sev: 'good',
         head: 'كلّ قنواتك تستقبل وتردّ',
-        sub: <>آخر فحص عند ميتا: {fmt.when(lastCheck)} — والفحص يسأل ميتا مباشرة لا صفّا عندنا.</>,
+        sub: <>آخر فحص عند ميتا: {fmt.when(lastCheck)}</>,
       };
 
   return (
@@ -591,9 +590,11 @@ function WebhookVital({ report, lastCheckedAt }: {
         k="وصول رسائل زبائنك إلى بوتك: لم يفحص في هذه الجلسة"
         why={(
           <>
-            آخر فحص كامل: {fmt.when(lastCheckedAt)}. والفحص يسأل ميتا: هل ما زالت تشعرنا
-            برسائل زبائنك؟ فإن انقطع الإشعار لا يعلم بوتك أنّ أحدا كتب — وهو العطل الذي
-            يبدو «صمتا» بلا سبب.
+            آخر فحص كامل: {fmt.when(lastCheckedAt)}.
+            <Hint>
+              الفحص يسأل ميتا: هل ما زالت تشعرنا برسائل زبائنك؟ فإن انقطع الإشعار لا يعلم
+              بوتك أنّ أحدا كتب — وهو العطل الذي يبدو «صمتا» بلا سبب.
+            </Hint>
           </>
         )}
       />

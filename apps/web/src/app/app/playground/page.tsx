@@ -199,7 +199,7 @@ export default function PlaygroundPage() {
           <Empty
             title={hasAny ? 'اكتب سؤالا كما يكتبه زبون' : 'لا بوت لتجرّبه بعد'}
             hint={hasAny
-              ? 'أو اختر سؤالا جاهزا من الرصيف أسفل. ستظهر هنا ردود بوتك — وبجانب كلّ ردّ لوح يقول لماذا ردّ هكذا: أيّ معرفة استعمل، وأيّ أداة نادى، وكم كلّف.'
+              ? 'ومع كلّ ردّ ترى لماذا ردّ هكذا.'
               : 'نجرّب ما هو مكتوب فعلا. اكتب شخصيّة بوتك ومعرفته في شاشة البوت، ثمّ عد إلى هنا.'}
             action={hasAny
               ? <Button onClick={() => setPresetsOpen(true)}>افتح الأسئلة الجاهزة</Button>
@@ -270,7 +270,7 @@ export default function PlaygroundPage() {
                   : null}
                 {data.knowledge.chunks
                   ? <><span className="num">{fmt.num(data.knowledge.chunks)}</span> مقطعا مضمّنا</>
-                  : 'بلا مقاطع مضمّنة — المعرفة تحقن كاملة'}
+                  : null}
               </span>
             )}
             href="/app/bot?tab=kb"
@@ -518,7 +518,7 @@ function bandOf({ data, use, last, hasAny }: {
   return {
     sev: 'good',
     head: 'لا شيء يمنع التجربة',
-    sub: 'اكتب سؤالا كما يكتبه زبون — أو اختر سؤالا سأله زبون فعلا من الرصيف أسفل.',
+    sub: '',
   };
 }
 
@@ -534,7 +534,7 @@ function heroOf({ data, use, last, kbTokens }: {
         sev: 'bad',
         value: '0',
         label: `${READ_UNIT_ACC} من المعرفة عند بوتك`,
-        ctx: <>بلا معرفة يجيب من شخصيّته وحدها — وهذا أوّل سبب لـ«لا أعرف» في وجه زبون.</>,
+        ctx: <>بلا معرفة يقول «لا أعرف» كثيرا.</>,
       };
     }
     return {

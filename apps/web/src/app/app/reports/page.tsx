@@ -651,11 +651,10 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
           sev="plain"
           value={fmt.num(selfServe.billed)}
           unit={`/ ${fmt.num(enough.minBilled)}`}
-          label="محادثة محسوبة في هذه الفترة. يظهر الاتّجاه بعد 10"
+          label="محادثة محسوبة في هذه الفترة"
           ctx={(
             <>
-              فتحت <span className="num">{fmt.num(total.opened)}</span> محادثة، ومنها
-              {' '}<span className="num">{fmt.num(selfServe.billed)}</span> ردّ فيها فصارت محسوبة.
+              من <Count n={total.opened} f={['محادثة واحدة فتحت', 'محادثتين فتحتا', 'محادثات فتحت', 'محادثة فتحت']} />
             </>
           )}
         />
@@ -671,12 +670,6 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
           {/* ══════════════ ① الحجم ══════════════ */}
           <Section
             title="الحجم — ومتى تحتاج موظّفا"
-            sub={(
-              <>
-                <span className="num">{range.from}</span> إلى <span className="num">{range.to}</span>
-                {' '}بتوقيت <span className="num">{range.tz}</span>
-              </>
-            )}
           >
             {enough.volume ? (
               <div className="rp-2">
@@ -763,8 +756,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                   note={(
                     <>
                       الأكثر انشغالا <b>{DOW[data.volume.byDow[dowPeak]?.dow ?? 7] ?? ''}</b> بـ
-                      {' '}<b className="num">{fmt.num(dowMax)}</b> رسالة — وهذا يوم الموظّف
-                      إن قرّرت أن تدخل واحدا.
+                      {' '}<b className="num">{fmt.num(dowMax)}</b> رسالة.
                     </>
                   )}
                 >
@@ -778,7 +770,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
 
                 <Fig
                   head="وأيّ ساعات اليوم"
-                  sub={<>الساعة بتوقيت <span className="num">{range.tz}</span>، والزمن من اليمين إلى اليسار</>}
+                  sub={<>بتوقيت <span className="num">{range.tz}</span></>}
                   top={fmt.num(hourMax)}
                   bottom="0"
                   axis={(

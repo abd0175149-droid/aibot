@@ -298,11 +298,7 @@ export default function UsagePage() {
         head: pace !== null
           ? <>بهذه الوتيرة تنهي الشهر عند <span className="num">{fmt.num(pace)}</span> محادثة — تحت سقفك</>
           : <>المستهلك <span className="num">{fmt.num(data.windowsBilled)}</span> من <span className="num">{fmt.num(data.windowsLimit)}</span></>,
-        sub: <>
-          السقف <span className="num">{fmt.num(data.windowsLimit)}</span> ·
-          {' '}ومضى <span className="num">{`${monthPct}%`}</span> من الشهر ·
-          {' '}ولا تُحسب المحادثة إلّا إذا ردّ فيها أحد
-        </>,
+        sub: '',
       };
 
   const columns: Array<Column<Window>> = [
@@ -469,8 +465,8 @@ export default function UsagePage() {
         sub={(
           <>
             <span className="num">{fmt.num(view.length)}</span> من
-            {' '}<span className="num">{fmt.num(data.windowsOpened)}</span> محادثة —
-            {' '}والباقي في الملفّ الذي تنزّله
+            {' '}<span className="num">{fmt.num(data.windowsOpened)}</span>
+            {view.length < data.windowsOpened && ' — والباقي في الملفّ'}
           </>
         )}
         actions={data.items.length

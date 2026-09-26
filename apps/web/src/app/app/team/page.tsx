@@ -11,7 +11,7 @@ import { auditLabel, auditActor, auditKnown, type AuditRow } from '@/lib/audit';
 import {
   PageHead, Stack, Row, Pill, Tag, Note, Alert, Meter, Button, Sheet, Table, Empty,
   Skeleton, ErrorBox, KV, KVRow, Field, FormInput, Select, Toggle, CodeBlock,
-  type Column,
+  Hint, type Column,
 } from '@/components/ui';
 import { Band, Hero, Section, Rows, MetricRow, Fold, ScreenDock, ChipRow, type Sev } from '@/components/screen';
 
@@ -277,10 +277,7 @@ export default function TeamPage() {
     solo: {
       sev: 'plain',
       head: 'أنت وحدك على هذا الحساب',
-      sub: <>
-        كلّ سطر في سجلّ الأفعال باسمك، ولا خروج لأحد إلّا بتغيير كلمتك.
-        {' '}وأوّل موظّف تدعوه يصير له حسابه وسجلّه وزرّ تعطيل خاصّ به.
-      </>,
+      sub: 'ادع موظّفا ليصير له حسابه وسجلّه.',
     },
     clear: {
       sev: 'good',
@@ -496,9 +493,8 @@ export default function TeamPage() {
         title="أعضاء فريقك"
         sub={(
           <>
-            <span className="num">{fmt.num(view.length)}</span> من
-            {' '}<span className="num">{fmt.num(data.items.length)}</span> حسابا —
-            {' '}والأخطر أوّلا: من لم يدخل قطّ، ثمّ الأقدم دخولا
+            {view.length < data.items.length && <><span className="num">{fmt.num(view.length)}</span> من </>}
+            <Count n={data.items.length} f={ACCOUNTS} /> · الأخطر أوّلا
           </>
         )}
       >
@@ -565,12 +561,12 @@ export default function TeamPage() {
           >
             صدّر كلّ بيانات الحساب (JSON)
           </Button>
-        </Row>
-        <Note>
+          <Hint label="ماذا يحدث عند إنهاء الاشتراك؟">
           <b>عند إنهاء العلاقة</b> يؤرشف فريق المنصّة الحساب: يتوقّف الدخول والرسائل في الحال، وتبقى
           البيانات <span className="num">60</span> يوما يطلب فيها التصدير أو التراجع — ثمّ تمحى نهائيّا
           بلا رجعة. وتصدير الحساب وحذف أيّ جهة يسجّلان في سجلّ الأفعال أعلاه.
-        </Note>
+          </Hint>
+        </Row>
       </Section>
 
       <Fold summary="كيف تعمل الدعوة؟">
