@@ -453,6 +453,14 @@ echo "  ℹ القرص ${DISK_PCT}%"
 if [ "${DISK_PCT:-0}" -ge 80 ]; then
   echo "  ⚠ القرص ضيّق — تقليمُ ذاكرة بناءٍ أقدمَ من أسبوعَين"
   docker builder prune -f --filter until=336h >/dev/null 2>&1 || true
+  DISK_PCT="$(df --output=pcent / | tail -1 | tr -dc '0-9')"
+  # ★ درجةٌ ثانيةٌ لا تقليمٌ أعمق من البداية: كانت ٨٦٪ تبقى ٨٦٪ بعد «تقليم
+  #   الأسبوعين» في كلّ نشرةٍ ليومٍ كامل (نشراتٌ متعدّدةٌ في اليوم تُبقي الذاكرةَ
+  #   كلَّها أحدثَ من أسبوعين). وتقليمُ ٧٢ ساعةً يدويّاً حرّر ٦٨ غيغا (٢٦ أيلول).
+  if [ "${DISK_PCT:-0}" -ge 80 ]; then
+    echo "  ⚠ ما زال ضيّقاً — تقليمُ ما مضى عليه ثلاثةُ أيّام"
+    docker builder prune -f --filter until=72h >/dev/null 2>&1 || true
+  fi
   echo "  ℹ بعد التقليم: $(df --output=pcent / | tail -1 | tr -dc '0-9')%"
 fi
 
