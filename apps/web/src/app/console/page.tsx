@@ -1067,7 +1067,9 @@ export default function TenantsPage() {
                           variant="danger"
                           busy={lifeBusy === 'archive'}
                           disabled={!armed || can.readOnly}
-                          reason={can.readOnly ? 'انتحالٌ نشط — قراءةٌ فقط.' : 'اكتب اسم العميل مطابقاً لتفعيل الزرّ.'}
+                          /* السببُ يقوله زرُّ الإيقاف بجانبه — والتكرارُ كان يُلصَق به
+                             بلا مسافة («…لتفعيل الزرّ.اكتب اسم…»، رُئي حيّاً). */
+                          reason={can.readOnly ? 'انتحالٌ نشط — قراءةٌ فقط.' : undefined}
                           onClick={() => void setStatus(sel, 'archive')}
                         >
                           أرشِف الحساب
