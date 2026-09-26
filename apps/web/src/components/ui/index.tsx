@@ -575,6 +575,13 @@ export function Table<T>({ columns, rows, keyOf, onRowClick }: {
 function useDialogFocus(open: boolean, onClose: () => void) {
   const box = useRef<HTMLDivElement>(null);
   const opener = useRef<Element | null>(null);
+  /* ★★★ `onClose` في مرجعٍ لا في تبعيّات التأثير. أغلبُ المستدعين يمرّرونها دالّةً
+     مضمَّنة (`onClose={() => …}`) فتتجدّد مع كلّ رسم — وكان التأثيرُ يُعاد مع كلّ
+     ضغطة مفتاح: التنظيفُ يُرجع التركيزَ إلى زرّ الفتح، ثمّ التشغيلُ يضعه على العنوان.
+     فالحقلُ يفقد التركيزَ بعد أوّل حرف وتضيع البقيّة: في معالج «عميل جديد» لم يكن
+     ممكناً كتابةُ بريدٍ ولا اسمٍ بمسافة (رُئي حيّاً في المتصفّح، ٢٦ أيلول). */
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
 
   /** ما يُركَّز فعلاً — ويُحسب عند كلّ ضغطة لأنّ المحتوى يتغيّر. */
   const focusables = useCallback((): HTMLElement[] => {
@@ -594,7 +601,7 @@ function useDialogFocus(open: boolean, onClose: () => void) {
     head?.focus();
 
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.stopPropagation(); onClose(); return; }
+      if (e.key === 'Escape') { e.stopPropagation(); closeRef.current(); return; }
       if (e.key !== 'Tab') return;
       const items = focusables();
       if (!items.length) return;
@@ -617,7 +624,8 @@ function useDialogFocus(open: boolean, onClose: () => void) {
       const back = opener.current;
       if (back instanceof HTMLElement && document.contains(back)) back.focus();
     };
-  }, [open, onClose, focusables]);
+    /* فتحٌ وإغلاقٌ فقط — لا كلُّ رسم. */
+  }, [open, focusables]);
 
   return box;
 }
