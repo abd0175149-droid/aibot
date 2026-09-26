@@ -78,7 +78,7 @@ describe('★★ البنيةُ تُرمى — لا تتراكم ولا تُور
     expect(harness).toContain('redisUrl');
   });
 
-  it('★★★ و`down()` يُنادى من `finally` — وإلّا تراكمت الحاويات', () => {
+  it('★★★ و`down()` ينادى من `finally` — وإلّا تراكمت الحاويات', () => {
     const t = read('test-integration/critical-path.itest.ts');
     expect(t).toContain('afterAll(');
     const at = t.indexOf('afterAll(');

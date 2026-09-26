@@ -173,7 +173,7 @@ describe('★ الزرّان في البطاقة والمساراتُ خلفهم
   });
 
   it('★ والبطاقةُ تُظهر الحالةَ نصّاً وتفرّق الحجبَ عن العدول', () => {
-    expect(page).toContain('محجوبٌ من حسابكم');
+    expect(page).toContain('محجوب من حسابكم');
     expect(page).toContain('عدل عن المراسلة');
     expect(page).toContain("setFlag(detail.contact.id, 'block')");
     expect(page).toContain("setFlag(detail.contact.id, 'optout')");
