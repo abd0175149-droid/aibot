@@ -2338,6 +2338,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "platform_locked_at": {
+          "name": "platform_locked_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "platform_lock_reason": {
+          "name": "platform_lock_reason",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "updated_by": {
           "name": "updated_by",
           "type": "uuid",

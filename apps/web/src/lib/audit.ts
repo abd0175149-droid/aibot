@@ -20,14 +20,21 @@ export interface AuditRow {
 
 /** الأفعالُ التي لا يقوم بها إلّا فريقُ المنصّة — فاعلُها الفارغُ يُسمّى به. */
 const PLATFORM_ACTIONS = new Set([
-  'tenant.create', 'tenant.impersonate', 'tenant.kill_bot',
+  'tenant.create', 'tenant.impersonate', 'tenant.kill_bot', 'tenant.unlock_bot', 'tenant.status',
   'tenant.owner_password_reset', 'tenant.channel_secrets_read', 'bot.seed',
 ]);
 
 const LABELS: Record<string, string> = {
   'tenant.impersonate': 'دخل فريقُ المنصّة بهويّة حسابكم — قراءةٌ فقط، ٣٠ دقيقة',
   'tenant.create': 'أُنشئ الحساب',
-  'tenant.kill_bot': 'أوقف فريقُ المنصّة البوتَ إيقافاً فوريّاً',
+  'tenant.status': 'غيّر فريقُ المنصّة حالةَ الحساب',
+  'tenant.kill_bot': 'أوقف فريقُ المنصّة البوتَ وقفله',
+  'tenant.unlock_bot': 'رفع فريقُ المنصّة القفلَ عن البوت',
+  'bot.publish': 'نُشرت نسخةٌ جديدةٌ من البوت',
+  'bot.toggle': 'شُغّل البوت أو أُوقف',
+  'bot.tool_create': 'أُنشئت أداةُ HTTP',
+  'bot.tool_update': 'عُدّلت أداةُ HTTP',
+  'bot.tool_delete': 'حُذفت أداةُ HTTP',
   'tenant.owner_password_reset': 'أعاد فريقُ المنصّة كلمةَ مرور المالك وأسقط جلساته',
   'tenant.channel_secrets_read': 'قرأ فريقُ المنصّة بيانات الويبهوك',
   'channel.connect': 'رُبطت القناة أو جُدّد توكنُها',

@@ -22,6 +22,13 @@ export const botConfigs = pgTable('bot_configs', {
   failHandoff: boolean('fail_handoff').notNull().default(true),
   businessHours: jsonb('business_hours'),
   outsideHoursMessage: text('outside_hours_message'),
+  /**
+   * ★★ إيقافُ المنصّة — قفلٌ لا يفتحه العميل. `enabled` وحده كان مفتاحَ
+   *    الإيقاف من لوحة المالك، وهو نفسُه ما يقلبه العميل من زرّه، فكان
+   *    الإيقافُ يعود بضغطة. ما دام هذا مكتوباً يرفض التشغيلُ والنشرُ الأوّل.
+   */
+  platformLockedAt: timestamp('platform_locked_at', { withTimezone: true }),
+  platformLockReason: text('platform_lock_reason'),
   updatedBy: uuid('updated_by').references(() => users.id, { onDelete: 'set null' }),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(now),
 });

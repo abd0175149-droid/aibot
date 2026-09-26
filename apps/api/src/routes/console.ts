@@ -36,8 +36,11 @@ export async function registerConsole(app: FastifyInstance) {
   const owner = requireAuth({ console: true, role: ['platform_owner'] });
 
   /** الجدول مرتَّبٌ **بالمخاطرة** لا بالاسم: الأسوأ صحّةً أوّلاً ثمّ الأقرب لسقفه. */
-  app.get('/console/tenants', { preHandler: owner }, async () => {
+  app.get<{ Querystring: { archived?: string } }>('/console/tenants', { preHandler: owner }, async (req) => {
     const db = getDb();
+    /* ★ المؤرشَفون يختفون من الجدول عمداً — ويُطلبون صراحةً: أرشفةٌ بلا طريقِ
+       عودةٍ إلى الصفّ هي حذفٌ بثوبٍ آخر، والاستعادةُ تحتاج أن تراه. */
+    const includeArchived = req.query.archived === '1';
     /* ★ و`coalesce(bv.mode, 'full')` يُقنّع الغياب، فعميلٌ بلا نسخةٍ منشورةٍ
        إطلاقاً كان يُوسَم في اللوحة «حقنٌ كامل» — يُقرأ «بوتُه يعمل» على تهيئةٍ لم
        تبدأ. فـ`botSeeded` علَمٌ صريحٌ يُرى منه النقص.
@@ -54,7 +57,9 @@ export async function registerConsole(app: FastifyInstance) {
                coalesce(bv.mode, 'full')      AS "knowledgeMode",
                (bv.mode IS NOT NULL)          AS "botSeeded",
                ow.email                       AS "ownerEmail",
-               coalesce(ow.pending, false)    AS "ownerPending"
+               coalesce(ow.pending, false)    AS "ownerPending",
+               t.archived_at                  AS "archivedAt",
+               (bc.platform_locked_at IS NOT NULL) AS "botLocked"
           FROM tenants t
           LEFT JOIN subscriptions s ON s.tenant_id = t.id AND s.status = 'active'
           LEFT JOIN plans p ON p.id = s.plan_id
@@ -82,7 +87,9 @@ export async function registerConsole(app: FastifyInstance) {
              WHERE u.tenant_id = t.id AND u.role = 'tenant_owner' AND u.is_active
              ORDER BY u.created_at ASC
              LIMIT 1) ow ON true
-         WHERE t.status <> 'archived'
+          LEFT JOIN LATERAL (
+            SELECT platform_locked_at FROM bot_configs WHERE tenant_id = t.id) bc ON true
+         WHERE ${includeArchived ? sql`true` : sql`t.status <> 'archived'`}
          ORDER BY inc.open_critical DESC NULLS LAST,
                   (coalesce(w.billed,0)::float / greatest((p.limits->>'windows')::int, 1)) DESC
       `);
@@ -321,23 +328,105 @@ export async function registerConsole(app: FastifyInstance) {
   );
 
   /** مفتاح إيقافٍ فوريّ لبوت عميل — الفعل الذي تحتاجه الثالثة فجراً. */
-  app.post<{ Params: { id: string } }>('/console/tenants/:id/kill-bot', { preHandler: owner }, async (req) => {
+  app.post<{ Params: { id: string }; Body: { reason?: string } }>('/console/tenants/:id/kill-bot', { preHandler: owner }, async (req) => {
     const db = getDb();
     if (!UUID_RE.test(req.params.id)) throw new AppError(ErrorCode.TENANT_NOT_FOUND, 'لا عميلَ بهذا المعرّف', 404);
+    /* ★★ قفلٌ لا إطفاء: `enabled=false` وحده كان يُلغيه العميل بضغطة «شغّل».
+       فيُكتب معه `platform_locked_at` وسببٌ يراه العميلُ في شاشته، ويرفض
+       `/bot/toggle` التشغيلَ ما دام مكتوباً. */
+    const reason = String(req.body?.reason ?? '').trim().slice(0, 200) || 'إيقافٌ من فريق المنصّة';
     return withPlatform(db, 'إيقاف بوت عميلٍ فوريّاً', async (tx) => {
       /* ★ `.returning()` لا `void`: معرّفٌ بلا صفٍّ كان يُصيب صفرَ صفوفٍ ويردّ
          `{ ok: true }` — الشاشةُ تقول «أُوقف» ولا شيء أُوقف، في الفعل الذي
          يُضغط الثالثةَ فجراً بالذات. */
-      const hit = await tx.update(botConfigs).set({ enabled: false })
+      const hit = await tx.update(botConfigs)
+        .set({ enabled: false, platformLockedAt: new Date(), platformLockReason: reason })
         .where(eq(botConfigs.tenantId, req.params.id)).returning({ tenantId: botConfigs.tenantId });
       if (!hit.length) throw new AppError(ErrorCode.TENANT_NOT_FOUND, 'لا بوتَ لعميلٍ بهذا المعرّف — ولم يُوقَف شيء', 404);
       await tx.insert(auditLog).values({
         tenantId: req.params.id, actorUserId: req.auth!.sub,
         action: 'tenant.kill_bot', entity: 'tenant', entityId: req.params.id, ip: req.ip,
+        diff: { reason },
       });
       return { ok: true };
     });
   });
+
+  /** ★ رفعُ إيقاف المنصّة — يفتح للعميل زرَّه ولا يشغّل البوتَ عنه: التشغيلُ قرارُه هو. */
+  app.post<{ Params: { id: string } }>('/console/tenants/:id/unlock-bot', { preHandler: owner }, async (req) => {
+    if (!UUID_RE.test(req.params.id)) throw new AppError(ErrorCode.TENANT_NOT_FOUND, 'لا عميلَ بهذا المعرّف', 404);
+    return withPlatform(getDb(), 'رفعُ إيقاف المنصّة عن بوت عميل', async (tx) => {
+      const hit = await tx.update(botConfigs)
+        .set({ platformLockedAt: null, platformLockReason: null })
+        .where(and(eq(botConfigs.tenantId, req.params.id), sql`${botConfigs.platformLockedAt} is not null`))
+        .returning({ tenantId: botConfigs.tenantId });
+      if (!hit.length) throw new AppError(ErrorCode.VALIDATION, 'لا إيقافَ من المنصّة على بوت هذا العميل', 404);
+      await tx.insert(auditLog).values({
+        tenantId: req.params.id, actorUserId: req.auth!.sub,
+        action: 'tenant.unlock_bot', entity: 'tenant', entityId: req.params.id, ip: req.ip,
+      });
+      return { ok: true };
+    });
+  });
+
+  /**
+   * ★★★ **دورةُ حياة العميل — كانت بلا فعلٍ واحد.**
+   *
+   *   كلُّ عميلٍ يُنشأ `trial` ولا يصير `active` أبداً، ولا مسارَ إيقافٍ ولا
+   *   أرشفة. والحالةُ تُقرأ في خمسة مواضع (الدخول، التجديد، الويبهوك، الإرسال،
+   *   لوحةُ الهامش) ولا يكتبها أحد. فثلاثةُ انتقالاتٍ مسمّاةٍ لا حقلٌ حرّ:
+   *   `activate` · `suspend` · `archive` — وكلُّ واحدٍ يُقيَّد بحالاتٍ يخرج منها.
+   *
+   * ⚠️ **الإيقافُ يطرد.** توكنُ الوصول لا يسأل عن حالة المستأجر في كلّ طلب،
+   *    فبلا إسقاط الجلسات يبقى الموقوفُ يعمل ربعَ ساعة ويُجدَّد ما دام الكوكي
+   *    حيّاً. والإسقاطُ في نفس المعاملة — إيقافٌ لا يطرد ليس إيقافاً.
+   */
+  const TENANT_TRANSITIONS = {
+    activate: { from: ['trial', 'suspended', 'archived'], to: 'active', msg: 'صار الحسابُ فعّالاً' },
+    suspend:  { from: ['trial', 'active'], to: 'suspended', msg: 'أُوقف الحساب — لا دخولَ ولا رسائلَ حتّى يُعاد' },
+    archive:  { from: ['trial', 'active', 'suspended'], to: 'archived', msg: 'أُرشف الحساب — يختفي من الجدول ويُستعاد بـ«فعّل»' },
+  } as const;
+  type Transition = keyof typeof TENANT_TRANSITIONS;
+
+  app.post<{ Params: { id: string; action: string } }>(
+    '/console/tenants/:id/status/:action',
+    { preHandler: owner },
+    async (req) => {
+      if (!UUID_RE.test(req.params.id)) throw new AppError(ErrorCode.TENANT_NOT_FOUND, 'لا عميلَ بهذا المعرّف', 404);
+      if (!(req.params.action in TENANT_TRANSITIONS)) {
+        throw new AppError(ErrorCode.VALIDATION, 'انتقالٌ غيرُ معروف — activate أو suspend أو archive', 400);
+      }
+      const tr = TENANT_TRANSITIONS[req.params.action as Transition];
+      const out = await withPlatform(getDb(), 'تغييرُ حالة عميل من لوحة المالك', async (tx) => {
+        const t = (await tx.select().from(tenants).where(eq(tenants.id, req.params.id)).limit(1))[0];
+        if (!t) throw new AppError(ErrorCode.TENANT_NOT_FOUND, 'لا عميلَ بهذا المعرّف', 404);
+        if (!(tr.from as readonly string[]).includes(t.status)) {
+          throw new AppError(ErrorCode.VALIDATION, `لا انتقالَ من حالة «${t.status}» بهذا الفعل`, 409);
+        }
+        const [next] = await tx.update(tenants)
+          .set({ status: tr.to, archivedAt: tr.to === 'archived' ? new Date() : null })
+          .where(eq(tenants.id, t.id)).returning();
+        let sessionsRevoked = 0;
+        if (tr.to !== 'active') {
+          const revoked = await tx.update(sessions).set({ revokedAt: new Date() })
+            .where(and(
+              isNull(sessions.revokedAt),
+              sql`${sessions.userId} in (select id from users where tenant_id = ${t.id})`,
+            ))
+            .returning({ id: sessions.id });
+          sessionsRevoked = revoked.length;
+        }
+        await tx.insert(auditLog).values({
+          tenantId: t.id, actorUserId: req.auth!.sub,
+          action: 'tenant.status', entity: 'tenant', entityId: t.id, ip: req.ip,
+          diff: { from: t.status, to: tr.to, sessionsRevoked },
+        });
+        return { tenant: next!, sessionsRevoked };
+      });
+      emitToPlatform('tenant:update', out.tenant);
+      return { ok: true, message: tr.msg, status: out.tenant.status, sessionsRevoked: out.sessionsRevoked };
+    },
+  );
 
   app.get<{ Querystring: { status?: string; severity?: string } }>(
     '/console/incidents',
@@ -409,7 +498,9 @@ export async function registerConsole(app: FastifyInstance) {
           LEFT JOIN conversation_windows w ON w.tenant_id = t.id AND w.billing_period = ${period}
           LEFT JOIN ai_runs r ON r.tenant_id = t.id
                              AND to_char(r.created_at, 'YYYY-MM') = ${period}
-         WHERE t.status = 'active'
+         -- ★ كان «= 'active'» — ولا عميلَ يصير active من المعالج، فخلت اللوحةُ من
+         --   كلّ من أُنشئ منه. التجريبيُّ والموقوفُ يكلّفان أيضاً؛ المؤرشَفُ وحده خارجها.
+         WHERE t.status <> 'archived'
          GROUP BY t.id, t.name, p.name, p.price_monthly
          ORDER BY (p.price_monthly::float - coalesce(sum(w.ai_cost_usd), 0)::float) ASC
       `);

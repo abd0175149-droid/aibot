@@ -343,10 +343,10 @@ export async function registerBot(app: FastifyInstance) {
       // النسخة الجديدة تُنشر فوراً في وضع full، وتنتظر التضمين في غيره
       if (mode === 'full') {
         await tx.update(botConfigs)
-          .set({ publishedVersionId: ver!.id, ...(firstPublish ? { enabled: true } : {}) })
+          .set({ publishedVersionId: ver!.id, ...(firstPublish && !cfg.platformLockedAt ? { enabled: true } : {}) })
           .where(eq(botConfigs.tenantId, tenantId));
       } else {
-        if (firstPublish) {
+        if (firstPublish && !cfg.platformLockedAt) {
           await tx.update(botConfigs).set({ enabled: true })
             .where(eq(botConfigs.tenantId, tenantId));
         }
@@ -355,7 +355,16 @@ export async function registerBot(app: FastifyInstance) {
 
       /* `live` تقول الحقيقة للشاشة: هل يردّ البوت **الآن**؟ وهي شرطان معاً —
          مُشعَلٌ، ونسخةٌ منشورةٌ فعلاً (لا تنتظر تضميناً). */
-      const live = (firstPublish || cfg.enabled) && mode === 'full';
+      /* ★ وقفلُ المنصّة يسبق الإشعالَ الأوّل: بوتٌ أوقفته المنصّةُ لا يُشعله نشرٌ. */
+      const live = ((firstPublish && !cfg.platformLockedAt) || cfg.enabled) && mode === 'full';
+
+      /* ★ النشرُ فعلٌ حسّاسٌ كان بلا صفٍّ في السجلّ — والتراجعُ مسجَّلٌ وحده،
+         فكان السجلُّ يقول «عاد إلى v3» ولا يقول متى نُشرت v4 ولا مَن نشرها. */
+      await tx.insert(auditLog).values({
+        tenantId, actorUserId,
+        action: 'bot.publish', entity: 'bot_version', entityId: ver!.id,
+        diff: { version: ver!.version, knowledgeMode: mode, note },
+      });
       return {
         version: ver, knowledgeMode: mode, kbTokens, embedding: mode !== 'full', live,
         /* ما دخل النسخة فعلاً — تعرضه ورقة النشر بدل أن تُخمّن. */
@@ -507,6 +516,20 @@ export async function registerBot(app: FastifyInstance) {
     const tenantId = tenantOf(req);
     const enabled = Boolean(req.body?.enabled);
     return withTenant(getDb(), tenantId, async (tx) => {
+      const cur = (await tx.select({
+        enabled: botConfigs.enabled,
+        platformLockedAt: botConfigs.platformLockedAt,
+        platformLockReason: botConfigs.platformLockReason,
+      }).from(botConfigs).where(eq(botConfigs.tenantId, tenantId)).limit(1))[0];
+      /* ★★ مفتاحُ المنصّة لا يُلغيه العميل بضغطة: إيقافٌ من اللوحة الثالثةَ فجراً
+         كان يعود خلال دقيقةٍ من زرّ «شغّل البوت» بلا أثر. والسببُ يُقال له. */
+      if (enabled && cur?.platformLockedAt) {
+        throw new AppError(
+          ErrorCode.FORBIDDEN,
+          `أوقف فريقُ المنصّة بوتك${cur.platformLockReason ? ` — ${cur.platformLockReason}` : ''}. لا يعود إلّا بقرارٍ منهم — تواصل مع الدعم.`,
+          409,
+        );
+      }
       const [row] = await tx.insert(botConfigs)
         .values({ tenantId, enabled, updatedBy: req.auth!.sub })
         .onConflictDoUpdate({
@@ -514,6 +537,12 @@ export async function registerBot(app: FastifyInstance) {
           set: { enabled, updatedBy: req.auth!.sub, updatedAt: new Date() },
         })
         .returning();
+      /* تبديلُ البوت كان بلا أثر: «مَن أطفأه الجمعةَ ليلاً؟» سؤالٌ بلا جواب. */
+      await tx.insert(auditLog).values({
+        tenantId, actorUserId: req.auth!.sub,
+        action: 'bot.toggle', entity: 'bot_config', entityId: tenantId, ip: req.ip,
+        diff: { enabled, was: cur?.enabled ?? null },
+      });
       return row;
     });
   });
@@ -593,6 +622,13 @@ export async function registerBot(app: FastifyInstance) {
         enabled: b.enabled === true,
       }).returning();
       const { secretsEnc, ...safe } = row!;
+      /* ★ أداةُ HTTP تنادي نظامَ العميل بسرٍّ — إنشاؤها فعلٌ حسّاسٌ يُسجَّل
+         باسم فاعله. ولا سرَّ في `diff`: المفتاحُ والعنوانُ وحدهما. */
+      await tx.insert(auditLog).values({
+        tenantId, actorUserId: req.auth!.sub,
+        action: 'bot.tool_create', entity: 'bot_tool', entityId: row!.id, ip: req.ip,
+        diff: { key: row!.key, url: (row!.http as { url?: string } | null)?.url ?? null },
+      });
       return { ...safe, http: maskHttp(safe.http), hasSecrets: Boolean(secretsEnc) };
     });
   });
@@ -716,6 +752,16 @@ export async function registerBot(app: FastifyInstance) {
 
         const [row] = await tx.update(botTools).set(patch)
           .where(eq(botTools.id, req.params.id)).returning();
+        /* أسماءُ الحقول المعدَّلة لا قيمُها — والسرُّ يُذكر أنّه بُدّل لا ما هو. */
+        await tx.insert(auditLog).values({
+          tenantId, actorUserId: req.auth!.sub,
+          action: 'bot.tool_update', entity: 'bot_tool', entityId: row!.id, ip: req.ip,
+          diff: {
+            key: cur.key,
+            fields: Object.keys(patch).filter((k) => k !== 'secretsEnc' && k !== 'keyVersion'),
+            secretsChanged: b.secrets !== undefined || Boolean(mig),
+          },
+        });
         const { secretsEnc, ...safe } = row!;
         return { ...safe, http: maskHttp(safe.http), hasSecrets: Boolean(secretsEnc) };
       });
@@ -735,8 +781,13 @@ export async function registerBot(app: FastifyInstance) {
     const tenantId = tenantOf(req);
     return withTenant(getDb(), tenantId, async (tx) => {
       const gone = await tx.delete(botTools)
-        .where(eq(botTools.id, req.params.id)).returning({ id: botTools.id });
+        .where(eq(botTools.id, req.params.id)).returning({ id: botTools.id, key: botTools.key });
       if (!gone.length) throw new AppError(ErrorCode.VALIDATION, 'أداةٌ غير موجودة', 404);
+      await tx.insert(auditLog).values({
+        tenantId, actorUserId: req.auth!.sub,
+        action: 'bot.tool_delete', entity: 'bot_tool', entityId: gone[0]!.id, ip: req.ip,
+        diff: { key: gone[0]!.key },
+      });
       return { ok: true };
     });
   });

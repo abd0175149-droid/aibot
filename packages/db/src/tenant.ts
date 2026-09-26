@@ -44,6 +44,13 @@ export async function withPlatform<T>(
   }
   return db.transaction(async (tx) => {
     await tx.execute(sql`SET LOCAL ROLE aibot_platform`);
+    /* ★ السببُ صار يُرى لا يُجبَر فحسب: كان شرطاً في الكود ولا يُسجَّل في أيّ
+       مكان. `application_name` محلّيُّ المعاملة يظهر في `pg_stat_activity`،
+       فاتّصالٌ عالقٌ في معاملةِ منصّةٍ (`idle in transaction`) يقول **لماذا**
+       فُتح — لا «aibot» وحسب. ⚠️ ولا سطرَ سجلٍّ لكلّ نداء: `/me` يمرّ من هنا في
+       كلّ تحميلِ شاشة، وسطرٌ لكلّ نداءٍ ضجيجٌ يُطفأ في أوّل أسبوع.
+       (الحدُّ ٦٣ حرفاً — حدُّ الاسم في PostgreSQL، وما زاد يُقصّ بصمت.) */
+    await tx.execute(sql`SELECT set_config('application_name', ${`platform: ${reason}`.slice(0, 63)}, true)`);
     return fn(tx);
   });
 }

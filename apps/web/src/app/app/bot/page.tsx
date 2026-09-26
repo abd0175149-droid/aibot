@@ -77,6 +77,9 @@ interface BotState {
     contextMessages: number; failMessage: string | null; outsideHoursMessage: string | null;
     /** ساعاتُ الدوام — بلاها يردّ البوت في كلّ وقتٍ ولا تُستعمل رسالةُ خارج الدوام */
     businessHours?: { tz?: string; days?: Record<string, unknown> } | null;
+    /** ★ إيقافٌ من فريق المنصّة — ما دام مكتوباً يرفض الخادم «شغّل». */
+    platformLockedAt?: string | null;
+    platformLockReason?: string | null;
   } | null;
   published: {
     version: number; persona: string; knowledgeBase: string;
@@ -506,7 +509,12 @@ export default function BotPage() {
     : !can.settings
       ? 'ضبط البوت لمالك الحساب. اطلب الصلاحيّة منه — وحسابك يقرأ كلّ شيء هنا.'
       : null;
-  const locked = Boolean(lockReason);
+  /* ★★ وسببٌ ثالثٌ من الخادم لا من الصلاحيّة: أوقفته المنصّةُ. زرٌّ يُضغط ويردّ
+     ٤٠٩ في كلّ مرّةٍ يكسر الثقة — فيُعطَّل ويُقال لماذا، والسببُ ما كتبه فريقُنا. */
+  const platformLock = cfg?.platformLockedAt
+    ? `أوقف فريقُ المنصّة بوتك${cfg.platformLockReason ? ` — ${cfg.platformLockReason}` : ''}. لا يعود إلّا بقرارٍ منهم — تواصل مع الدعم.`
+    : null;
+  const locked = Boolean(lockReason) || Boolean(platformLock);
 
   const personaChanged = persona !== (pub?.persona ?? '');
   const kbChanged = knowledge !== (pub?.knowledgeBase ?? '');
@@ -802,6 +810,17 @@ export default function BotPage() {
     bandMark = '○';
     bandTitle = 'لم يُضبط بوتك بعد';
     bandSub = <>اكتب شخصيّته ومعرفته ثمّ انشرهما — ولا يردّ على زبونٍ قبل أن تنشر.</>;
+  } else if (platformLock) {
+    bandTone = 'crit';
+    bandMark = '■';
+    bandTitle = 'أوقف فريقُ المنصّة بوتك — لا يردّ على أحد';
+    bandSub = (
+      <>
+        {cfg.platformLockReason ? <>السبب: <span dir="auto">{cfg.platformLockReason}</span>. </> : null}
+        لا يعود بزرّ «شغّل» — يرفعه فريقُ المنصّة بعد التواصل، ثمّ تشغّله أنت.
+        {pub ? <> ونسختك <span className="num">{`v${pub.version}`}</span> محفوظةٌ كما هي.</> : null}
+      </>
+    );
   } else if (!cfg.enabled) {
     bandTone = 'crit';
     bandMark = '■';
@@ -942,7 +961,7 @@ export default function BotPage() {
               variant={cfg?.enabled ? 'danger' : 'primary'}
               busy={busy === 'toggle'}
               disabled={locked}
-              reason={lockReason ?? undefined}
+              reason={lockReason ?? platformLock ?? undefined}
               onClick={() => { if (cfg?.enabled) setAsk({ k: 'stop' }); else void toggleBot(true); }}
             >
               {cfg?.enabled ? 'أوقف البوت' : 'شغّل البوت'}

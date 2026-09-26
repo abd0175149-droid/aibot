@@ -691,7 +691,23 @@ export async function registerReports(app: FastifyInstance) {
   app.post<{ Body: ConnectBody }>(
     '/channel/connect',
     { preHandler: requireAuth({ settings: true }) },
-    async (req, reply) => connect(tenantOf(req), req.body ?? {}, reply),
+    async (req, reply) => {
+      const tenantId = tenantOf(req);
+      const out = await connect(tenantId, req.body ?? {}, reply);
+      if (reply.sent) return out;
+      /* ★ الربطُ من لوحة المالك كان مسجَّلاً، ومن العميل نفسِه لا: توكنٌ جديدٌ
+         على القناة يبدّل من يتكلّم باسم النشاط — ويستحقّ سطراً باسم من فعله. */
+      await withTenant(getDb(), tenantId, (tx) =>
+        tx.insert(auditLog).values({
+          tenantId,
+          actorUserId: req.auth!.sub,
+          action: 'channel.connect',
+          entity: 'tenant_channel',
+          entityId: (out as { id: string }).id,
+          ip: req.ip,
+        }));
+      return out;
+    },
   );
 
   /**

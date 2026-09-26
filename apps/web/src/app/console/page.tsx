@@ -62,6 +62,9 @@ interface TenantRow {
   ownerEmail: string | null;
   /** مالكٌ بكلمةٍ مؤقّتةٍ لم يدخل قطّ — أثرُ معالجٍ أُغلق قبل أن تُنسخ الكلمة. */
   ownerPending: boolean;
+  archivedAt: string | null;
+  /** بوتُه موقوفٌ من المنصّة — لا يفتحه العميل. */
+  botLocked: boolean;
 }
 
 /** صفّ الهامش — من `GET /console/usage`؛ يشمل المستأجرين الفعّالين وحدهم. */
@@ -127,6 +130,8 @@ const HEALTH: Record<string, { tone: Tone; label: string; rank: number; why: str
    (سليم/تحذير/حرج) فلا تُنفَق على تصنيفٍ إداريّ. والموقوف حرجٌ فعلاً. */
 const STATUS_PILL: Record<string, { tone: Tone; label: string }> = {
   trial: { tone: 'neutral', label: 'تجريبيّ' },
+  active: { tone: 'ok', label: 'فعّال' },
+  archived: { tone: 'neutral', label: 'مؤرشَف' },
   past_due: { tone: 'warn', label: 'متأخّر السداد' },
   suspended: { tone: 'crit', label: 'موقوف' },
 };
@@ -148,7 +153,9 @@ function byRisk(a: TenantRow, b: TenantRow): number {
 }
 
 export default function TenantsPage() {
-  const tenants = useApi<{ items: TenantRow[] }>('/console/tenants');
+  /* ★ المؤرشَفون خارج الجدول عمداً ويُطلبون صراحةً — أرشفةٌ بلا طريقِ عودةٍ حذفٌ. */
+  const [showArchived, setShowArchived] = useState(false);
+  const tenants = useApi<{ items: TenantRow[] }>(showArchived ? '/console/tenants?archived=1' : '/console/tenants');
   const margin = useApi<{ period: string; items: MarginRow[] }>('/console/usage');
   const incidents = useApi<Incident[]>('/console/incidents');
   const can = useCan();
@@ -169,7 +176,10 @@ export default function TenantsPage() {
      لا يُظهر «…» في أثناء فعلٍ لا علاقةَ له به. */
   const [resetting, setResetting] = useState(false);
   const [killWord, setKillWord] = useState('');
+  /** سببُ الإيقاف — يراه العميلُ في شاشته حرفاً حرفاً، فيُكتب له لا لنا. */
+  const [killReason, setKillReason] = useState('');
   const [busy, setBusy] = useState(false);
+  const [lifeBusy, setLifeBusy] = useState<string | null>(null);
   const router = useRouter();
   const { reload: reloadSession } = useSession();
   const [impBusy, setImpBusy] = useState(false);
@@ -195,6 +205,7 @@ export default function TenantsPage() {
   function closeSheet() {
     setOpenId(null);
     setKillWord('');
+    setKillReason('');
     setOwnerTemp(null);
     setWebhook(null);
   }
@@ -207,8 +218,8 @@ export default function TenantsPage() {
   async function killBot(r: TenantRow) {
     setBusy(true);
     try {
-      await post(`/console/tenants/${r.id}/kill-bot`);
-      toast(`أُوقف بوت ${r.name} — يصمت عن كلّ زبائنه الآن، ولا يعود إلّا بتشغيلٍ يدويّ.`);
+      await post(`/console/tenants/${r.id}/kill-bot`, { reason: killReason.trim() || undefined });
+      toast(`أُوقف بوت ${r.name} وقُفل — لا يعود بزرّ العميل، بل برفع القفل من ورقته ثمّ تشغيله هو.`);
       closeSheet();
       await tenants.reload();
     } catch (e) {
@@ -237,6 +248,39 @@ export default function TenantsPage() {
       /* نداءٌ فاشلٌ يصمت يجعل من ضغط يظنّ أنّ كلمةً وُلدت — فيقول للعميل سرّاً لا وجودَ له. */
       toast(e instanceof ApiError ? e.message : 'تعذّر توليد كلمةٍ مؤقّتة. أعِد المحاولة.');
     } finally { setResetting(false); }
+  }
+
+  /**
+   * ★★★ **دورةُ حياة العميل — كانت بلا فعلٍ واحد.** ثلاثةُ انتقالاتٍ مسمّاةٍ يقيّدها
+   *   الخادم بالحالة الراهنة، وكلُّ واحدٍ يقول أثرَه قبل الضغط: الإيقافُ يطرد.
+   */
+  async function setStatus(r: TenantRow, action: 'activate' | 'suspend' | 'archive') {
+    setLifeBusy(action);
+    try {
+      const out = await post<{ message: string; sessionsRevoked: number }>(`/console/tenants/${r.id}/status/${action}`);
+      toast(out.sessionsRevoked ? `${out.message} — وأُسقطت ${out.sessionsRevoked} جلسة.` : out.message);
+      if (action === 'archive' && !showArchived) closeSheet();
+      await tenants.reload();
+      void margin.reload();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'تعذّر تغييرُ حالة الحساب. أعِد المحاولة.');
+    } finally {
+      setLifeBusy(null);
+    }
+  }
+
+  /** رفعُ قفل المنصّة عن بوته — يفتح زرَّه ولا يشغّله عنه. */
+  async function unlockBot(r: TenantRow) {
+    setLifeBusy('unlock');
+    try {
+      await post(`/console/tenants/${r.id}/unlock-bot`);
+      toast(`رُفع القفل عن بوت ${r.name} — يشغّله صاحبُه من شاشته حين يشاء.`);
+      await tenants.reload();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'تعذّر رفعُ القفل. أعِد المحاولة.');
+    } finally {
+      setLifeBusy(null);
+    }
   }
 
   /**
@@ -338,12 +382,22 @@ export default function TenantsPage() {
       <PageHead
         title="العملاء"
         sub="مرتَّبٌ بالمخاطرة لا بالاسم: الأسوأ صحّةً أوّلاً، ثمّ الأقرب إلى سقفه. هذا الترتيب هو الشاشة كلّها."
-        actions={
-          /* الشهر سلسلةُ آلةٍ لا نصّ: «2025-09» بلا عزلٍ اتجاهيٍّ تُقرأ «09-2025» */
-          margin.data?.period
-            ? <span className="tn-period num">{margin.data.period}</span>
-            : undefined
-        }
+        actions={(
+          <Row gap="sm">
+            <button
+              type="button"
+              className="chipf"
+              aria-pressed={showArchived}
+              onClick={() => setShowArchived((v) => !v)}
+            >
+              {showArchived ? 'المؤرشَفون ظاهرون' : 'أظهر المؤرشَفين'}
+            </button>
+            {/* الشهر سلسلةُ آلةٍ لا نصّ: «2025-09» بلا عزلٍ اتجاهيٍّ تُقرأ «09-2025» */}
+            {margin.data?.period
+              ? <span className="tn-period num">{margin.data.period}</span>
+              : null}
+          </Row>
+        )}
       />
 
       <DataView
@@ -417,6 +471,7 @@ export default function TenantsPage() {
                     {STATUS_PILL[r.status] && (
                       <Pill tone={STATUS_PILL[r.status]!.tone} label={STATUS_PILL[r.status]!.label} />
                     )}
+                    {r.botLocked && <Pill tone="crit" label="بوتُه مقفولٌ من المنصّة" />}
                     {/* ★ وضعُ المعرفة صار وسمَ حالةٍ لا عموداً كاملاً: «حقنٌ
                         كامل» بمعرفةٍ تكبر هو الإنذارُ المبكّر لانفجار الكلفة،
                         وبقيّةُ الأوضاع لا يُقرَّر عليها شيء — فلا تُنفق عموداً
@@ -823,6 +878,42 @@ export default function TenantsPage() {
                       </Note>
                     )}
 
+                    {/* ★★ قفلُ المنصّة على بوته — يُقال ويُرفع من هنا وحدها. والرفعُ لا
+                        يشغّل: التشغيلُ قرارُ العميل من شاشته. */}
+                    {sel.botLocked && (
+                      <Note tone="crit">
+                        <b>بوتُه موقوفٌ ومقفولٌ من المنصّة.</b> زرُّ «شغّل» عنده يردّ بالرفض ويقول له السبب.
+                        {' '}ارفع القفل حين يُحلّ ما أُوقف لأجله — ثمّ يشغّله هو.
+                        <Button size="sm" busy={lifeBusy === 'unlock'} disabled={can.readOnly}
+                          reason="انتحالٌ نشط — قراءةٌ فقط."
+                          onClick={() => void unlockBot(sel)}>ارفع القفل عن بوته</Button>
+                      </Note>
+                    )}
+
+                    {/* ★★★ دورةُ الحياة — ثلاثةُ انتقالاتٍ يقيّدها الخادمُ بالحالة الراهنة.
+                        والزرُّ يقول أثرَه: الإيقافُ يطرد الجلساتِ ويُسقط الويبهوك والإرسال. */}
+                    <KV>
+                      <KVRow k="الحالة">
+                        <Row gap="sm">
+                          {STATUS_PILL[sel.status]
+                            ? <Pill tone={STATUS_PILL[sel.status]!.tone} label={STATUS_PILL[sel.status]!.label} />
+                            : <span className="mono">{sel.status}</span>}
+                          {sel.status !== 'active' && (
+                            <Button size="sm" variant="primary" busy={lifeBusy === 'activate'} disabled={can.readOnly}
+                              reason="انتحالٌ نشط — قراءةٌ فقط."
+                              onClick={() => void setStatus(sel, 'activate')}>
+                              {sel.status === 'trial' ? 'فعّل الاشتراك' : sel.status === 'archived' ? 'استعِده فعّالاً' : 'أعِد تفعيله'}
+                            </Button>
+                          )}
+                          {(sel.status === 'trial' || sel.status === 'active') && (
+                            <Button size="sm" busy={lifeBusy === 'suspend'} disabled={can.readOnly}
+                              reason="انتحالٌ نشط — قراءةٌ فقط."
+                              onClick={() => void setStatus(sel, 'suspend')}>أوقف الحساب — يطرد الجلسات</Button>
+                          )}
+                        </Row>
+                      </KVRow>
+                    </KV>
+
                     {/* ★ إعادةُ كلمةِ مالكه — البابُ الذي كان `ops/set-password.ts` وحده.
                         وكلُّ جلساته تسقط، فهو فعلٌ يُنطق أثرُه قبل الضغط لا بعده. */}
                     <details className="cn-gate">
@@ -952,6 +1043,10 @@ export default function TenantsPage() {
                       >
                         <Input id="kill-name" value={killWord} onChange={setKillWord} />
                       </Field>
+                      <Field label="سببُ الإيقاف — يراه العميل حرفاً حرفاً" id="kill-reason"
+                        hint="اختياريّ. يُعرض في شاشة بوته مع زرّ «شغّل» المعطَّل، ويُكتب في سجلّه.">
+                        <Input id="kill-reason" value={killReason} onChange={setKillReason} />
+                      </Field>
                       <Button
                         variant="danger"
                         busy={busy}
@@ -963,6 +1058,19 @@ export default function TenantsPage() {
                       >
                         أوقف بوته الآن
                       </Button>
+                      {/* ★ الأرشفةُ خلف نفس البوّابة: تُخفيه من الجدول وتطرد جلساته وتُسقط
+                          ويبهوكه — وتُستعاد من «أظهر المؤرشَفين» ثمّ «استعِده فعّالاً». */}
+                      {sel.status !== 'archived' && (
+                        <Button
+                          variant="danger"
+                          busy={lifeBusy === 'archive'}
+                          disabled={!armed || can.readOnly}
+                          reason={can.readOnly ? 'انتحالٌ نشط — قراءةٌ فقط.' : 'اكتب اسم العميل مطابقاً لتفعيل الزرّ.'}
+                          onClick={() => void setStatus(sel, 'archive')}
+                        >
+                          أرشِف الحساب
+                        </Button>
+                      )}
                     </details>
                   </Stack>
                 )}

@@ -52,24 +52,35 @@ interface Snap {
   optoutRows: number;
   attention: boolean | null;
   stored: number;
+  /** كيف حُفظ معرّفُ الزبون فعلاً — يُطبع دليلاً. */
+  identity?: string | null;
 }
 
+/**
+ * الأثرُ يُقرأ من **الرسالة** إلى محادثتها إلى جهتها — لا من هويّة القناة:
+ * أوّلُ تشغيلٍ بحث بـ`channel_identities.external_id = FROM` فلم يجد شيئاً
+ * (المعرّفُ يُطبَّع قبل الحفظ) وأعلن ❌ على مسارٍ سليم. والرسالةُ المحفوظةُ
+ * بوسم التمرين طريقٌ لا يخطئ: هي الدليلُ الذي يبقى بالتعريف.
+ */
 async function snap(db: Db, tenantId: string): Promise<Snap> {
   return withPlatform(db, 'تمرين العدول: قراءة الأثر', async (tx) => {
-    const [c] = await tx.select({ id: contacts.id, optedOutAt: contacts.optedOutAt })
-      .from(contacts)
-      .innerJoin(channelIdentities, eq(channelIdentities.contactId, contacts.id))
-      .where(and(eq(channelIdentities.tenantId, tenantId), eq(channelIdentities.externalId, FROM)))
-      .limit(1);
-    const [m] = await tx.select({ n: sql<number>`count(*)::int` }).from(messages)
+    const mine = await tx.select({ conversationId: messages.conversationId }).from(messages)
       .where(and(eq(messages.tenantId, tenantId), sql`${messages.externalId} like ${`${TAG}%`}`));
-    if (!c) return { contactId: null, optedOutAt: null, optoutRows: 0, attention: null, stored: m?.n ?? 0 };
-    const [o] = await tx.select({ n: sql<number>`count(*)::int` }).from(optouts).where(eq(optouts.contactId, c.id));
-    const [conv] = await tx.select({ attention: conversations.needsAttention }).from(conversations)
-      .where(eq(conversations.contactId, c.id)).limit(1);
+    const stored = mine.length;
+    const convId = mine[0]?.conversationId;
+    if (!convId) return { contactId: null, optedOutAt: null, optoutRows: 0, attention: null, stored };
+    const [conv] = await tx.select({ contactId: conversations.contactId, attention: conversations.needsAttention })
+      .from(conversations).where(eq(conversations.id, convId)).limit(1);
+    if (!conv) return { contactId: null, optedOutAt: null, optoutRows: 0, attention: null, stored };
+    const [c] = await tx.select({ optedOutAt: contacts.optedOutAt }).from(contacts)
+      .where(eq(contacts.id, conv.contactId)).limit(1);
+    const [o] = await tx.select({ n: sql<number>`count(*)::int` }).from(optouts)
+      .where(eq(optouts.contactId, conv.contactId));
+    const [ident] = await tx.select({ externalId: channelIdentities.externalId }).from(channelIdentities)
+      .where(eq(channelIdentities.contactId, conv.contactId)).limit(1);
     return {
-      contactId: c.id, optedOutAt: c.optedOutAt, optoutRows: o?.n ?? 0,
-      attention: conv?.attention ?? null, stored: m?.n ?? 0,
+      contactId: conv.contactId, optedOutAt: c?.optedOutAt ?? null, optoutRows: o?.n ?? 0,
+      attention: conv.attention, stored, identity: ident?.externalId ?? null,
     };
   });
 }
@@ -114,7 +125,9 @@ async function main(): Promise<number> {
     log(`ويبهوك: HTTP ${st3}`);
     const s3 = await until(db, ctx.tenantId, (s) => s.stored >= 3 && s.optedOutAt == null);
     log('الأثر بعد «اشترك»', s3);
-    verdict.optin = s3.optedOutAt == null && s3.optoutRows === 0 && s3.stored >= 3;
+    /* ⚠️ مشروطٌ بنجاح ①: «لا عدولَ بعد اشترك» يصدق فارغاً لو لم يُسجَّل عدولٌ
+       أصلاً — وأوّلُ تشغيلٍ أعلن ✅ هنا على مسارٍ لم يُثبت شيئاً. */
+    verdict.optin = verdict.optout && s3.optedOutAt == null && s3.optoutRows === 0 && s3.stored >= 3;
   } finally {
     step('تنظيف');
     await purgeDrillData(db, ctx.tenantId);
