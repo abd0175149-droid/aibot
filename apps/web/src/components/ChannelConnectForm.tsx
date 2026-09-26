@@ -59,8 +59,10 @@ export function ChannelConnectForm({
         setErr(e.message);
         /* تلميحُ الخادم يُعرض إن وُجد: «التوكن مؤقّت — أنشئ توكن مستخدم نظام»
            أنفعُ بكثيرٍ من «تعذّر الربط». */
-        const extra = (e as unknown as { body?: { issues?: string[]; hint?: string } }).body;
-        if (extra?.issues) setIssues(extra.issues);
+        /* ★ `body` صار حقلاً حقيقيّاً في `ApiError` — وكان هذا يقرأ حقلاً لا يملؤه أحد،
+           فلم يصل سببُ ميتا ولا التلميحُ إلى هذه الشاشة قطّ (رُئي حيّاً في المعالج). */
+        const extra = e.body as { issues?: string[]; hint?: string } | undefined;
+        if (Array.isArray(extra?.issues)) setIssues(extra.issues);
         if (extra?.hint) setIssues((x) => [...x, extra.hint!]);
       } else setErr('تعذّر الربط');
     } finally { setBusy(false); }

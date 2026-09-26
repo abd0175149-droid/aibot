@@ -112,9 +112,10 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
       setStep(3);
     } catch (e) {
       if (e instanceof ApiError) {
-        setErr(e.message);
-        const extra = (e as unknown as { body?: { issues?: string[]; hint?: string } }).body;
-        if (extra?.issues) setIssues(extra.issues);
+        /* ★ السببُ والتلميحُ من جسم الردّ — كانا يُقرآن من حقلٍ لا يملؤه أحد. */
+        const extra = e.body as { issues?: string[]; hint?: string } | undefined;
+        setErr(extra?.hint ? `${e.message} ${extra.hint}` : e.message);
+        if (Array.isArray(extra?.issues)) setIssues(extra.issues);
       } else setErr('تعذّر الربط');
     } finally { setBusy(false); }
   }
@@ -149,7 +150,8 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
                 reason="القيم الثلاث مطلوبة">
                 افحص واربط
               </Button>
-              <Button onClick={() => setStep(3)}>أكمِل بلا ربط</Button>
+              {/* والتخطّي يمسح خطأَ الربط: كان يتبع المالكَ إلى خطوة البوت (رُئي حيّاً). */}
+              <Button onClick={() => { setErr(null); setIssues([]); setStep(3); }}>أكمِل بلا ربط</Button>
             </>
           )}
           {/* الخطوةُ الثالثة لا فعلَ لها في الرصيف: زرُّ «انشر وابدأ» داخل

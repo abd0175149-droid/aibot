@@ -29,3 +29,21 @@ describe('تركيزُ النافذة المنبثقة لا يُسرق مع كل
     expect(body).not.toMatch(/\[open, onClose/);
   });
 });
+
+describe('★ خطأُ الخادم بصيغة `{ error: "نصّ", issues, hint }` يصل إلى الشاشة', () => {
+  /* رُئي حيّاً: ميتا رفضت توكناً (٤٢٢) والمعالجُ قال «صار خطأ عندنا». */
+  const api = readFileSync(join(__dirname, '..', 'src', 'lib', 'api.ts'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  it('القارئُ يعرف الشكلين ويُرفق الجسم', () => {
+    expect(api).toContain("if (typeof j.error === 'string') {");
+    expect(api).toContain('message = j.error;');
+    expect(api).toContain('throw new ApiError(code, message, res.status, body);');
+    expect(api).toContain('readonly body?: Record<string, unknown>,');
+  });
+  it('والنموذجان يقرآن `e.body` لا حقلاً وهميّاً', () => {
+    for (const f of ['Onboarding.tsx', 'ChannelConnectForm.tsx']) {
+      const s = readFileSync(join(__dirname, '..', 'src', 'components', f), 'utf8');
+      expect(s, f).toContain('e.body as { issues?: string[]; hint?: string } | undefined');
+      expect(s, f).not.toContain('(e as unknown as { body?:');
+    }
+  });
+});

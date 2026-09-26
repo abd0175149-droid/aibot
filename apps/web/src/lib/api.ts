@@ -65,7 +65,11 @@ export function setToken(t: string | null): void {
 export function getToken(): string | null { return accessToken; }
 
 export class ApiError extends Error {
-  constructor(readonly code: string, message: string, readonly status: number) {
+  constructor(
+    readonly code: string, message: string, readonly status: number,
+    /** جسمُ الردّ كما جاء — لمساراتٍ تُرفق تفاصيلَ (`issues` · `hint`) مع الرسالة. */
+    readonly body?: Record<string, unknown>,
+  ) {
     super(message);
   }
 }
@@ -139,18 +143,28 @@ export async function api<T = unknown>(
   if (!res.ok) {
     let code = 'INTERNAL';
     let message = HUMAN.INTERNAL!;
+    let body: Record<string, unknown> | undefined;
     try {
-      const j = (await res.json()) as { error?: { code?: string; message?: string } };
-      code = j.error?.code ?? code;
+      const j = (await res.json()) as { error?: string | { code?: string; message?: string } };
+      body = j as Record<string, unknown>;
+      /* ★ وشكلٌ ثانٍ: مساراتُ الربط تردّ `{ error: 'نصّ', issues, hint }` — والقارئُ
+         كان لا يعرف إلّا `error.message`، فرفضُ ميتا لتوكنٍ باطل (٤٢٢) صار «صار
+         خطأ عندنا» ولم يصل سببُه ولا تلميحُه إلى الشاشة (رُئي حيّاً في المعالج). */
+      if (typeof j.error === 'string') {
+        code = res.status === 401 ? 'UNAUTHORIZED' : res.status === 403 ? 'FORBIDDEN' : res.status < 500 ? 'VALIDATION' : 'INTERNAL';
+        message = j.error;
+      } else {
+        code = j.error?.code ?? code;
       /* ★ **رسالةُ الخادم تسبق الخريطةَ العامّة.**
          كان `HUMAN[code] ?? j.error?.message` — فالخريطةُ تغلب دائماً، وكلُّ
          ٤٠٠ يصير «تحقّق من الحقول» مهما قال الخادم بالضبط ما هو غير الصالح.
          والخادمُ يكتب رسائلَ عربيّةً دقيقةً (نطاقُ دوامٍ معطوب · مفتاحُ أداةٍ
          محجوز · سعرُ نموذجٍ غائب) — كلُّها كانت تُرمى.
          والخريطةُ تبقى احتياطاً لما لا رسالةَ له. */
-      message = j.error?.message ?? HUMAN[code] ?? message;
+        message = j.error?.message ?? HUMAN[code] ?? message;
+      }
     } catch { /* استجابةٌ ليست JSON — نبقي الرسالة العامّة */ }
-    throw new ApiError(code, message, res.status);
+    throw new ApiError(code, message, res.status, body);
   }
 
   if (res.status === 204) return undefined as T;
