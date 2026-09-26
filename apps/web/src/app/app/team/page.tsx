@@ -6,7 +6,7 @@ import { useApi, useToast, fmt } from '@/lib/useApi';
 import { post, patch, download, ApiError } from '@/lib/api';
 import { useSession, useCan } from '@/lib/session';
 import { readTeam, daysSince, type TeamRole } from '@/lib/team';
-import { auditLabel, auditActor, auditKnown, isPlatformEntry, type AuditRow } from '@/lib/audit';
+import { auditLabel, auditActor, auditKnown, type AuditRow } from '@/lib/audit';
 import {
   PageHead, Stack, Row, Pill, Tag, Note, Alert, Meter, Button, Sheet, Table, Empty,
   Skeleton, ErrorBox, KV, KVRow, Field, FormInput, Select, Toggle, CodeBlock,
@@ -553,7 +553,7 @@ export default function TeamPage() {
                 <span className={`au-what${auditKnown(r.action) ? '' : ' mono'}`} dir="auto">{auditLabel(r.action)}</span>
                 {r.action === 'tenant.impersonate'
                   ? <Pill tone="warn" label="فريق المنصّة — قراءةٌ فقط" />
-                  : isPlatformEntry(r.action) && <Pill tone="neutral" label="فريق المنصّة" />}
+                  : auditActor(r) === 'فريق المنصّة' && <Pill tone="neutral" label="فريق المنصّة" />}
               </li>
             ))}
           </ul>
