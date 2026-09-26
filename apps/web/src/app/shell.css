@@ -467,3 +467,25 @@
   .imp-bar .note { padding-block: 8px; font-size: var(--t-sm); }
   .imp-bar .note > .btn, .imp-bar .note > .btn-wrap { margin-block-start: 6px; }
 }
+
+/* ══════ صفُّ التبويب للبنود المجمَّعة (البوت، الأداء، الإعدادات) ══════
+   خطٌّ سفليٌّ للنشط لا سطحٌ ملوّن: هو تنقّلٌ ثانويٌّ تحت عنوان الشاشة لا
+   زرٌّ ثانٍ ينافس الرصيف. والحالةُ مرمَّزةٌ مرّتين: الوزنُ والخطّ. */
+.subnav {
+  display: flex; gap: 4px;
+  margin-block-end: 14px;
+  border-block-end: 1px solid var(--rule);
+  overflow-x: auto; scrollbar-width: none;
+}
+.subnav-i {
+  flex: none;
+  min-height: 40px; padding-inline: 14px;
+  display: inline-flex; align-items: center;
+  color: var(--muted); font-weight: 600; font-size: 14px;
+  text-decoration: none;
+  border-block-end: 2px solid transparent;
+  margin-block-end: -1px;
+}
+.subnav-i:hover { color: var(--ink); }
+.subnav-i[aria-current='page'] { color: var(--ink); font-weight: 700; border-block-end-color: var(--brand); }
+.subnav-i:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; border-radius: var(--radius-sm); }

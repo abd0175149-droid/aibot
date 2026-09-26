@@ -52,15 +52,24 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const { data, error, loading, reload } = useApi<Overview>(hasTenant ? '/reports/overview' : null);
 
   const nav: NavItem[] = [
+    /* ★ ستّةُ بنودٍ لا تسعة: الشاشاتُ المتلازمةُ تحت بندٍ واحدٍ بتبويبات.
+       والترتيبُ ترتيبُ الاستعمال — فعلى الهاتف تبقى الأربعةُ الأولى ظاهرة،
+       و«الأداء» و«الإعدادات» خلف «المزيد». */
     { href: '/app', label: 'الرئيسيّة', icon: '⌂', needs: 'settings' },
-    { href: '/app/inbox', label: 'الإنبوكس', icon: '✉', badge: data?.needsAttention },
-    { href: '/app/bot', label: 'البوت', icon: '✦', needs: 'settings' },
-    { href: '/app/channels', label: 'القنوات', icon: '⇄', needs: 'settings' },
-    { href: '/app/usage', label: 'الاستهلاك', icon: '▤', needs: 'billing' },
-    { href: '/app/playground', label: 'جرّب بوتك', icon: '◐', needs: 'settings' },
-    { href: '/app/contacts', label: 'جهات الاتّصال', icon: '☰' },
-    { href: '/app/reports', label: 'التقارير', icon: '◫', needs: 'billing' },
-    { href: '/app/team', label: 'الفريق', icon: '◇', needs: 'settings' },
+    { href: '/app/inbox', label: 'المحادثات', icon: '✉', badge: data?.needsAttention },
+    {
+      href: '/app/bot', label: 'البوت', icon: '✦', needs: 'settings',
+      tabs: [{ href: '/app/bot', label: 'الإعداد' }, { href: '/app/playground', label: 'جرّب بوتك' }],
+    },
+    { href: '/app/contacts', label: 'الزبائن', icon: '☰' },
+    {
+      href: '/app/reports', label: 'الأداء', icon: '◫', needs: 'billing',
+      tabs: [{ href: '/app/reports', label: 'التقارير' }, { href: '/app/usage', label: 'الاستهلاك' }],
+    },
+    {
+      href: '/app/channels', label: 'الإعدادات', icon: '⚙', needs: 'settings',
+      tabs: [{ href: '/app/channels', label: 'القنوات' }, { href: '/app/team', label: 'الفريق' }],
+    },
   ];
 
   /* كسرٌ لا نسبةٌ مئويّة: `Meter` يملك العتبات (80/95/100) وأرضيّة الشريط

@@ -20,6 +20,12 @@ export interface NavItem {
   badge?: number;
   /** يُخفى إن لم يملك المستخدم الصلاحيّة — لا يُعرض معطَّلاً. */
   needs?: 'settings' | 'billing' | 'console';
+  /**
+   * ★ شاشاتٌ تحت بندٍ واحد — تسعُ وجهاتٍ صارت ستّاً (خطّة الواجهات، ٢٦ أيلول).
+   *   البندُ نشطٌ على أيٍّ منها، وفوق الشاشة صفُّ تبويبٍ يتنقّل بينها.
+   *   الأوّلُ هو البندُ نفسُه (`href`)، ولكلٍّ صلاحيّتُه.
+   */
+  tabs?: Array<{ href: string; label: string; needs?: NavItem['needs'] }>;
 }
 
 /**
@@ -141,8 +147,20 @@ export function Shell({
   /* ★ بندٌ نشطٌ **واحد**. كان الشرط `path === href || path.startsWith(href + '/')`،
      و`/app/inbox` يبدأ بـ`/app/` — فكان بندان يُوسمان aria-current معاً،
      ويُضاءان معاً. الصحيح أطول بادئةٍ مطابقة وحدها. */
-  const activeHref = visible
-    .filter((n) => path === n.href || path.startsWith(n.href + '/'))
+  const hits = (href: string) => path === href || path.startsWith(href + '/');
+  const tabsOf = (n: NavItem) => (n.tabs ?? []).filter((t) => !t.needs || me.permissions[t.needs]);
+  /* المطابقةُ على البند **وتبويباته**: `/app/playground` يُضيء «البوت». */
+  const matchLen = (n: NavItem) => Math.max(
+    hits(n.href) ? n.href.length : -1,
+    ...tabsOf(n).map((t) => (hits(t.href) ? t.href.length : -1)),
+  );
+  const activeItem = visible
+    .filter((n) => matchLen(n) >= 0)
+    .sort((a, b) => matchLen(b) - matchLen(a))[0] ?? null;
+  const activeHref = activeItem?.href ?? null;
+  const subTabs = activeItem ? tabsOf(activeItem) : [];
+  const activeTab = subTabs
+    .filter((t) => hits(t.href))
     .sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null;
 
   /* التقسيم حسابٌ على طول القائمة لا على عرض الشاشة: `SLOTS - 1` لأنّ
@@ -235,6 +253,17 @@ export function Shell({
             </Button>
           </Note>
           </div>
+        )}
+        {subTabs.length > 1 && (
+          /* ★ صفُّ التبويب للبنود المجمَّعة — روابطُ حقيقيّةٌ لا حالة: الرجوعُ
+             في المتصفّح والرابطُ المشارَك يعملان كما كانا. */
+          <nav className="subnav" aria-label={activeItem!.label}>
+            {subTabs.map((t) => (
+              <Link key={t.href} href={t.href} className="subnav-i" aria-current={t.href === activeTab ? 'page' : undefined}>
+                {t.label}
+              </Link>
+            ))}
+          </nav>
         )}
         {children}
       </main>

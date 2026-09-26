@@ -525,7 +525,7 @@ export default function ContactsPage() {
     <Stack gap="lg">
       {toastNode}
       <PageHead
-        title="جهات الاتّصال"
+        title="الزبائن"
         sub="كلّ زبون في بطاقة واحدة، مهما تعدّدت قنواته."
         actions={<Pill tone="neutral" label={fmt.num(total)} mark={false} />}
       />
