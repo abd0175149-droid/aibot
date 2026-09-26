@@ -850,7 +850,7 @@ export default function TenantsPage() {
                               ? 'لا اشتراك فعّالا — كلفته قائمة وإيراده صفر.'
                               : <><span className="num">{fmt.pct(selMargin)}</span> من إيراده</>}
                         </KVRow>
-                        <KVRow k="النوافذ / السقف">
+                        <KVRow k="المحادثات / السقف">
                           <span className="tn-cap">
                             <span className="num">
                               {fmt.num(sel.windowsUsed)} / {fmt.num(sel.windowLimit)}

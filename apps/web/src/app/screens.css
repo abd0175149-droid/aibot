@@ -331,3 +331,13 @@ a.sc-hero:hover .sc-hero-k { color: var(--ink); text-decoration: underline; text
 /* وِجهةٌ تُفتح في تبويبٍ جديدٍ ويُنسخ عنوانُها = `<a>` لا `<button>`.
    و`.btn` لا تُلغي خطَّ الرابط لأنّها كُتبت للأزرار، فيُلغى هنا. */
 .sc-link { text-decoration: none; }
+
+/* ══════ الشاشةُ العريضة (≥1400) — خطّة الواجهات، المرحلة ٥ ══════
+   ① المحتوى بعرضٍ مقروء في الوسط: على 1920 كان السطرُ 1600 بكسلاً، والقيمةُ
+      في طرفٍ واسمُها في الطرف الآخر.
+   ② `.sc-cols` قسمان متجاوران؛ ودونها يبقيان متتاليَين كما هما. */
+.sc-cols { display: contents; }
+@media (min-width: 1400px) {
+  .main:not(.pinned) > * { max-width: 1240px; margin-inline: auto; width: 100%; }
+  .sc-cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0 32px; align-items: start; }
+}
