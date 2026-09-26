@@ -6,11 +6,7 @@
  */
 import { getDb, closeDb, withPlatform, sql, type Tx } from '../packages/db/src/index';
 import { seal } from '../packages/crypto/src/index';
-
-/** قيمةٌ ثابتةٌ يُقارَن بها في الطور ③ — لا سرَّ حقيقيّاً هنا. */
-export const DRILL_SECRET = 'قيمةُ-تمرينٍ-ثابتةٌ-0123456789';
-const TENANT = '33333333-3333-7333-8333-333333333333';
-const CHANNEL = '44444444-4444-7444-8444-444444444444';
+import { DRILL_SECRET, DRILL_TENANT as TENANT, DRILL_CHANNEL as CHANNEL } from './drill-rot-const';
 
 async function main(): Promise<void> {
   const db = getDb();

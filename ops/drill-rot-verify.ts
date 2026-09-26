@@ -7,9 +7,10 @@
  */
 import { getDb, closeDb, withPlatform, sql, type Tx } from '../packages/db/src/index';
 import { open as decrypt, configuredKeyVersions } from '../packages/crypto/src/index';
-import { DRILL_SECRET } from './drill-rot-seed';
+/* ⚠️ من ملفّ الثوابت لا من ملفّ البذر: استيرادُ ذاك يُنفّذ بذراً جديداً
+   فيتحقّق هذا الطورُ من صفٍّ كتبه بنفسه — ويمرّ دائماً. */
+import { DRILL_SECRET, DRILL_CHANNEL as CHANNEL } from './drill-rot-const';
 
-const CHANNEL = '44444444-4444-7444-8444-444444444444';
 
 async function main(): Promise<void> {
   const db = getDb();
