@@ -64,17 +64,19 @@ describe('★ دورةُ الفوترة — دالّةٌ واحدةٌ بلا ا�
 });
 
 describe('★★ مرشَّحو جهةٍ واحدة — خطّيٌّ لا تربيعيّ', () => {
+  /* #84: البُناةُ في `contacts-query.ts` والمساراتُ في `routes/contacts.ts`. */
   const c = bare('apps/api/src/routes/contacts.ts');
+  const q = bare('apps/api/src/contacts-query.ts');
 
   it('ورقةُ الجهة تنادي `dupPairsFor` — لا كلَّ الأزواج ثمّ ترشيح', () => {
-    expect(c).toContain('function dupPairsFor(tenantId: string, contactId: string): Frag');
+    expect(q).toContain('export function dupPairsFor(tenantId: string, contactId: string): Frag');
     expect(c).toContain('from ${dupPairsFor(tenantId, id)} p');
     expect(c).not.toMatch(/from \$\{dupPairs\(tenantId\)\} p\s*\n\s*where p\.a = \$\{id\}/);
   });
 
   it('★ ونفسُ السببَين ونفسُ العتبة — فلا يختلف الاقتراحُ بين القائمة والورقة', () => {
-    const at = c.indexOf('function dupPairsFor(');
-    const body = c.slice(at, c.indexOf('\n}\n', at));
+    const at = q.indexOf('function dupPairsFor(');
+    const body = q.slice(at, q.indexOf('\n}\n', at));
     expect(body).toContain("'phone'::text as why");
     expect(body).toContain("'name'::text");
     expect(body).toContain('>= 0.62');

@@ -86,7 +86,7 @@ const CODE = (rel: string) => readFileSync(join(__dirname, '..', 'src', rel), 'u
 
 describe('الشاشتان تقرآن القطعةَ نفسَها', () => {
   it('★ لا نسخةَ ثانيةٌ من التسوية في مسارٍ آخر', () => {
-    for (const rel of ['routes/inbox.ts', 'routes/contacts.ts']) {
+    for (const rel of ['routes/inbox.ts', 'routes/contacts.ts', 'contacts-query.ts', 'contacts-merge.ts']) {
       const c = CODE(rel);
       expect(c, `${rel} يكتب تسويتَه بنفسه — نسختان تتباعدان`)
         .not.toMatch(/translate\(coalesce/);
@@ -96,7 +96,8 @@ describe('الشاشتان تقرآن القطعةَ نفسَها', () => {
   });
 
   it('وكلتاهما تنادي المطابقةَ المسوّاة وذيلَ الرقم', () => {
-    for (const rel of ['routes/inbox.ts', 'routes/contacts.ts']) {
+    /* #84: بحثُ جهات الاتّصال انتقل مع بُناة الاستعلام إلى `contacts-query.ts`. */
+    for (const rel of ['routes/inbox.ts', 'contacts-query.ts']) {
       const c = CODE(rel);
       expect(c, `${rel} لا يسوّي الاسم`).toContain('nameMatch(');
       expect(c, `${rel} لا يطابق ذيل الرقم`).toContain('phoneTail(');

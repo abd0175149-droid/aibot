@@ -199,7 +199,9 @@ describe('ذيلُ الرقم — 07 هو 9627', () => {
    ولا يمسكه اختبارُ وحدةٍ: الأثرُ في القاعدة لا في القيمة المُعادة.
    ═══════════════════════════════════════════════════════════════════════ */
 
-const SRC = readFileSync(join(__dirname, '..', 'src', 'routes', 'contacts.ts'), 'utf8');
+/* ★ #84: الدمجُ وتراجعُه انتقلا من `routes/contacts.ts` إلى `contacts-merge.ts` —
+   والحارسُ يقرأ حيث تعيش الكتلةُ فعلاً، وإلّا مرّ على الفراغ. */
+const SRC = readFileSync(join(__dirname, '..', 'src', 'contacts-merge.ts'), 'utf8');
 const APPLY = SRC.slice(SRC.indexOf('export async function applyMerge'), SRC.indexOf('export async function undoMerge'));
 
 describe('تنفيذُ الدمج — الشكلُ مفروضٌ لا مرجوّ', () => {
