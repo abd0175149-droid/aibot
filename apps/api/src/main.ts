@@ -13,6 +13,7 @@ import { registerReports } from './routes/reports.js';
 import { registerPlayground } from './routes/playground.js';
 import { registerTeam } from './routes/team.js';
 import { registerAudit } from './routes/audit.js';
+import { registerPrivacy } from './routes/privacy.js';
 import { registerPush } from './routes/push.js';
 import { registerNotifications, alertingReachable } from './routes/notifications.js';
 import { configuredKeyVersions, currentKeyVersion } from '@aibot/crypto';
@@ -158,6 +159,7 @@ await app.register(async (api) => {
   await registerPlayground(api);
   await registerTeam(api);
   await registerAudit(api);
+  await registerPrivacy(api);
   await registerPush(api);
   await registerNotifications(api);
 }, { prefix: '/api' });

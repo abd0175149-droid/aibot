@@ -54,6 +54,9 @@ const LABELS: Record<string, string> = {
   'contact.optin': 'أُعيد اشتراكُ زبون',
   'contact.merge': 'دُمجت جهتا اتّصال',
   'contact.merge_undo': 'أُلغي دمجُ جهتَي اتّصال',
+  'contact.export': 'صُدّر ملفُّ جهة اتّصال',
+  'contact.delete': 'حُذفت جهةُ اتّصال وكلُّ بياناتها نهائيّاً',
+  'tenant.export': 'صُدّرت بياناتُ الحساب كاملةً',
 };
 
 export function auditLabel(action: string): string {

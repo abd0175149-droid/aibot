@@ -436,6 +436,9 @@ function InboxScreen() {
       }
       void list.reload();
     },
+    /* ★ جهةٌ حُذفت نهائيّاً: القائمةُ تُعاد قراءتُها فيسقط صفُّها — بدل صفٍّ باقٍ
+       يردّ ٤٠٤ عند فتحه ويُقرأ عطلاً. */
+    'conversation:removed': () => { void list.reload(); },
     'message:status': (p: { conversationId: string; id: string; status: string; errorMessage?: string | null }) => {
       if (p.conversationId !== active) return;
       thread.setData((t) => (t ? {

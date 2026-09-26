@@ -31,6 +31,9 @@ function log(msg: string, extra: Record<string, unknown> = {}): void {
 /** أقصى ما يُحذف من جدولٍ واحدٍ في دورةٍ واحدة. */
 const BATCH = 5_000;
 
+/** مستأجرون مؤرشَفون يُمحَون في الدورة الواحدة — كلُّ واحدٍ تعاقبٌ كاملٌ في معاملة. */
+const PURGE_TENANTS_PER_CYCLE = 3;
+
 /**
  * سجلّاتُ المنصّة — ليست بيانات عميلٍ ولا يحكمها `retentionDays`.
  *
@@ -117,5 +120,33 @@ export async function runRetention(): Promise<RetentionResult[]> {
     out.push({ table: t.table, deleted: n });
   }
 
+  /* ★★ **الوعدُ الثالث في صفحة الخصوصيّة: «تصديرٌ كامل، ثمّ حذفٌ بعد ٦٠ يوماً».**
+     الأرشفةُ من لوحة المالك تُخفي العميلَ وتطرده، ولا شيءَ كان يحذفه — فبياناتُ
+     علاقةٍ انتهت تبقى إلى الأبد. هنا يُحذف صفُّ المستأجر (فتتعاقب كلُّ جداوله)
+     بعد ستّين يوماً من أرشفته: مدّةٌ يُطلب فيها التصديرُ ويُتراجَع فيها عن الأرشفة
+     بـ«استعِده فعّالاً». ⚠️ ثلاثةٌ في الدورة لا أكثر: التعاقبُ يمسح رسائلَ ونوافذَ
+     ومقاطعَ بمعاملةٍ واحدةٍ لكلّ مستأجر. ويُكتب اسمُه في السجلّ قبل المحو: صفوفُ
+     `audit_log` تسقط معه، فهذا السطرُ هو الأثرُ الوحيد. */
+  const purged = await withPlatform(db, 'حذفُ مستأجرين مؤرشَفين تجاوزوا مهلة الستّين يوماً', async (tx) => {
+    const rows = await tx.execute(sql`
+      DELETE FROM tenants
+       WHERE id IN (
+         SELECT id FROM tenants
+          WHERE status = 'archived' AND archived_at < now() - ${`${PURGE_ARCHIVED_AFTER_DAYS} days`}::interval
+          ORDER BY archived_at ASC
+          LIMIT ${PURGE_TENANTS_PER_CYCLE})
+       RETURNING id, slug, name, archived_at
+    `) as unknown as Array<{ id: string; slug: string; name: string; archived_at: Date }>;
+    for (const r of rows) log('حُذف مستأجرٌ مؤرشَفٌ بعد مهلة الستّين يوماً', { tenantId: r.id, slug: r.slug, archivedAt: r.archived_at });
+    return rows.length;
+  }).catch((e) => {
+    log('تعذّر حذفُ المؤرشَفين', { err: String(e) });
+    return -1;
+  });
+  out.push({ table: 'tenants(archived)', deleted: purged });
+
   return out;
 }
+
+/** مهلةُ الأرشفة قبل المحو — الرقمُ المكتوبُ في صفحة الخصوصيّة المنشورة. */
+export const PURGE_ARCHIVED_AFTER_DAYS = 60;

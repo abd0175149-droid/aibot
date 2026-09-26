@@ -70,6 +70,8 @@ export interface EventMap {
   };
   /** تحديثُ صفٍّ في القائمة. من الـAPI يحمل الصفَّ كاملاً، ومن العامل معرّفَه. */
   'conversation:update': { id: string; [k: string]: unknown };
+  /** ★ محادثةٌ زالت (حُذفت جهتُها نهائيّاً): الإنبوكسُ المفتوح يُسقطها بدل أن يعرض صفّاً يردّ ٤٠٤. */
+  'conversation:removed': { id: string };
 }
 
 /** أحداثُ غرفة المنصّة — قرّاؤها لوحةُ المالك وحدها. */
@@ -83,7 +85,7 @@ export type PlatformEventName = keyof PlatformEventMap;
 
 /** الأسماءُ في وقت التشغيل — يقرؤها `decodeEvent` فيرفض ما ليس منها. */
 export const EVENT_NAMES = [
-  'message:new', 'message:status', 'conversation:update',
+  'message:new', 'message:status', 'conversation:update', 'conversation:removed',
 ] as const satisfies readonly EventName[];
 
 export const PLATFORM_EVENT_NAMES = [

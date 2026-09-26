@@ -162,7 +162,10 @@ export default function ChannelsPage() {
         lastError: r.issues[0] ?? null,
         qualityRating: r.qualityRating ?? c.qualityRating,
         messagingTier: r.messagingTier ?? c.messagingTier,
-        status: r.level === 'ok' || r.level === 'degraded' ? 'connected' as const : 'error' as const,
+        /* ★ نفسُ قاعدة الخادم: `blocked` وحده يُنزل؛ والتعثّرُ العابر يُبقي الحالة. */
+        status: r.level === 'ok' || r.level === 'degraded'
+          ? 'connected' as const
+          : r.level === 'blocked' ? 'error' as const : c.status,
       } : c)),
     } : d));
   }
@@ -209,7 +212,8 @@ export default function ChannelsPage() {
   const wa = items.find((c) => c.kind === 'whatsapp_cloud');
   const ig = items.find((c) => c.kind === 'instagram');
   const broken = items.filter((c) => c.status !== 'connected');
-  const live = items.filter((c) => c.status === 'connected');
+  /* والمعطوبةُ تُفحص مع الموصولة — الفحصُ هو طريقُ عودتها. */
+  const live = items.filter((c) => c.status === 'connected' || c.status === 'error');
   const lastCheck = items
     .map((c) => c.lastCheckedAt)
     .filter((x): x is string => Boolean(x))
@@ -355,7 +359,9 @@ export default function ChannelsPage() {
             )}
 
             <Row gap="xs">
-              {wa?.status === 'connected' ? (
+              {/* ★ الفحصُ مرئيٌّ للمعطوبة أيضاً: كان يختفي عند `error`، فالطريقُ
+                  الوحيد إلى الرفع بعد إصلاح التوكن كان سكربتاً أو انتظارَ فحصين. */}
+              {wa?.status === 'connected' || wa?.status === 'error' ? (
                 <Button
                   size="md"
                   busy={busy === wa.id}
@@ -456,7 +462,7 @@ export default function ChannelsPage() {
             )}
 
             <Row gap="xs">
-              {ig?.status === 'connected' ? (
+              {ig?.status === 'connected' || ig?.status === 'error' ? (
                 <Button
                   size="md"
                   busy={busy === ig.id}

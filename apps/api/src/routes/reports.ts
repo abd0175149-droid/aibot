@@ -806,8 +806,15 @@ export async function registerReports(app: FastifyInstance) {
         lastError: report.issues[0] ?? null,
         qualityRating: report.qualityRating ?? ch.qualityRating,
         messagingTier: report.messagingTier ?? ch.messagingTier,
-        // `error` فقط عند عطلٍ فعليّ: `degraded` تعني تعمل بجودةٍ أقلّ لا معطوبة
-        status: report.level === 'ok' || report.level === 'degraded' ? 'connected' : 'error',
+        /* ★★ التنزيلُ إلى `error` عند **عطلٍ قاطعٍ** وحده (`blocked` = توكنٌ باطل)،
+           لا عند `unreachable`: انقطاعُ شبكةٍ أو 5xx عند ميتا كان يحوّل القناةَ
+           إلى `error` فوراً — فيرفض الإرسالُ كلَّ ردٍّ، ويختفي زرُّ الفحص من الشاشة،
+           ولا رجعةَ إلّا بسكربت. والفحصُ الدوريُّ (`health.ts`) لا يُنزل إلّا بعد
+           فحصين — فكانت قاعدتان لنتيجةٍ واحدة. والتعثّرُ العابرُ يُكتب في
+           `lastError` ويبقى للعين، والحالةُ كما هي. */
+        status: report.level === 'ok' || report.level === 'degraded'
+          ? 'connected'
+          : report.level === 'blocked' ? 'error' : ch.status,
       }).where(eq(tenantChannels.id, ch.id)));
 
       return {

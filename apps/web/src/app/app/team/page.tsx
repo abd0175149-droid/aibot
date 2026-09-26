@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { ReactNode } from 'react';
 import { useApi, useToast, fmt } from '@/lib/useApi';
-import { post, patch, ApiError } from '@/lib/api';
+import { post, patch, download, ApiError } from '@/lib/api';
 import { useSession, useCan } from '@/lib/session';
 import { readTeam, daysSince, type TeamRole } from '@/lib/team';
 import { auditLabel, auditActor, auditKnown, isPlatformEntry, type AuditRow } from '@/lib/audit';
@@ -558,6 +558,29 @@ export default function TeamPage() {
             ))}
           </ul>
         )}
+      </Section>
+
+      {/* ★★ وعدا صفحة الخصوصيّة عند إنهاء العلاقة: «تصديرٌ كامل يُرسل إليه، ثمّ حذفٌ
+          بعد 60 يوماً». التصديرُ زرٌّ هنا في أيّ وقت، والمحوُ يفعله العامل بعد
+          ستّين يوماً من الأرشفة — والرقمُ نفسُه في الصفحة المنشورة وفي الكود. */}
+      <Section
+        title="بياناتُ الحساب"
+        sub="تصديرٌ كاملٌ متى شئت — ومحوٌ نهائيٌّ بعد ستّين يوماً من إنهاء العلاقة"
+      >
+        <Row gap="sm">
+          <Button
+            disabled={impersonating}
+            reason={impersonating ? impReason : undefined}
+            onClick={() => { download('/export', 'aibot-export.json').catch(() => toast('تعذّر التصدير. أعِد المحاولة.')); }}
+          >
+            صدّر كلَّ بيانات الحساب (JSON)
+          </Button>
+        </Row>
+        <Note>
+          <b>عند إنهاء العلاقة</b> يؤرشف فريقُ المنصّة الحساب: يتوقّف الدخولُ والرسائلُ في الحال، وتبقى
+          البياناتُ <span className="num">60</span> يوماً يُطلب فيها التصديرُ أو التراجعُ — ثمّ تُمحى نهائيّاً
+          بلا رجعة. وتصديرُ الحساب وحذفُ أيّ جهةٍ يُسجَّلان في سجلّ الأفعال أعلاه.
+        </Note>
       </Section>
 
       <Fold summary="لماذا لا نرسل بريد الدعوة، وماذا يُسجَّل في سجلّ الأفعال">

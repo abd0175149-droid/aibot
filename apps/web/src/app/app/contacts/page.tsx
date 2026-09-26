@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import Link from 'next/link';
 import { useApi, useToast, fmt } from '@/lib/useApi';
-import { get, post, ApiError } from '@/lib/api';
+import { get, post, del, download, ApiError } from '@/lib/api';
 import { useCan } from '@/lib/session';
 import { readDuplicates, sidesOf } from '@/lib/contacts';
 import {
@@ -325,6 +325,34 @@ export default function ContactsPage() {
       setFlagBusy(null);
     }
   }, [loadDetail, reloadAll, toast]);
+
+  /* ★★ وعدُ صفحة الخصوصيّة: «حذفُ أيّ جهة اتّصال وكلّ بياناتها بزرٍّ واحد» —
+     وتصديرُها. الحذفُ نهائيٌّ يتعاقب إلى الهويّات والمحادثات والرسائل والنوافذ،
+     فخلفه تأكيدٌ ثانٍ يقول ذلك بالحرف — لا نافذةُ `confirm` عامّة. */
+  const [confirmDel, setConfirmDel] = useState(false);
+  useEffect(() => { setConfirmDel(false); }, [openId]);
+  const exportContact = useCallback(async (id: string) => {
+    try {
+      await download(`/contacts/${id}/export`, `contact-${id}.json`);
+      toast('نُزّل ملفُّ الجهة — JSON كاملٌ برسائلها ومحادثاتها.');
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'تعذّر التصدير. أعِد المحاولة.');
+    }
+  }, [toast]);
+  const deleteContact = useCallback(async (id: string) => {
+    setFlagBusy('delete');
+    try {
+      const r = await del<{ message: string }>(`/contacts/${id}`);
+      toast(r.message);
+      setOpenId(null);
+      setDetail(null);
+      reloadAll();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'تعذّر الحذف. أعِد المحاولة.');
+    } finally {
+      setFlagBusy(null);
+    }
+  }, [reloadAll, toast]);
 
   function openDetail(id: string) {
     setOpenId(id);
@@ -717,6 +745,25 @@ export default function ContactsPage() {
                   )}
                 </Row>
               </KVRow>
+              {/* لصاحب الإعدادات وحده: موظّفٌ يحذف زبوناً بكلّ تاريخه ليس قراراً لكلّ من يملك توكناً. */}
+              {perms.settings && !perms.readOnly && (
+                <KVRow k="البيانات">
+                  <Row gap="sm">
+                    <Button size="sm" onClick={() => void exportContact(detail.contact.id)}>صدّر ملفَّها (JSON)</Button>
+                    {!confirmDel ? (
+                      <Button size="sm" variant="danger" onClick={() => setConfirmDel(true)}>احذفها وكلَّ بياناتها…</Button>
+                    ) : (
+                      <>
+                        <span className="sc-ctx">نهائيٌّ: الرسائلُ والمحادثاتُ والنوافذُ تُمحى ولا تُستعاد.</span>
+                        <Button size="sm" variant="danger" busy={flagBusy === 'delete'} onClick={() => void deleteContact(detail.contact.id)}>
+                          نعم — احذف نهائيّاً
+                        </Button>
+                        <Button size="sm" variant="quiet" onClick={() => setConfirmDel(false)}>تراجع</Button>
+                      </>
+                    )}
+                  </Row>
+                </KVRow>
+              )}
               {detail.contact.phone && (
                 <KVRow k="الرقم"><span className="mono">{detail.contact.phone}</span></KVRow>
               )}

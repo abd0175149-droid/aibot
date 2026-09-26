@@ -113,7 +113,8 @@ describe('مهمّةُ الاحتفاظ — لا حذفٌ بلا سقفٍ ولا
 
   it('كلُّ DELETE محدودٌ بـLIMIT', () => {
     const deletes = (bare.match(/DELETE FROM/g) ?? []).length;
-    const limits = (bare.match(/LIMIT \$\{BATCH\}/g) ?? []).length;
+    /* وسقفُ المؤرشَفين ثابتٌ مسمًّى آخر — الحارسُ يقبل السقفَين لا الرقمَ الحرفيّ. */
+    const limits = (bare.match(/LIMIT \$\{(BATCH|PURGE_TENANTS_PER_CYCLE)\}/g) ?? []).length;
     expect(deletes).toBeGreaterThanOrEqual(2);
     /* 🔴 `DELETE` بلا سقفٍ يحتجز اتّصالاً من بِركةٍ فيها عشرة ويقفل صفوفاً
        دقائقَ — فيتكدّس الويبهوك خلفه. وحذفٌ يُعطّل الاستلام أسوأُ من جدولٍ
