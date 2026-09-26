@@ -43,11 +43,17 @@ interface Connected {
   verifyToken: string | null;
 }
 
+/* ★ نفسُ القاعدة في الخادم (`console.ts`): لا معرّفَ من شرطاتٍ وحدها، ولا بريدَ بلا نطاق. */
+const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,28})[a-z0-9]$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
   const [step, setStep] = useState<Step>(1);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [issues, setIssues] = useState<string[]>([]);
+  /** كُتب في المعرّف ما ليس لاتينيّاً فحُذف — يُقال في تلميح الحقل. */
+  const [slugDropped, setSlugDropped] = useState(false);
 
   // ① النشاط
   const [name, setName] = useState('');
@@ -129,8 +135,10 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
         <>
           {step === 1 && (
             <Button variant="primary" busy={busy} onClick={createTenant}
-              disabled={!name.trim() || !/^[a-z0-9-]{3,30}$/.test(slug) || !email.includes('@')}
-              reason="الاسم والمعرّف والبريد مطلوبة">
+              disabled={!name.trim() || !SLUG_RE.test(slug) || !EMAIL_RE.test(email)}
+              reason={!name.trim() ? 'اكتب اسمَ النشاط.'
+                : !SLUG_RE.test(slug) ? 'المعرّف ٣–٣٠ حرفاً لاتينيّاً أو رقماً، يبدأ وينتهي بحرفٍ أو رقم.'
+                  : !EMAIL_RE.test(email) ? 'بريدُ المالك غيرُ مكتمل.' : undefined}>
               أنشئ العميل
             </Button>
           )}
@@ -194,9 +202,18 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
                 if (!slug) setSlug(v.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 24).replace(/^-|-$/g, ''));
               }} />
             </Field>
-            <Field id="o-slug" label="المعرّف" hint="حروفٌ لاتينيّة وأرقامٌ وشرطات. لا يُعدَّل بعد الإنشاء.">
+            <Field id="o-slug" label="المعرّف"
+              hint={slugDropped
+                ? 'المعرّف بحروفٍ لاتينيّةٍ فقط — مثل: bait-alsham. حُذف ما ليس منها.'
+                : 'حروفٌ لاتينيّة وأرقامٌ وشرطات. لا يُعدَّل بعد الإنشاء.'}>
+              {/* ★ ما ليس لاتينيّاً يُحذف ولا يصير شرطة: «مطعم تجربة» كانت تصير
+                  «----------» فيُفعَّل الزرّ على معرّفٍ من شرطاتٍ وحدها (رُئي حيّاً). */}
               <Input id="o-slug" value={slug} dir="ltr"
-                onChange={(v) => setSlug(v.toLowerCase().replace(/[^a-z0-9-]/g, '-'))} />
+                onChange={(v) => {
+                  const clean = v.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '').replace(/-{2,}/g, '-');
+                  setSlugDropped(clean.length < v.replace(/\s+/g, '-').length);
+                  setSlug(clean);
+                }} />
             </Field>
             <Field id="o-mail" label="بريد المالك" hint="نُنشئ له حساباً بكلمة مرورٍ مؤقّتة يجب تغييرها.">
               <Input id="o-mail" type="email" value={email} dir="ltr" onChange={setEmail} />

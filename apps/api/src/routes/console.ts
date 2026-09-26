@@ -110,6 +110,14 @@ export async function registerConsole(app: FastifyInstance) {
       if (!b.name || !b.slug || !b.ownerEmail) {
         throw new AppError(ErrorCode.VALIDATION, 'الاسم والمعرّف وبريد المالك مطلوبة', 400);
       }
+      /* ★ الصيغةُ هنا لا في الواجهة وحدها: كانت تقبل «----------» معرّفاً (الواجهةُ
+         تحوّل العربيّةَ إلى شرطات) وأيَّ نصٍّ بريداً. والمعرّفُ يدخل عناوينَ ويبقى إلى الأبد. */
+      if (!/^[a-z0-9](?:[a-z0-9-]{1,28})[a-z0-9]$/.test(b.slug)) {
+        throw new AppError(ErrorCode.VALIDATION, 'المعرّف ٣–٣٠ حرفاً لاتينيّاً صغيراً أو رقماً أو شرطة، يبدأ وينتهي بحرفٍ أو رقم.', 400);
+      }
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(b.ownerEmail)) {
+        throw new AppError(ErrorCode.VALIDATION, 'بريدُ المالك غيرُ صالح.', 400);
+      }
       const db = getDb();
       const temp = publicId().slice(0, 12);
       /* ⚠️ التجزئةُ **قبل** فتح المعاملة: argon2 نحو مئة مِلّي ثانية، وكان

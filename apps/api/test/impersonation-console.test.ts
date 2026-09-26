@@ -235,3 +235,20 @@ describe('★ ولا ثابتَ تأكيدٍ لا يُرسَل', () => {
     expect(src).not.toContain('OPTOUT_ACK_MSG');
   });
 });
+
+describe('★ صيغةُ المعرّف والبريد عند إنشاء عميل — في الخادم والواجهة معاً', () => {
+  /* رُئي حيّاً: «مطعم تجربة» في حقل المعرّف صارت «----------» وفُعّل الزرّ، والخادمُ بلا فحصِ صيغة. */
+  const SLUG = /^[a-z0-9](?:[a-z0-9-]{1,28})[a-z0-9]$/;
+  it('القاعدةُ نفسُها تُنفَّذ', () => {
+    for (const ok of ['nuskjo', 'bait-alsham', 'a1b']) expect(SLUG.test(ok), ok).toBe(true);
+    for (const bad of ['----------', '-abc', 'abc-', 'ab', 'Abc', 'مطعم', 'a b c']) expect(SLUG.test(bad), bad).toBe(false);
+  });
+  it('وموصولةٌ في الموضعين', () => {
+    const con = bare('apps/api/src/routes/console.ts');
+    const wiz = bare('apps/web/src/components/Onboarding.tsx');
+    expect(con).toContain(String.raw`/^[a-z0-9](?:[a-z0-9-]{1,28})[a-z0-9]$/.test(b.slug)`);
+    expect(wiz).toContain(String.raw`const SLUG_RE = /^[a-z0-9](?:[a-z0-9-]{1,28})[a-z0-9]$/;`);
+    expect(wiz).toContain(".replace(/[^a-z0-9-]/g, '')");
+    expect(wiz).not.toContain(".replace(/[^a-z0-9-]/g, '-')");
+  });
+});
