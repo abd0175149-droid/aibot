@@ -47,3 +47,21 @@ describe('★ خطأُ الخادم بصيغة `{ error: "نصّ", issues, hint 
     }
   });
 });
+
+describe('★ ورقتان مفتوحتان: العليا تُرى وتملك المفاتيح', () => {
+  /* رُئي حيّاً: «اربط/جدّد القناة…» و«ابذر بوته…» في ورقة العميل تفتحان ورقتَيهما تحتها. */
+  const page = readFileSync(join(__dirname, '..', 'src', 'app', 'console', 'page.tsx'), 'utf8');
+  it('ورقتا الربط والبذر بعد ورقة العميل في الشجرة', () => {
+    const client = page.indexOf('ورقةُ العميل: الوِجهةُ التي لم تكن');
+    const connect = page.indexOf('endpoint={`/console/tenants/${connectFor}/channel/connect`}');
+    const seed = page.indexOf('endpoint={`/console/tenants/${seedFor}/bot/seed`}');
+    expect(client).toBeGreaterThan(0);
+    expect(connect).toBeGreaterThan(client);
+    expect(seed).toBeGreaterThan(client);
+  });
+  it('ومستمعُ المفاتيح يعمل للنافذة العليا وحدها', () => {
+    const ui = readFileSync(join(__dirname, '..', 'src', 'components', 'ui', 'index.tsx'), 'utf8');
+    expect(ui).toContain("if (open.length && open[open.length - 1] !== box.current) return;");
+    expect(ui).toContain("w ? w.classList.contains('on')");
+  });
+});

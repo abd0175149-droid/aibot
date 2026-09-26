@@ -601,6 +601,14 @@ function useDialogFocus(open: boolean, onClose: () => void) {
     head?.focus();
 
     const onKey = (e: KeyboardEvent) => {
+      /* ★ ورقتان مفتوحتان (ورقةُ عميلٍ وفوقها ورقةُ ربط): المفاتيحُ للعليا وحدها. كان
+         كلُّ مستمعٍ يعمل — فـEscape يُغلق الاثنتين معاً، وحبسُ Tab يتنازعانه. والعليا
+         آخرُ نافذةٍ مفتوحةٍ في الشجرة، وهي ما يُرسم فوق. */
+      /* والورقةُ المغلقة تبقى مرسومةً خارج الشاشة (`offsetParent` لا يكفي) — فالمفتوحةُ
+         ما كان غلافُها `.sheetwrap.on`، أو نافذةٌ (`Modal`) لا غلافَ لها. */
+      const open = [...document.querySelectorAll<HTMLElement>('[role="dialog"][aria-modal="true"]')]
+        .filter((d) => { const w = d.closest('.sheetwrap'); return w ? w.classList.contains('on') : d.offsetParent !== null; });
+      if (open.length && open[open.length - 1] !== box.current) return;
       if (e.key === 'Escape') { e.stopPropagation(); closeRef.current(); return; }
       if (e.key !== 'Tab') return;
       const items = focusables();

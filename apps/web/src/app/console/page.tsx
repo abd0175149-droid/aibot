@@ -773,45 +773,6 @@ export default function TenantsPage() {
                 تقوله الخليّة لا ما تُخفيه.
               </Note>
 
-              {/* ورقةُ ربط القناة لعميلٍ يُسمّى صراحةً — لا بالانتحال. */}
-              <Sheet
-                open={Boolean(connectFor)}
-                title="اربط/جدّد قناة العميل"
-                onClose={() => { setConnectFor(null); setWebhook(null); }}
-                hint="يُفحص التوكن عند ميتا قبل أن يُحفظ، والفعل يُسجَّل باسمك في سجلّ العميل."
-              >
-                {connectFor && (
-                  <ChannelConnectForm
-                    endpoint={`/console/tenants/${connectFor}/channel/connect`}
-                    submitLabel="افحص واحفظ"
-                    onDone={() => {
-                      setConnectFor(null);
-                      toast('فُحص التوكن عند ميتا وحُفظ — والقناة موصولة.');
-                      void tenants.reload();
-                    }}
-                  />
-                )}
-              </Sheet>
-
-              {/* ورقةُ بذر البوت — نفسُ نموذج المعالج بنفس الحدود. */}
-              <Sheet
-                open={Boolean(seedFor)}
-                title="ابذر أوّل نسخةِ بوتٍ لهذا العميل"
-                onClose={() => setSeedFor(null)}
-                hint="الخادم يرفض إن كان للعميل نسخةٌ منشورةٌ أصلاً — فلا يمحو فتحٌ بالخطأ شخصيّةَ عميلٍ يعمل."
-              >
-                {seedFor && (
-                  <BotSeedForm
-                    endpoint={`/console/tenants/${seedFor}/bot/seed`}
-                    onDone={() => {
-                      setSeedFor(null);
-                      toast('نُشرت أوّلُ نسخةِ بوتٍ لهذا العميل وشُغِّل.');
-                      void tenants.reload();
-                    }}
-                  />
-                )}
-              </Sheet>
-
               {/* ══════ ورقةُ العميل: الوِجهةُ التي لم تكن ══════ */}
               <Sheet
                 open={Boolean(sel)}
@@ -1079,6 +1040,49 @@ export default function TenantsPage() {
                   </Stack>
                 )}
               </Sheet>
+
+              {/* ★ ورقتا الربط والبذر **بعد** ورقة العميل في الشجرة: تُفتحان من أزرارها،
+                  وكانتا قبلها فتُرسمان تحتها — الزرُّ يبدو أنّه لا يفعل شيئاً (رُئي حيّاً).
+                  والإغلاقُ يُعيد إلى ورقة العميل كما هي. */}
+              {/* ورقةُ ربط القناة لعميلٍ يُسمّى صراحةً — لا بالانتحال. */}
+              <Sheet
+                open={Boolean(connectFor)}
+                title="اربط/جدّد قناة العميل"
+                onClose={() => { setConnectFor(null); setWebhook(null); }}
+                hint="يُفحص التوكن عند ميتا قبل أن يُحفظ، والفعل يُسجَّل باسمك في سجلّ العميل."
+              >
+                {connectFor && (
+                  <ChannelConnectForm
+                    endpoint={`/console/tenants/${connectFor}/channel/connect`}
+                    submitLabel="افحص واحفظ"
+                    onDone={() => {
+                      setConnectFor(null);
+                      toast('فُحص التوكن عند ميتا وحُفظ — والقناة موصولة.');
+                      void tenants.reload();
+                    }}
+                  />
+                )}
+              </Sheet>
+
+              {/* ورقةُ بذر البوت — نفسُ نموذج المعالج بنفس الحدود. */}
+              <Sheet
+                open={Boolean(seedFor)}
+                title="ابذر أوّل نسخةِ بوتٍ لهذا العميل"
+                onClose={() => setSeedFor(null)}
+                hint="الخادم يرفض إن كان للعميل نسخةٌ منشورةٌ أصلاً — فلا يمحو فتحٌ بالخطأ شخصيّةَ عميلٍ يعمل."
+              >
+                {seedFor && (
+                  <BotSeedForm
+                    endpoint={`/console/tenants/${seedFor}/bot/seed`}
+                    onDone={() => {
+                      setSeedFor(null);
+                      toast('نُشرت أوّلُ نسخةِ بوتٍ لهذا العميل وشُغِّل.');
+                      void tenants.reload();
+                    }}
+                  />
+                )}
+              </Sheet>
+
 
               {/* ★ الرصيف: فعلُ الشاشة الأوّل في مدى الإبهام، ومعه أثرُه مكتوباً
                   قبل الضغط لا بعده. */}
