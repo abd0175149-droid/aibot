@@ -14,7 +14,7 @@ import { ChannelConnectForm } from '@/components/ChannelConnectForm';
 import { BotSeedForm } from '@/components/BotSeedForm';
 import {
   PageHead, Stack, Row, Meter, Pill, Tag, Dot, Note, Button, Table, DataView,
-  ErrorBox, Sheet, Dock, KV, KVRow, Field, Input, CodeBlock, type Column, type Tone,
+  ErrorBox, Sheet, Dock, KV, KVRow, Field, Input, CodeBlock, Tabs, type Column, type Tone,
 } from '@/components/ui';
 import { Bar } from './parts';
 import { Hero, MetricRow, Delta, Section, Fold } from '@/components/screen';
@@ -164,6 +164,7 @@ export default function TenantsPage() {
   const [wizard, setWizard] = useState(false);
   /** العميلُ المفتوحةُ ورقتُه — معرّفٌ لا كائن، فلا تتعلّق الورقةُ بنسخةٍ قديمة. */
   const [openId, setOpenId] = useState<string | null>(null);
+  const [sheetTab, setSheetTab] = useState<'over' | 'setup' | 'risk'>('over');
   /* ربطُ/تجديدُ قناةٍ لعميلٍ قائم — الفعل الذي كان يمرّ بـssh وسكربت. */
   const [connectFor, setConnectFor] = useState<string | null>(null);
   /* بذرُ بوتٍ لعميلٍ بقي بلا نسخةٍ منشورة — الفعل الثاني الذي كان بلا بابٍ في اللوحة. */
@@ -204,6 +205,7 @@ export default function TenantsPage() {
    */
   function closeSheet() {
     setOpenId(null);
+    setSheetTab('over');
     setKillWord('');
     setKillReason('');
     setOwnerTemp(null);
@@ -493,17 +495,21 @@ export default function TenantsPage() {
               head: 'الصحّة',
               cell: (r) => {
                 const h = HEALTH[r.channelHealth] ?? HEALTH.none!;
+                const open = Number(r.openCritical ?? 0);
                 return (
-                  <Row gap="xs" wrap={false}>
-                    <Dot tone={h.tone} />
-                    <span>{h.label}</span>
-                  </Row>
+                  <Stack gap="xs">
+                    <Row gap="xs" wrap={false}>
+                      <Dot tone={h.tone} />
+                      <span>{h.label}</span>
+                    </Row>
+                    {open > 0 && <Pill tone="crit" label={`${fmt.num(open)} حرجة مفتوحة`} />}
+                  </Stack>
                 );
               },
             },
             {
               key: 'cap',
-              head: 'النوافذ / السقف',
+              head: 'المحادثات / السقف',
               num: true,
               cell: (r) => {
                 const limit = Number(r.windowLimit ?? 0);
@@ -516,12 +522,6 @@ export default function TenantsPage() {
                   </span>
                 );
               },
-            },
-            {
-              key: 'cost',
-              head: 'كلفة الشهر',
-              num: true,
-              cell: (r) => <span className="num">{fmt.money(r.aiCost)}</span>,
             },
             {
               key: 'margin',
@@ -549,7 +549,7 @@ export default function TenantsPage() {
                 const m = (rev - cost * JOD_PER_USD) / rev;
                 const low = m < MARGIN_FLOOR;
                 return (
-                  <span className="tn-margin">
+                  <span className="tn-margin" title={`كلفة الشهر ${fmt.money(r.aiCost)}`}>
                     {/* لا معنى باللون وحده: النصّ يقول ما تقوله النقطة */}
                     <span className="num">{fmt.pct(m)}</span>
                     {low && (
@@ -557,28 +557,6 @@ export default function TenantsPage() {
                         tone={m < 0 ? 'crit' : 'warn'}
                         label={m < 0 ? 'يستهلك أكثر' : 'دون الهدف'}
                       />
-                    )}
-                  </span>
-                );
-              },
-            },
-            {
-              key: 'inc',
-              head: 'آخر حادثة',
-              cell: (r) => {
-                const open = Number(r.openCritical ?? 0);
-                const last = lastIncident.get(r.id);
-                if (incidents.loading && !open) return <span className="tn-dim">جار الجلب…</span>;
-                if (incidents.error && !open) return <Pill tone="warn" label="لم تحمّل" />;
-                if (!open && !last) return <span className="tn-dim">لا حوادث مفتوحة</span>;
-                return (
-                  <span className="tn-inc">
-                    {open > 0 && <Pill tone="crit" label={`${fmt.num(open)} حرجة مفتوحة`} />}
-                    {last && (
-                      <>
-                        <span className="tn-inc-t" dir="auto">{last.title}</span>
-                        <span className="tn-dim">{fmt.when(last.lastSeenAt)}</span>
-                      </>
                     )}
                   </span>
                 );
@@ -627,8 +605,7 @@ export default function TenantsPage() {
                     <>
                       من <span className="num">{fmt.num(items.length)}</span> عملاء نشطين
                       {worstBroken ? <> · أوّلهم «<span dir="auto">{worstBroken.name}</span>»</> : null}
-                      {' · '}ولا حادثة حرجة مفتوحة: هذا العطل صامت لا يشتكى منه —
-                      زبائنهم يكتبون ولا يجابون.
+                      {' · '}زبائنهم يكتبون ولا يجابون.
                     </>
                   )}
                 />
@@ -641,8 +618,7 @@ export default function TenantsPage() {
                     <>
                       من <span className="num">{fmt.num(items.length)}</span>{' '}
                       عملاء نشطين · أعلاهم عند{' '}
-                      <span className="num">{fmt.pct(worstCap)}</span> من سقفه · والباقة ترقّى
-                      قبل أن يبلغ السقف لا بعده.
+                      <span className="num">{fmt.pct(worstCap)}</span> من سقفه
                     </>
                   )}
                 />
@@ -654,11 +630,10 @@ export default function TenantsPage() {
                   meter={{ pct: items.length / TENANT_CAP }}
                   ctx={(
                     <>
-                      لا حادثة حرجة مفتوحة، ولا قناة معطوبة، ولا من قارب سقفه ·{' '}
                       {grossMargin == null
-                        ? 'والهامش الإجماليّ لم يحسب بعد'
-                        : <>والهامش الإجماليّ <span className="num">{fmt.pct(grossMargin)}</span></>}
-                      {' · '}وكلفة النماذج <span className="num">{fmt.money(totalCost)}</span> هذا الشهر.
+                        ? 'الهامش لم يحسب بعد'
+                        : <>الهامش <span className="num">{fmt.pct(grossMargin)}</span></>}
+                      {' · '}كلفة النماذج <span className="num">{fmt.money(totalCost)}</span>
                     </>
                   )}
                 />
@@ -674,7 +649,7 @@ export default function TenantsPage() {
               )}
               {incidents.error && (
                 <ErrorBox
-                  message={`عمود «آخر حادثة» غير محمّل — عدّاد الحوادث الحرجة في الجدول من مصدر آخر ويبقى صحيحا: ${incidents.error}`}
+                  message={`آخر حادثة لكلّ عميل غير محمّلة — عدّاد الحوادث الحرجة في الجدول من مصدر آخر ويبقى صحيحا: ${incidents.error}`}
                   onRetry={incidents.reload}
                 />
               )}
@@ -778,9 +753,6 @@ export default function TenantsPage() {
                 open={Boolean(sel)}
                 title={sel ? sel.name : 'ورقة العميل'}
                 onClose={closeSheet}
-                hint={sel
-                  ? 'الشريطان على مقياس واحد مشترك بين كلّ الأوراق، فطول شريط هنا يقارن بطول شريط في ورقة غيره.'
-                  : undefined}
                 footer={sel ? (
                   <Row gap="sm">
                     {Number(sel.openCritical ?? 0) > 0 || selLast ? (
@@ -799,244 +771,267 @@ export default function TenantsPage() {
                     <Button size="lg" variant="primary" busy={impBusy} disabled={can.readOnly}
                       reason="أنت في انتحال نشط أصلا — أنهه من اللافتة أوّلا."
                       onClick={() => void impersonate(sel)}>ادخل بهويّته — قراءة فقط</Button>
-                    <Button size="lg" onClick={() => setConnectFor(sel.id)}>اربط/جدّد القناة…</Button>
-                    {/* ★ بذرُ بوتٍ لعميلٍ لم يكتمل معالجُه — `…/bot/seed` كان مبنيّاً
-                        ولا يناديه إلّا المعالجُ نفسُه. والشرطُ لا زينة: الخادم يردّ ٤٠٩
-                        على عميلٍ له نسخةٌ منشورة، وزرٌّ يفشل دائماً يكسر الثقة. */}
-                    {!sel.botSeeded && (
-                      <Button size="lg" onClick={() => setSeedFor(sel.id)} disabled={can.readOnly}
-                        reason="انتحال نشط — قراءة فقط.">ابذر بوته…</Button>
-                    )}
-                    <a className="btn lg" href="/console/margin">لوحة الهامش ‹</a>
                     <Button size="lg" onClick={closeSheet}>أغلق</Button>
                   </Row>
                 ) : undefined}
               >
                 {sel && (
                   <Stack gap="md">
-                    <Row gap="xs">
-                      {selHealth && <Pill tone={selHealth.tone} label={selHealth.label} />}
-                      {STATUS_PILL[sel.status] && (
-                        <Pill tone={STATUS_PILL[sel.status]!.tone} label={STATUS_PILL[sel.status]!.label} />
-                      )}
-                      {sel.botSeeded
-                        ? <Tag tone="violet" label={kbModeLabel(sel.knowledgeMode)} mark={false} />
-                        : <Pill tone="warn" label="بلا بوت منشور" />}
-                      {Number(sel.openCritical ?? 0) > 0 && (
-                        <Pill tone="crit" label={`${fmt.num(sel.openCritical)} حرجة مفتوحة`} />
-                      )}
-                    </Row>
+                    {/* ★★ ثلاثةُ تبويبات (خطّة الواجهات، المرحلة ٤): كانت الورقةُ عموداً
+                        واحداً فيه الأرقامُ والتهيئةُ والإيقافُ معاً — وأخطرُ زرٍّ فيها
+                        على بعد تمريرةٍ من أكثرها استعمالاً. والأحمرُ للإيقاف والأرشفة وحدهما. */}
+                    <Tabs
+                      tabs={[
+                        { id: 'over', label: 'نظرة عامّة' },
+                        { id: 'setup', label: 'الإعداد', badge: (!sel.botSeeded || sel.ownerPending) ? 1 : undefined },
+                        { id: 'risk', label: 'الحالة والخطر', badge: sel.botLocked ? 1 : undefined },
+                      ] as const}
+                      active={sheetTab}
+                      onChange={setSheetTab}
+                    />
+                    {sheetTab === 'over' && (
+                      <>
+                      <Row gap="xs">
+                        {selHealth && <Pill tone={selHealth.tone} label={selHealth.label} />}
+                        {STATUS_PILL[sel.status] && (
+                          <Pill tone={STATUS_PILL[sel.status]!.tone} label={STATUS_PILL[sel.status]!.label} />
+                        )}
+                        {sel.botSeeded
+                          ? <Tag tone="violet" label={kbModeLabel(sel.knowledgeMode)} mark={false} />
+                          : <Pill tone="warn" label="بلا بوت منشور" />}
+                        {Number(sel.openCritical ?? 0) > 0 && (
+                          <Pill tone="crit" label={`${fmt.num(sel.openCritical)} حرجة مفتوحة`} />
+                        )}
+                      </Row>
 
-                    {selHealth && <p className="cn-dim">{selHealth.why}</p>}
+                      {selHealth && <p className="cn-dim">{selHealth.why}</p>}
 
-                    {/* ★★ تهيئةٌ ناقصةٌ تُرى. زرٌّ صحيحٌ في ورقةٍ لا تقول إنّ التهيئة
-                        ناقصةٌ لا يُضغَط — والمعالجُ كان يُغلق بلا إنذارٍ ولا أثر. */}
-                    {(!sel.botSeeded || sel.ownerPending) && (
-                      <Note tone="warn">
-                        <b>تهيئة لم تكتمل.</b>{' '}
-                        {!sel.botSeeded && 'لا نسخة بوت منشورة لهذا العميل — بوته لا يردّ ولو كانت قناته سليمة. '}
-                        {sel.ownerPending && 'ومالكه لم يدخل قطّ وكلمته ما زالت مؤقّتة — وهي تعرض مرّة واحدة في المعالج، فلو أغلق قبل نسخها فقدت. '}
-                        وما بقي يكمل من هذه الورقة: طيّة «أعد كلمة مرور مالكه» تحت هذا السطر،
-                        {!sel.botSeeded && <> وزرّ «ابذر بوته…» في أسفلها،</>} وزرّ «اربط/جدّد القناة…».
-                      </Note>
+                      <div className="mg-bars">
+                        <span className="mg-lbl">إيراد شهريّ</span>
+                        <Bar value={selRev ?? 0} scale={scale} kind="rev" />
+                        <span className="mg-val">
+                          {selRev == null
+                            ? '—'
+                            : <><span className="num">{fmt.num(Math.round(selRev))}</span> د.أ</>}
+                        </span>
+
+                        <span className="mg-lbl">كلفة نماذجه</span>
+                        <Bar
+                          value={selCost}
+                          scale={scale}
+                          kind="cst"
+                          goal={selRev != null && selRev > 0 ? selRev * (1 - MARGIN_FLOOR) : undefined}
+                        />
+                        <span className="mg-val">
+                          <span className="num">{selCost.toFixed(2)}</span> د.أ
+                        </span>
+                      </div>
+
+                      <p className="cn-legend">
+                        <span><i className="cn-sw rev" aria-hidden="true" />إيراد اشتراكه</span>
+                        <span><i className="cn-sw cst" aria-hidden="true" />كلفة نماذجه</span>
+                        <span>
+                          <i className="cn-sw-goal" aria-hidden="true" />
+                          علامة هدف الهامش عند{' '}
+                          <span className="num">{fmt.pct(MARGIN_FLOOR)}</span> — ما تجاوزها
+                          فهامشه دون الهدف
+                        </span>
+                        <span>
+                          والمقياس من صفر إلى{' '}
+                          <span className="num">{fmt.num(Math.round(scale))}</span> د.أ
+                        </span>
+                      </p>
+
+                      <KV>
+                        <KVRow k="الهامش">
+                          {selUnmeasured
+                            ? 'غير مقيس: استهلاك حقيقيّ وكلفة صفريّة — لا صفّ سعر مسجّلا للنموذج الذي يردّ به، فهامشه أعلى من حقيقته. أضف سعر النموذج ليعود الرقم صادقا.'
+                            : selMargin == null
+                              ? 'لا اشتراك فعّالا — كلفته قائمة وإيراده صفر.'
+                              : <><span className="num">{fmt.pct(selMargin)}</span> من إيراده</>}
+                        </KVRow>
+                        <KVRow k="النوافذ / السقف">
+                          <span className="tn-cap">
+                            <span className="num">
+                              {fmt.num(sel.windowsUsed)} / {fmt.num(sel.windowLimit)}
+                            </span>
+                            {selLimit > 0
+                              ? <Meter pct={capPct(sel)} />
+                              : <span className="tn-dim">بلا باقة فعّالة — لا سقف يقاس</span>}
+                          </span>
+                        </KVRow>
+                        <KVRow k="الباقة"><span dir="auto">{sel.plan ?? 'بلا باقة'}</span></KVRow>
+                        <KVRow k="وسيط التوكنات لكلّ ردّ">
+                          {selUsage
+                            ? <span className="num">{fmt.num(selUsage.avgTokensPerReply)}</span>
+                            : <span className="tn-dim">غير محمّل — لوحة الهامش هي مصدره</span>}
+                        </KVRow>
+                        <KVRow k="آخر حادثة">
+                          {selLast
+                            ? <><span dir="auto">{selLast.title}</span>{' — '}{fmt.when(selLast.lastSeenAt)}</>
+                            : incidents.error
+                              ? 'غير محمّلة — أعد المحاولة من رسالة الخطأ في الشاشة'
+                              : 'لا حادثة مفتوحة لهذا العميل'}
+                        </KVRow>
+                      </KV>
+
+                        <a className="btn sm" href="/console/margin">لوحة الهامش ‹</a>
+                      </>
                     )}
+                    {sheetTab === 'setup' && (
+                      <>
+                      {/* ★★ تهيئةٌ ناقصةٌ تُرى. زرٌّ صحيحٌ في ورقةٍ لا تقول إنّ التهيئة
+                          ناقصةٌ لا يُضغَط — والمعالجُ كان يُغلق بلا إنذارٍ ولا أثر. */}
+                      {(!sel.botSeeded || sel.ownerPending) && (
+                        <Note tone="warn">
+                          <b>تهيئة لم تكتمل.</b>{' '}
+                          {!sel.botSeeded && 'لا بوت منشور — لا يردّ ولو كانت قناته سليمة. '}
+                          {sel.ownerPending && 'ومالكه لم يدخل قطّ بكلمته المؤقّتة. '}
+                          أكملها من الأزرار أدناه.
+                        </Note>
+                      )}
 
-                    {/* ★★ قفلُ المنصّة على بوته — يُقال ويُرفع من هنا وحدها. والرفعُ لا
-                        يشغّل: التشغيلُ قرارُ العميل من شاشته. */}
-                    {sel.botLocked && (
-                      <Note tone="crit">
-                        <b>بوته موقوف ومقفول من المنصّة.</b> زرّ «شغّل» عنده يردّ بالرفض ويقول له السبب.
-                        {' '}ارفع القفل حين يحلّ ما أوقف لأجله — ثمّ يشغّله هو.
-                        <Button size="sm" busy={lifeBusy === 'unlock'} disabled={can.readOnly}
-                          reason="انتحال نشط — قراءة فقط."
-                          onClick={() => void unlockBot(sel)}>ارفع القفل عن بوته</Button>
-                      </Note>
-                    )}
-
-                    {/* ★★★ دورةُ الحياة — ثلاثةُ انتقالاتٍ يقيّدها الخادمُ بالحالة الراهنة.
-                        والزرُّ يقول أثرَه: الإيقافُ يطرد الجلساتِ ويُسقط الويبهوك والإرسال. */}
-                    <KV>
-                      <KVRow k="الحالة">
                         <Row gap="sm">
-                          {STATUS_PILL[sel.status]
-                            ? <Pill tone={STATUS_PILL[sel.status]!.tone} label={STATUS_PILL[sel.status]!.label} />
-                            : <span className="mono">{sel.status}</span>}
-                          {sel.status !== 'active' && (
-                            <Button size="sm" variant="primary" busy={lifeBusy === 'activate'} disabled={can.readOnly}
-                              reason="انتحال نشط — قراءة فقط."
-                              onClick={() => void setStatus(sel, 'activate')}>
-                              {sel.status === 'trial' ? 'فعّل الاشتراك' : sel.status === 'archived' ? 'استعده فعّالا' : 'أعد تفعيله'}
-                            </Button>
-                          )}
-                          {(sel.status === 'trial' || sel.status === 'active') && (
-                            <Button size="sm" busy={lifeBusy === 'suspend'} disabled={can.readOnly}
-                              reason="انتحال نشط — قراءة فقط."
-                              onClick={() => void setStatus(sel, 'suspend')}>أوقف الحساب — يطرد الجلسات</Button>
+                          <Button onClick={() => setConnectFor(sel.id)}>اربط/جدّد القناة…</Button>
+                          {/* ★ بذرُ بوتٍ لعميلٍ لم يكتمل معالجُه — والشرطُ لا زينة: الخادم يردّ ٤٠٩
+                              على عميلٍ له نسخةٌ منشورة، وزرٌّ يفشل دائماً يكسر الثقة. */}
+                          {!sel.botSeeded && (
+                            <Button onClick={() => setSeedFor(sel.id)} disabled={can.readOnly}
+                              reason="انتحال نشط — قراءة فقط.">ابذر بوته…</Button>
                           )}
                         </Row>
-                      </KVRow>
-                    </KV>
+                      {/* ★ إعادةُ كلمةِ مالكه — البابُ الذي كان `ops/set-password.ts` وحده.
+                          وكلُّ جلساته تسقط، فهو فعلٌ يُنطق أثرُه قبل الضغط لا بعده. */}
+                      <Fold summary="أعد كلمة مرور مالكه — وتسقط كلّ جلساته">
+                        <p className="cn-dim">
+                          تولّد كلمة مؤقّتة تعرض <b>مرّة واحدة</b> ولا تخزّن نصّا، ويطرد المالك
+                          من كلّ أجهزته في الحال، ويسجّل الفعل باسمك في سجلّه فيراه.
+                          {sel.ownerEmail && <> والبريد <span className="mono">{sel.ownerEmail}</span>.</>}
+                        </p>
+                        {ownerTemp
+                          ? <CodeBlock label={`كلمة مؤقّتة لـ${ownerTemp.email}`} text={ownerTemp.pass} />
+                          : (
+                            <Button busy={resetting} disabled={can.readOnly}
+                              reason="انتحال نشط — قراءة فقط، وكلّ فعل كاتب مرفوض في الخادم أصلا."
+                              onClick={() => void resetOwner(sel)}>ولّد كلمة مؤقّتة</Button>
+                          )}
+                      </Fold>
 
-                    {/* ★ إعادةُ كلمةِ مالكه — البابُ الذي كان `ops/set-password.ts` وحده.
-                        وكلُّ جلساته تسقط، فهو فعلٌ يُنطق أثرُه قبل الضغط لا بعده. */}
-                    <details className="cn-gate">
-                      <summary>أعد كلمة مرور مالكه — وتسقط كلّ جلساته</summary>
-                      <p className="cn-dim">
-                        تولّد كلمة مؤقّتة تعرض <b>مرّة واحدة</b> ولا تخزّن نصّا، ويطرد المالك
-                        من كلّ أجهزته في الحال، ويسجّل الفعل باسمك في سجلّه فيراه.
-                        {sel.ownerEmail && <> والبريد <span className="mono">{sel.ownerEmail}</span>.</>}
-                      </p>
-                      {ownerTemp
-                        ? <CodeBlock label={`كلمة مؤقّتة لـ${ownerTemp.email}`} text={ownerTemp.pass} />
-                        : (
-                          <Button variant="danger" busy={resetting} disabled={can.readOnly}
-                            reason="انتحال نشط — قراءة فقط، وكلّ فعل كاتب مرفوض في الخادم أصلا."
-                            onClick={() => void resetOwner(sel)}>ولّد كلمة مؤقّتة</Button>
-                        )}
-                    </details>
+                      {/* ★ وبيانا ميتا: الـCallback URL وتوكنُ التحقّق. الثاني مُسقَطٌ من
+                          `GET /channels` عمداً ومحجوبٌ في السجلّ، فمعالجٌ أُغلق قبل خطوته
+                          الأخيرة كان يُفقده بلا رجعةٍ إلّا بـ`ssh`. */}
+                      {/* ⚠️ و`Fold` لا `cn-gate`: الثانيةُ محاطةٌ بأحمر لأنّها بوّابةُ فعلٍ
+                          لا رجعةَ فيه (إيقافُ بوتٍ، إسقاطُ جلسات). وقراءةُ عنوانٍ ليست
+                          خطراً — وإطارٌ أحمرُ على فعلٍ آمنٍ يُبلّد الأحمرَ حيث يَلزم. */}
+                      <Fold summary="بيانا ميتا — الـCallback URL وتوكن التحقّق">
+                        {webhook
+                          ? (
+                            <Stack gap="sm">
+                              <CodeBlock label="Callback URL" text={webhook.url} />
+                              {webhook.token
+                                ? <CodeBlock label="Verify token" text={webhook.token} />
+                                : <p className="cn-dim">لا قناة محفوظة لهذا العميل بعد.</p>}
+                              <p className="cn-dim">
+                                يلصقان في WhatsApp ← Configuration، ثمّ يفعّل الحقل{' '}
+                                <span className="mono">messages</span> — وبلاه لا تصل رسالة واحدة
+                                وكلّ شيء آخر يبدو سليما.
+                              </p>
+                            </Stack>
+                          )
+                          : (
+                            <Button onClick={() => void readWebhook(sel)}>اعرضهما</Button>
+                          )}
+                      </Fold>
 
-                    {/* ★ وبيانا ميتا: الـCallback URL وتوكنُ التحقّق. الثاني مُسقَطٌ من
-                        `GET /channels` عمداً ومحجوبٌ في السجلّ، فمعالجٌ أُغلق قبل خطوته
-                        الأخيرة كان يُفقده بلا رجعةٍ إلّا بـ`ssh`. */}
-                    {/* ⚠️ و`Fold` لا `cn-gate`: الثانيةُ محاطةٌ بأحمر لأنّها بوّابةُ فعلٍ
-                        لا رجعةَ فيه (إيقافُ بوتٍ، إسقاطُ جلسات). وقراءةُ عنوانٍ ليست
-                        خطراً — وإطارٌ أحمرُ على فعلٍ آمنٍ يُبلّد الأحمرَ حيث يَلزم. */}
-                    <Fold summary="بيانا ميتا — الـCallback URL وتوكن التحقّق">
-                      {webhook
-                        ? (
-                          <Stack gap="sm">
-                            <CodeBlock label="Callback URL" text={webhook.url} />
-                            {webhook.token
-                              ? <CodeBlock label="Verify token" text={webhook.token} />
-                              : <p className="cn-dim">لا قناة محفوظة لهذا العميل بعد.</p>}
-                            <p className="cn-dim">
-                              يلصقان في WhatsApp ← Configuration، ثمّ يفعّل الحقل{' '}
-                              <span className="mono">messages</span> — وبلاه لا تصل رسالة واحدة
-                              وكلّ شيء آخر يبدو سليما.
-                            </p>
-                          </Stack>
-                        )
-                        : (
-                          <Button onClick={() => void readWebhook(sel)}>اعرضهما</Button>
-                        )}
-                    </Fold>
+                      </>
+                    )}
+                    {sheetTab === 'risk' && (
+                      <>
+                      {/* ★★ قفلُ المنصّة على بوته — يُقال ويُرفع من هنا وحدها. والرفعُ لا
+                          يشغّل: التشغيلُ قرارُ العميل من شاشته. */}
+                      {sel.botLocked && (
+                        <Note tone="crit">
+                          <b>بوته موقوف ومقفول من المنصّة.</b> زرّ «شغّل» عنده يردّ بالرفض ويقول له السبب.
+                          {' '}ارفع القفل حين يحلّ ما أوقف لأجله — ثمّ يشغّله هو.
+                          <Button size="sm" busy={lifeBusy === 'unlock'} disabled={can.readOnly}
+                            reason="انتحال نشط — قراءة فقط."
+                            onClick={() => void unlockBot(sel)}>ارفع القفل عن بوته</Button>
+                        </Note>
+                      )}
 
-                    <div className="mg-bars">
-                      <span className="mg-lbl">إيراد شهريّ</span>
-                      <Bar value={selRev ?? 0} scale={scale} kind="rev" />
-                      <span className="mg-val">
-                        {selRev == null
-                          ? '—'
-                          : <><span className="num">{fmt.num(Math.round(selRev))}</span> د.أ</>}
-                      </span>
+                      {/* ★★★ دورةُ الحياة — ثلاثةُ انتقالاتٍ يقيّدها الخادمُ بالحالة الراهنة.
+                          والزرُّ يقول أثرَه: الإيقافُ يطرد الجلساتِ ويُسقط الويبهوك والإرسال. */}
+                      <KV>
+                        <KVRow k="الحالة">
+                          <Row gap="sm">
+                            {STATUS_PILL[sel.status]
+                              ? <Pill tone={STATUS_PILL[sel.status]!.tone} label={STATUS_PILL[sel.status]!.label} />
+                              : <span className="mono">{sel.status}</span>}
+                            {sel.status !== 'active' && (
+                              <Button size="sm" variant="primary" busy={lifeBusy === 'activate'} disabled={can.readOnly}
+                                reason="انتحال نشط — قراءة فقط."
+                                onClick={() => void setStatus(sel, 'activate')}>
+                                {sel.status === 'trial' ? 'فعّل الاشتراك' : sel.status === 'archived' ? 'استعده فعّالا' : 'أعد تفعيله'}
+                              </Button>
+                            )}
+                            {(sel.status === 'trial' || sel.status === 'active') && (
+                              <Button size="sm" busy={lifeBusy === 'suspend'} disabled={can.readOnly}
+                                reason="انتحال نشط — قراءة فقط."
+                                onClick={() => void setStatus(sel, 'suspend')}>أوقف الحساب — يطرد الجلسات</Button>
+                            )}
+                          </Row>
+                        </KVRow>
+                      </KV>
 
-                      <span className="mg-lbl">كلفة نماذجه</span>
-                      <Bar
-                        value={selCost}
-                        scale={scale}
-                        kind="cst"
-                        goal={selRev != null && selRev > 0 ? selRev * (1 - MARGIN_FLOOR) : undefined}
-                      />
-                      <span className="mg-val">
-                        <span className="num">{selCost.toFixed(2)}</span> د.أ
-                      </span>
-                    </div>
-
-                    <p className="cn-legend">
-                      <span><i className="cn-sw rev" aria-hidden="true" />إيراد اشتراكه</span>
-                      <span><i className="cn-sw cst" aria-hidden="true" />كلفة نماذجه</span>
-                      <span>
-                        <i className="cn-sw-goal" aria-hidden="true" />
-                        علامة هدف الهامش عند{' '}
-                        <span className="num">{fmt.pct(MARGIN_FLOOR)}</span> — ما تجاوزها
-                        فهامشه دون الهدف
-                      </span>
-                      <span>
-                        والمقياس من صفر إلى{' '}
-                        <span className="num">{fmt.num(Math.round(scale))}</span> د.أ
-                      </span>
-                    </p>
-
-                    <KV>
-                      <KVRow k="الهامش">
-                        {selUnmeasured
-                          ? 'غير مقيس: استهلاك حقيقيّ وكلفة صفريّة — لا صفّ سعر مسجّلا للنموذج الذي يردّ به، فهامشه أعلى من حقيقته. أضف سعر النموذج ليعود الرقم صادقا.'
-                          : selMargin == null
-                            ? 'لا اشتراك فعّالا — كلفته قائمة وإيراده صفر.'
-                            : <><span className="num">{fmt.pct(selMargin)}</span> من إيراده</>}
-                      </KVRow>
-                      <KVRow k="النوافذ / السقف">
-                        <span className="tn-cap">
-                          <span className="num">
-                            {fmt.num(sel.windowsUsed)} / {fmt.num(sel.windowLimit)}
-                          </span>
-                          {selLimit > 0
-                            ? <Meter pct={capPct(sel)} />
-                            : <span className="tn-dim">بلا باقة فعّالة — لا سقف يقاس</span>}
-                        </span>
-                      </KVRow>
-                      <KVRow k="الباقة"><span dir="auto">{sel.plan ?? 'بلا باقة'}</span></KVRow>
-                      <KVRow k="وسيط التوكنات لكلّ ردّ">
-                        {selUsage
-                          ? <span className="num">{fmt.num(selUsage.avgTokensPerReply)}</span>
-                          : <span className="tn-dim">غير محمّل — لوحة الهامش هي مصدره</span>}
-                      </KVRow>
-                      <KVRow k="آخر حادثة">
-                        {selLast
-                          ? <><span dir="auto">{selLast.title}</span>{' — '}{fmt.when(selLast.lastSeenAt)}</>
-                          : incidents.error
-                            ? 'غير محمّلة — أعد المحاولة من رسالة الخطأ في الشاشة'
-                            : 'لا حادثة مفتوحة لهذا العميل'}
-                      </KVRow>
-                    </KV>
-
-                    {/* ★ أخطرُ فعلٍ في الشاشة لا يكون أضعفَ زرٍّ فيها: طيّةٌ
-                        تُفتح، ثمّ بوّابةُ كتابةٍ تُطابق الاسم حرفاً حرفاً. */}
-                    <details className="cn-gate">
-                      <summary>أوقف بوته — يصمت عن كلّ زبائنه</summary>
-                      <p className="cn-dim">
-                        كلّ رسالة تصل بعد الإيقاف تنتظر موظّفا من عند العميل، والأثر يرى عند
-                        زبائنه في الحال. ولا يعود إلّا بتشغيل يدويّ — فاكتب اسم العميل كما هو
-                        مكتوب في رأس هذه الورقة لتفعيل الزرّ.
-                      </p>
-                      <Field
-                        label="اسم العميل كما هو مكتوب أعلاه"
-                        id="kill-name"
-                        hint="مطابقة حرفا حرفا — وهذا هو التأكيد، فلا نقرة ثانية تغني عنه."
-                      >
-                        <Input id="kill-name" value={killWord} onChange={setKillWord} />
-                      </Field>
-                      <Field label="سبب الإيقاف — يراه العميل حرفا حرفا" id="kill-reason"
-                        hint="اختياريّ. يعرض في شاشة بوته مع زرّ «شغّل» المعطّل، ويكتب في سجلّه.">
-                        <Input id="kill-reason" value={killReason} onChange={setKillReason} />
-                      </Field>
-                      <Button
-                        variant="danger"
-                        busy={busy}
-                        disabled={!armed || can.readOnly}
-                        reason={can.readOnly
-                          ? 'انتحال نشط — قراءة فقط، وكلّ فعل كاتب مرفوض في الخادم أصلا.'
-                          : 'اكتب اسم العميل مطابقا لتفعيل الزرّ.'}
-                        onClick={() => void killBot(sel)}
-                      >
-                        أوقف بوته الآن
-                      </Button>
-                      {/* ★ الأرشفةُ خلف نفس البوّابة: تُخفيه من الجدول وتطرد جلساته وتُسقط
-                          ويبهوكه — وتُستعاد من «أظهر المؤرشَفين» ثمّ «استعِده فعّالاً». */}
-                      {sel.status !== 'archived' && (
+                      {/* ★ أخطرُ فعلٍ في الشاشة لا يكون أضعفَ زرٍّ فيها: طيّةٌ
+                          تُفتح، ثمّ بوّابةُ كتابةٍ تُطابق الاسم حرفاً حرفاً. */}
+                      <details className="cn-gate">
+                        <summary>أوقف بوته — يصمت عن كلّ زبائنه</summary>
+                        <p className="cn-dim">
+                          كلّ رسالة تصل بعد الإيقاف تنتظر موظّفا من عند العميل، والأثر يرى عند
+                          زبائنه في الحال. ولا يعود إلّا بتشغيل يدويّ — فاكتب اسم العميل كما هو
+                          مكتوب في رأس هذه الورقة لتفعيل الزرّ.
+                        </p>
+                        <Field
+                          label="اسم العميل كما هو مكتوب أعلاه"
+                          id="kill-name"
+                          hint="مطابقة حرفا حرفا — وهذا هو التأكيد، فلا نقرة ثانية تغني عنه."
+                        >
+                          <Input id="kill-name" value={killWord} onChange={setKillWord} />
+                        </Field>
+                        <Field label="سبب الإيقاف — يراه العميل حرفا حرفا" id="kill-reason"
+                          hint="اختياريّ. يعرض في شاشة بوته مع زرّ «شغّل» المعطّل، ويكتب في سجلّه.">
+                          <Input id="kill-reason" value={killReason} onChange={setKillReason} />
+                        </Field>
                         <Button
                           variant="danger"
-                          busy={lifeBusy === 'archive'}
+                          busy={busy}
                           disabled={!armed || can.readOnly}
-                          /* السببُ يقوله زرُّ الإيقاف بجانبه — والتكرارُ كان يُلصَق به
-                             بلا مسافة («…لتفعيل الزرّ.اكتب اسم…»، رُئي حيّاً). */
-                          reason={can.readOnly ? 'انتحال نشط — قراءة فقط.' : undefined}
-                          onClick={() => void setStatus(sel, 'archive')}
+                          reason={can.readOnly
+                            ? 'انتحال نشط — قراءة فقط، وكلّ فعل كاتب مرفوض في الخادم أصلا.'
+                            : 'اكتب اسم العميل مطابقا لتفعيل الزرّ.'}
+                          onClick={() => void killBot(sel)}
                         >
-                          أرشف الحساب
+                          أوقف بوته الآن
                         </Button>
-                      )}
-                    </details>
+                        {/* ★ الأرشفةُ خلف نفس البوّابة: تُخفيه من الجدول وتطرد جلساته وتُسقط
+                            ويبهوكه — وتُستعاد من «أظهر المؤرشَفين» ثمّ «استعِده فعّالاً». */}
+                        {sel.status !== 'archived' && (
+                          <Button
+                            variant="danger"
+                            busy={lifeBusy === 'archive'}
+                            disabled={!armed || can.readOnly}
+                            /* السببُ يقوله زرُّ الإيقاف بجانبه — والتكرارُ كان يُلصَق به
+                               بلا مسافة («…لتفعيل الزرّ.اكتب اسم…»، رُئي حيّاً). */
+                            reason={can.readOnly ? 'انتحال نشط — قراءة فقط.' : undefined}
+                            onClick={() => void setStatus(sel, 'archive')}
+                          >
+                            أرشف الحساب
+                          </Button>
+                        )}
+                      </details>
+                      </>
+                    )}
                   </Stack>
                 )}
               </Sheet>
