@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { BOT_SCREEN, BOT_SCREEN_ABS, readBotScreen } from '../../../test-support/bot-screen';
 
 /**
  * ★ **مسارُ التراجع كان محصَّناً ومكتملاً — ولا زرَّ له في أيّ شاشة.**
@@ -22,14 +23,14 @@ const code = (rel: string) => read(rel)
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/^\s*\/\/[^\n]*/gm, ' ');
 
-const PAGE = code('apps/web/src/app/app/bot/page.tsx');
+const PAGE = BOT_SCREEN.map(code).join('\n');
 const API = code('apps/api/src/routes/bot.ts');
 
 describe('الماسحُ يُزيل التعليقات', () => {
   it('★ وبلا ذلك يمرّ الحارسُ على تعليقٍ يقول «لا يستطيع التراجع»', () => {
     /* وهو تعليقٌ حقيقيٌّ في الملفّ (سطرُ تحذير الحذف)، يحمل كلمة `rollback`
        الإنجليزيّة في شرحٍ آخر — فماسحٌ لا يُعمي التعليقات يُصدّق شرحاً. */
-    expect(read('apps/web/src/app/app/bot/page.tsx')).toContain('التراجع عنه من هذه الشاشة');
+    expect(BOT_SCREEN.map(read).join('\n')).toContain('التراجع عنه من هذه الشاشة');
     expect(PAGE, 'التعليقاتُ ما زالت تُقرأ').not.toContain('التراجع عنه من هذه الشاشة');
   });
 });

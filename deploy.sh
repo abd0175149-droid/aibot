@@ -217,7 +217,10 @@ else
   #    والبصمةُ تُكتب **بعد** نجاح التثبيت وحده، فتثبيتٌ فاشلٌ يُعاد.
   LOCK_STAMP="node_modules/.aibot-lock-sha"
   LOCK_NOW="$(sha256sum pnpm-lock.yaml | cut -d" " -f1)"
-  if [ ! -d node_modules ] || [ "$(cat "$LOCK_STAMP" 2>/dev/null)" != "$LOCK_NOW" ]; then
+  # ★ وأدواتُ البوّابة غائبةٌ = تثبيتٌ ناقص ولو طابقت البصمة (بصمةٌ كُتبت على
+  #   تثبيتٍ حذف devDependencies — انظر أدناه).
+  if [ ! -d node_modules ] || [ "$(cat "$LOCK_STAMP" 2>/dev/null)" != "$LOCK_NOW" ] \
+     || [ ! -x node_modules/.bin/tsc ] || [ ! -x node_modules/.bin/vitest ]; then
     echo "  ℹ المثبَّت لا يطابق القفل — تثبيت التبعيّات"
     # ★★★ **`CI=true` — وبلاها كان التثبيت لا-عمليّةً صامتةً برمز نجاح.**
     #    pnpm يسأل تفاعليّاً حين يقرّر إعادةَ بناء `node_modules`:
@@ -229,9 +232,18 @@ else
     #    و`CI=true` هي الصيغةُ التي يفهمها pnpm للاعملٍ بلا سؤال.
     # ⚠️ ولا تُحذف `< /dev/null`: هي التي منعت الانتظارَ إلى الأبد قبل ذلك.
     #    الاثنتان معاً: لا سؤالَ يُطرح، ولو طُرح لم يُنتظر جوابُه.
-    if ! CI=true gate_run "$GATE_INSTALL_TIMEOUT" "تثبيت التبعيّات" \
-         npx --yes pnpm@9 install --frozen-lockfile; then
+    # 🔴 و`NODE_ENV=development` صراحةً: `.env` يضبطها `production` وقد حُمِّل
+    #    أعلاه، وpnpm تحت `production` **يحذف** devDependencies — فذهبت typescript
+    #    وvitest وtsx، ثمّ جلب `npx tsc` حزمةً أخرى اسمُها `tsc@2.0.4` (٢٦ أيلول).
+    #    لم يظهر قبل ذلك لأنّ التثبيت لا يجري إلّا حين يتغيّر القفل.
+    if ! NODE_ENV=development CI=true gate_run "$GATE_INSTALL_TIMEOUT" "تثبيت التبعيّات" \
+         npx --yes pnpm@9 install --frozen-lockfile --prod=false; then
       echo "  ✘ فشل تثبيت التبعيّات — لا يُنشر. ولم يُلمس شيءٌ بعد."
+      exit 1
+    fi
+    # ★ الأثرُ لا رمزُ الخروج: تثبيتٌ «ناجحٌ» بلا المُصرِّف هو ما وقع للتوّ.
+    if [ ! -x node_modules/.bin/tsc ] || [ ! -x node_modules/.bin/vitest ]; then
+      echo "  ✘ التثبيتُ نجح بلا typescript/vitest — أدواتُ البوّابة غائبة. لا يُنشر."
       exit 1
     fi
     printf '%s' "$LOCK_NOW" > "$LOCK_STAMP"
@@ -242,7 +254,7 @@ else
            packages/shared packages/ai packages/channels packages/crypto; do
     [ -f "$t/tsconfig.json" ] || continue
     if ! gate_run "$GATE_STEP_TIMEOUT" "فحص أنواع ${t}" \
-         npx tsc -p "$t/tsconfig.json" --noEmit; then
+         npx --no-install tsc -p "$t/tsconfig.json" --noEmit; then
       echo "  ✘ خطأُ أنواعٍ في ${t} — لا يُنشر. ولم يُلمس شيءٌ بعد."
       exit 1
     fi
@@ -250,7 +262,7 @@ else
   echo "  ✔ الأنواع سليمة"
 
   # ② الاختبارات — وأكثرُها حرّاسٌ ساكنةٌ تحرس أعطالاً وقعت فعلاً.
-  if ! gate_run "$GATE_STEP_TIMEOUT" "الاختبارات" npx vitest run --reporter=basic; then
+  if ! gate_run "$GATE_STEP_TIMEOUT" "الاختبارات" npx --no-install vitest run --reporter=basic; then
     echo "  ✘ اختبارٌ فاشل — لا يُنشر. ولم يُلمس شيءٌ بعد."
     exit 1
   fi

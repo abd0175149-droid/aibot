@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { BOT_SCREEN, BOT_SCREEN_ABS, readBotScreen } from '../../../test-support/bot-screen';
 
 /**
  * ★ حرّاسُ الدفعة الأولى — «أطفئ ما هو مكسورٌ الآن عند عميلَيك».
@@ -78,7 +79,7 @@ describe('ما تقوله الشاشة يطابق ما يفعله الخادم',
     expect(api, '`live` تُحسب وتُعاد للشاشة').toMatch(/const live = /);
     // ويُعاد في جسم الردّ — لا يُحسب ثمّ يُهمَل
     expect(api.slice(api.indexOf('const live = '))).toMatch(/return \{[\s\S]{0,400}\blive\b/);
-    const web = read('apps/web/src/app/app/bot/page.tsx');
+    const web = readBotScreen();
     expect(web, 'التوستة كانت تقول «يردّ بها من الآن» في كلّ حال').toMatch(/r\.live/);
   });
 

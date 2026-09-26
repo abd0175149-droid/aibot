@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { BotBehaviorPatch, BusinessHours, DAY_KEYS } from '@aibot/shared';
+import { BOT_SCREEN, BOT_SCREEN_ABS, readBotScreen } from '../../../test-support/bot-screen';
 
 /**
  * ★ **تراجعٌ صامتٌ في أوّل تعديلٍ روتينيّ — وهو أخطر ما في شاشة البوت.**
@@ -59,9 +60,7 @@ describe('التزامنُ التفاؤليّ على المسوّدة', () => {
   });
 
   it('والشاشةُ تحمل الطابعَ وتوقف الحفظ التلقائيّ عند التعارض', () => {
-    const web = readFileSync(
-      join(__dirname, '..', '..', 'web', 'src', 'app', 'app', 'bot', 'page.tsx'), 'utf8',
-    );
+    const web = readBotScreen();
     expect(web).toMatch(/draftUpdatedAt/);
     expect(web).toMatch(/e\.status === 409/);
     expect(web, 'بلا هذا يمحو أوّلُ blur عملَ غيرك بعد ثوانٍ')
@@ -125,9 +124,7 @@ describe('عقدُ سلوك البوت', () => {
     );
     expect(web).toMatch(/patch\('\/bot\/config'/);
     expect(web, 'وفترةٌ معطوبةٌ تُمسك قبل الإرسال أيضاً').toMatch(/const badRange/);
-    const page = readFileSync(
-      join(__dirname, '..', '..', 'web', 'src', 'app', 'app', 'bot', 'page.tsx'), 'utf8',
-    );
+    const page = readBotScreen();
     expect(page).toMatch(/<BotBehavior/);
     /* والأربعةُ لم تعد بطاقاتِ قراءة. («لا تُعدَّل من هنا» تبقى — وهي عن
        الثلاثة الأخرى التي تضبطها المنصّة: النموذج ودوراتُ الأدوات وعددُ

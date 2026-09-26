@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { BOT_SCREEN, BOT_SCREEN_ABS, readBotScreen } from '../../../test-support/bot-screen';
 
 /**
  * ★ حرّاسُ **ما بين الشاشات** — وهو المهمَل دائماً.
@@ -139,7 +140,7 @@ describe('الحوارُ يُدير التركيز — مرّةً واحدةً �
     const files = [
       join(__dirname, '..', 'src', 'components', 'Shell.tsx'),
       join(APP, 'console', 'page.tsx'),
-      join(APP, 'app', 'bot', 'page.tsx'),
+      ...BOT_SCREEN_ABS,
       join(APP, 'app', 'inbox', 'page.tsx'),
     ];
     for (const f of files) {
@@ -221,13 +222,18 @@ describe('كلُّ مرشّحٍ في رابطٍ داخليٍّ تقرؤه شاش
     const deaf = [...new Set(links.filter((l) => {
       const page = join(APP, l.route, 'page.tsx');
       if (!existsSync(page)) return true;
-      return !readFileSync(page, 'utf8').includes(`get('${l.param}')`);
+      /* ★ الشاشةُ مجلّدُها لا `page.tsx` وحده: شاشةُ البوت قُسّمت (#83) وقارئُ
+         `?tab=` صار في `state.tsx`. والمسحُ لملفّات المجلّد المباشرة فقط. */
+      const dir = join(APP, l.route);
+      const src = readdirSync(dir).filter((f) => f.endsWith('.tsx'))
+        .map((f) => readFileSync(join(dir, f), 'utf8')).join('\n');
+      return !src.includes(`get('${l.param}')`);
     }).map((l) => `${l.route}?${l.param}= (من ${l.file})`))];
     expect(deaf, 'رابطٌ يحمل مرشّحاً تُهمله شاشتُه: يُقرأ عطلاً ولا يظهر في سجلّ').toEqual([]);
   });
 
   it('★ وقيمةُ `?tab=` من تبويبات شاشة البوت نفسها — لا معرّفٌ مختلَق', () => {
-    const bot = readFileSync(join(APP, 'app', 'bot', 'page.tsx'), 'utf8');
+    const bot = readBotScreen();
     const decl = /const TABS = \[([\s\S]*?)\] as const;/.exec(bot)?.[1] ?? '';
     const ids = [...decl.matchAll(/id: '([a-z]+)'/g)].map((m) => m[1]!);
     expect(ids, 'تغيّر شكلُ TABS — حدِّث هذا الحارس').toContain('persona');

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { BOT_SCREEN, BOT_SCREEN_ABS, readBotScreen } from '../../../test-support/bot-screen';
 
 /**
  * ★ حرّاسُ الدفعة الثالثة — **البوت يعرف ما رفعه المالك**.
@@ -167,7 +168,7 @@ describe('مهمّةُ التضمين تصل بعد الإيداع وتُعاد 
 
 describe('الشاشة تقول الحقيقة عن الملفّات', () => {
   it('رفعُ ملفٍّ بعد النشر يفتح زرَّ النشر', () => {
-    const page = read('apps/web/src/app/app/bot/page.tsx');
+    const page = readBotScreen();
     expect(page, 'كانت المقارنة على النصّ والشخصيّة وحدهما، فالملفّ الجديد لا يُغيّر شيئاً')
       .toMatch(/filesChanged/);
     expect(page).toMatch(/changed\s*=\s*personaChanged \|\| kbChanged \|\| filesChanged/);

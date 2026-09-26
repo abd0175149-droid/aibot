@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { BOT_SCREEN, BOT_SCREEN_ABS, readBotScreen } from '../../../test-support/bot-screen';
 
 /**
  * ★ حرّاسُ باني الأدوات — **أداةٌ نصفُ مبنيّةٍ أمام زبونٍ حقيقيّ.**
@@ -39,7 +40,7 @@ describe('الأداةُ تُنشأ معطَّلةً حتّى يُحفظ الق�
   });
 
   it('★ وإغلاقُ الباني يعيد الجلب — أداةٌ حُفظت للتجربة ثمّ أُغلقت النافذة كانت تختفي', () => {
-    const page = strip(read(join(WEB, 'app', 'app', 'bot', 'page.tsx')));
+    const page = strip(readBotScreen());
     const at = page.indexOf('<ToolBuilder');
     expect(at).toBeGreaterThan(0);
     const block = page.slice(at, at + 700);
@@ -48,7 +49,7 @@ describe('الأداةُ تُنشأ معطَّلةً حتّى يُحفظ الق�
 });
 
 describe('الإيقافُ المؤقّت له زرّ', () => {
-  const page = read(join(WEB, 'app', 'app', 'bot', 'page.tsx'));
+  const page = readBotScreen();
 
   it('★ وكان المخرجُ الوحيد الحذف — بسرّ الأداة ومسارها', () => {
     expect(page).toContain('أوقفها مؤقّتاً');

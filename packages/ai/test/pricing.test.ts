@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { SEED_PRICES, computeCost, inputShare } from '../src/pricing';
+import { BOT_SCREEN, BOT_SCREEN_ABS, readBotScreen } from '../../../test-support/bot-screen';
 
 /**
  * ★ العطل الذي وُلد منه هذا الملفّ: نسخةُ بوتٍ نُشرت على نموذجٍ لا صفَّ سعرٍ
@@ -84,8 +85,7 @@ describe('تسعير النماذج — التغطية', () => {
    *   عمداً كي لا تُسحب `crypto` و`dns` إلى حزمة المتصفّح).
    */
   it('كلُّ نموذجٍ تعرضه شاشة البوت للعميل له صفُّ سعر', () => {
-    const page = join(__dirname, '..', '..', '..', 'apps', 'web', 'src', 'app', 'app', 'bot', 'page.tsx');
-    const src = readFileSync(page, 'utf8');
+    const src = readBotScreen();
     const block = /const MODEL: Record<string, string> = \{([\s\S]*?)\};/.exec(src);
     expect(block, 'تغيّر شكل خريطة MODEL في apps/web/src/app/app/bot/page.tsx — حدِّث هذا الحارس').toBeTruthy();
 

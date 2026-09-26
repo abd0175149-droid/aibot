@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { BOT_SCREEN, BOT_SCREEN_ABS, readBotScreen } from '../../../test-support/bot-screen';
 
 /**
  * ★★ **ثلاثةُ وعودٍ في المخطَّط والتعليقات لم يكن لها فعل.**
@@ -63,7 +64,7 @@ describe('★★ قفلُ المنصّة على البوت — لا يفتحه �
   });
 
   it('وشاشةُ البوت تقول السببَ وتعطّل «شغّل»', () => {
-    const page = bare('apps/web/src/app/app/bot/page.tsx');
+    const page = BOT_SCREEN.map(bare).join('\n');
     expect(page).toContain('const platformLock = cfg?.platformLockedAt');
     expect(page).toContain('const locked = Boolean(lockReason) || Boolean(platformLock);');
     expect(page).toContain('reason={lockReason ?? platformLock ?? undefined}');
