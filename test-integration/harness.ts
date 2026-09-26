@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readdirSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { startFakes, type Fakes } from './fakes';
 
@@ -83,7 +83,7 @@ export async function up(): Promise<Env> {
       ...COMPOSE, 'exec', '-T', '-e', `PGPASSWORD=${env.pgPassword}`, 'db',
       'psql', '-v', 'ON_ERROR_STOP=1', '--single-transaction', '-q',
       '-U', 'aibot', '-d', 'aibot', '-f', '-',
-    ], { cwd: REPO, input: require('node:fs').readFileSync(join(dir, f), 'utf8'), stdio: ['pipe', 'ignore', 'pipe'] });
+    ], { cwd: REPO, input: readFileSync(join(dir, f), 'utf8'), stdio: ['pipe', 'ignore', 'pipe'] });
   }
 
   /* ⚠️ كلمةُ دور التطبيق تُضبط **خارج** الترحيلات — كما في `deploy.sh`.

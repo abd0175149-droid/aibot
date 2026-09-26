@@ -30,7 +30,7 @@ afterAll(async () => {
 describe('ويبهوك ← وارد ← ردّ ← صادر', () => {
   it('★ القاعدةُ حقيقيّةٌ ومُرحَّلةٌ والدورُ عاديٌّ (فحصٌ ذاتيّ)', async () => {
     /* حزامٌ يبدأ على قاعدةٍ ناقصةٍ يُنتج فشلاً يبدو عطلَ شيفرة. */
-    const { getDb, withPlatform, sql } = await import('@aibot/db');
+    const { getDb, withPlatform, sql } = await import('../packages/db/src/index');
     const rows = await withPlatform(getDb(), 'تكامل: فحصُ المخطَّط', (tx) => tx.execute(
       sql`SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema='public'`,
     )) as unknown as Array<{ n: number }>;
@@ -38,7 +38,7 @@ describe('ويبهوك ← وارد ← ردّ ← صادر', () => {
   });
 
   it('★★★ دوران متتاليان في المحادثة نفسها — والثاني هو المقصود', async () => {
-    const { getDb, withPlatform, messages, conversations, eq, and, desc } = await import('@aibot/db');
+    const { getDb, withPlatform, messages, conversations, eq, and, desc } = await import('../packages/db/src/index');
     const { ensureDrillTenant } = await import('../apps/worker/scripts/drill-kit');
     const { handleInbound } = await import('../apps/worker/src/inbound');
     const { handleReply } = await import('../apps/worker/src/reply');
