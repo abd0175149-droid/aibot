@@ -25,7 +25,7 @@ export default function BotPage() {
 
       <PageHead
         title="البوت"
-        sub="خمسة أشياء تجعل بوتك مختلفاً — وكلّها بياناتٌ تضبطها أنت."
+        sub="شخصيّة بوتك ومعرفته وأدواته وسلوكه."
         actions={(
           <Row gap="sm">
             <Pill
@@ -36,7 +36,7 @@ export default function BotPage() {
             {/* ★ `pub.embedStatus === 'pending'` لا يشتعل أبداً: العامل يكتب
                 `ready` و`publishedVersionId` في معاملةٍ واحدة. فالحالة الموجودة
                 فعلاً — نسخةٌ نُشرت وتُجهَّز — هي التي لم يكن لها مؤشّر. */}
-            {pendingEmbed && <Pill tone="warn" label={`v${pendingVersion} تُجهَّز معرفتها…`} />}
+            {pendingEmbed && <Pill tone="warn" label={`v${pendingVersion} تجهّز معرفتها…`} />}
             {/* ★ أخطرُ فعلٍ في الشاشة لا يكون أضعفَ زرٍّ فيها: الإطفاء `danger`
                 وخلفه ورقةٌ تقول ما يحدث لرسائل زبائنك. والتشغيل بلا ورقة. */}
             <Button
@@ -56,9 +56,9 @@ export default function BotPage() {
           تحته آخرُ ما وصلنا لا الحقيقةَ اللحظيّة. */}
       {bot.error && bot.data && (
         <Note tone="warn">
-          <b>تعذّر تحديث حالة بوتك الآن.</b> ما تراه أدناه آخرُ ما وصلنا.{' '}
+          <b>تعذّر تحديث حالة بوتك الآن.</b> ما تراه أدناه آخر ما وصلنا.{' '}
           <Button size="sm" onClick={() => { void bot.reload(); void vers.reload(); }}>
-            أعِد المحاولة
+            أعد المحاولة
           </Button>
         </Note>
       )}
@@ -77,7 +77,7 @@ export default function BotPage() {
         <div className="sect">
           <div className="sect-h">
             <h2>ما سيصل زبائنك عند النشر</h2>
-            <span className="sect-c">مقارنةً بالنسخة التي تخدمهم الآن</span>
+            <span className="sect-c">مقارنة بالنسخة التي تخدمهم الآن</span>
           </div>
 
           <div className="rows bot-rows">
@@ -126,13 +126,13 @@ export default function BotPage() {
 
           {unsaved && (
             <Note tone="warn">
-              <b>على الشاشة تغييرٌ غير محفوظ.</b> النشر ينشر المسوّدة المحفوظة على الخادم،
-              لا ما تراه الآن. احفظ أوّلاً ليدخل ما كتبته في هذه النسخة.
+              <b>على الشاشة تغيير غير محفوظ.</b> النشر ينشر آخر ما حفظته،
+              لا ما تراه الآن. احفظ أوّلا ليدخل ما كتبته في هذه النسخة.
             </Note>
           )}
 
           <details className="bot-more">
-            <summary>أرِني الفرق سطراً سطراً</summary>
+            <summary>أرني الفرق سطرا سطرا</summary>
             <div className="bot-more-b">
               {personaChanged && (
                 <div>
@@ -152,7 +152,7 @@ export default function BotPage() {
                 </div>
               )}
               <p className="muted-p">
-                المخطوط بالأحمر يُحذف والأخضر يُضاف. ولا شيء من هذا يصل زبوناً قبل أن تنشر.
+                المخطوط بالأحمر يحذف والأخضر يضاف. ولا شيء من هذا يصل زبونا قبل أن تنشر.
               </p>
             </div>
           </details>
@@ -164,9 +164,9 @@ export default function BotPage() {
           وتخسر ما على شاشتك، أو تحفظ فوقه بقرارٍ منك. */}
       {conflict && (
         <Note tone="warn">
-          <b>تغيّرت المسوّدة من مكانٍ آخر.</b>{' '}
-          يمكن أنّك فتحتَها في تبويبٍ ثانٍ، أو أضفتَ تصحيحاً من الساحة. أوقفنا
-          الحفظَ التلقائيّ حتّى لا يُمحى ذاك العمل.{' '}
+          <b>تغيّرت تعديلاتك من مكان آخر.</b>{' '}
+          يمكن أنّك فتحتها في تبويب ثان، أو أضفت تصحيحا من «جرّب بوتك». أوقفنا
+          الحفظ التلقائيّ حتّى لا يمحى ذاك العمل.{' '}
           <Button size="sm" onClick={() => void takeLatest()}>حمّل الأحدث</Button>{' '}
           <Button
             size="sm" variant="quiet"
@@ -209,7 +209,7 @@ export default function BotPage() {
         open={ask?.k === 'stop'}
         title="أوقف بوتك عن كلّ زبائنك؟"
         onClose={() => setAsk(null)}
-        hint="ولا يمسّ هذا محادثةً يكتب فيها موظّفك — بوتك ساكتٌ عنها أصلاً."
+        hint="لا يتأثّر بهذا ما يكتبه موظّفوك."
         footer={(
           <Row gap="sm">
             <Button
@@ -220,18 +220,18 @@ export default function BotPage() {
             >
               أوقفه الآن
             </Button>
-            <Button onClick={() => setAsk(null)}>أبقِه يعمل</Button>
+            <Button onClick={() => setAsk(null)}>أبقه يعمل</Button>
           </Row>
         )}
       >
         <p className="muted-p">
-          <b>كلّ رسالةٍ تصل بعد الإيقاف تنتظر موظّفاً</b> — لا ردَّ آليّ، ولا يعلم زبونك
-          أنّ أحداً سيردّ عليه.
+          <b>كلّ رسالة تصل بعد الإيقاف تنتظر موظّفا</b> — لا ردّ آليّ، ولا يعلم زبونك
+          أنّ أحدا سيردّ عليه.
         </p>
         <p className="muted-p">
-          والأثر على قنواتك كلّها معاً، لا على محادثةٍ واحدة.
-          {pub ? <> ونسختك <span className="num">{`v${pub.version}`}</span> تبقى محفوظةً كما هي،
-            ويعود بوتك بضغطةٍ واحدة.</> : null}
+          والأثر على قنواتك كلّها معا، لا على محادثة واحدة.
+          {pub ? <> ونسختك <span className="num">{`v${pub.version}`}</span> تبقى محفوظة كما هي،
+            ويعود بوتك بضغطة واحدة.</> : null}
         </p>
       </Sheet>
 
@@ -239,7 +239,7 @@ export default function BotPage() {
         open={ask?.k === 'publish'}
         title="انشر للزبائن"
         onClose={() => setAsk(null)}
-        hint="بعد النشر يردّ بوتك بالنسخة الجديدة على كلّ رسالةٍ قادمة — ولا تُقطع محادثةٌ جارية."
+        hint="بعد النشر يردّ بوتك بالنسخة الجديدة على الرسائل القادمة."
         footer={(
           <Row gap="sm">
             <Button
@@ -252,7 +252,7 @@ export default function BotPage() {
             >
               انشر الآن
             </Button>
-            <Button onClick={() => setAsk(null)}>راجِع مرّةً أخرى</Button>
+            <Button onClick={() => setAsk(null)}>راجع مرّة أخرى</Button>
           </Row>
         )}
       >
@@ -286,14 +286,14 @@ export default function BotPage() {
         </div>
         {draftMode !== 'full' && (
           <p className="muted-p">
-            معرفتك فوق العتبة الأولى، فتُقطَّع وتُضمَّن أوّلاً —
+            معرفتك فوق العتبة الأولى، فتقطّع وتضمّن أوّلا —
             و{pub ? <span className="num">{`v${pub.version}`}</span> : 'النسخة السابقة'} تخدم
-            زبائنك حتّى تجهز الجديدة. قد يأخذ ذلك دقيقةً أو أكثر.
+            زبائنك حتّى تجهز الجديدة. قد يأخذ ذلك دقيقة أو أكثر.
           </p>
         )}
         {draftMode !== liveMode && (
           <p className="muted-p">
-            ووضعُ القراءة يتغيّر إلى <b>{MODE[draftMode]!.label}</b>: {MODE[draftMode]!.how}
+            ووضع القراءة يتغيّر إلى <b>{MODE[draftMode]!.label}</b>: {MODE[draftMode]!.how}
           </p>
         )}
       </Sheet>
@@ -302,7 +302,7 @@ export default function BotPage() {
         open={ask?.k === 'tool'}
         title="احذف هذه الأداة؟"
         onClose={() => setAsk(null)}
-        hint="الحذف لا يُسحب: يمحو المسار والمعاملات والسرّ المحفوظ معها."
+        hint="الحذف نهائيّ ولا يمكن التراجع عنه."
         footer={(
           <Row gap="sm">
             <Button
@@ -311,27 +311,27 @@ export default function BotPage() {
               busy={ask?.k === 'tool' && busyTool === ask.id}
               onClick={() => { if (ask?.k === 'tool') void deleteTool(ask.id, ask.name); }}
             >
-              احذفها نهائيّاً
+              احذفها نهائيّا
             </Button>
-            <Button onClick={() => setAsk(null)}>أبقِها</Button>
+            <Button onClick={() => setAsk(null)}>أبقها</Button>
           </Row>
         )}
       >
         <p className="muted-p">
           {ask?.k === 'tool' ? <><b dir="auto">«{ask.name}»</b> — </> : null}
-          بعد الحذف يجيب بوتك من نصّ معرفتك وحده في كلّ سؤالٍ كانت تجيبه، وقد يُعطي سعراً
-          قديماً أو يقول «لا أعرف» ويحوّل لموظّف.
+          بعد الحذف يجيب بوتك من نصّ معرفتك وحده في كلّ سؤال كانت تجيبه، وقد يعطي سعرا
+          قديما أو يقول «لا أعرف» ويحوّل لموظّف.
         </p>
         <p className="muted-p">
-          وإن كان العطل مؤقّتاً عند نظامك فالأفضل تعطيلها لا حذفها — تعود بنقرةٍ بعد الإصلاح.
+          وإن كان العطل مؤقّتا عند نظامك فالأفضل تعطيلها لا حذفها — تعود بنقرة بعد الإصلاح.
         </p>
       </Sheet>
 
       <Sheet
         open={ask?.k === 'rollback'}
-        title="عُد إلى نسخةٍ سابقة؟"
+        title="عد إلى نسخة سابقة؟"
         onClose={() => setAsk(null)}
-        hint="التراجع نشرُ نسخةٍ قديمة — لا تُحذف نسخةٌ ولا تُقطع محادثةٌ جارية."
+        hint="التراجع يعيد نسخة سابقة. لا يحذف شيء."
         footer={(
           <Row gap="sm">
             <Button
@@ -342,9 +342,9 @@ export default function BotPage() {
               reason={rollbackReason ?? undefined}
               onClick={() => { if (ask?.k === 'rollback') void rollback(ask.id, ask.version); }}
             >
-              عُد إليها الآن
+              عد إليها الآن
             </Button>
-            <Button onClick={() => setAsk(null)}>أبقِ الحالية</Button>
+            <Button onClick={() => setAsk(null)}>أبق الحالية</Button>
           </Row>
         )}
       >
@@ -352,16 +352,16 @@ export default function BotPage() {
           {ask?.k === 'rollback'
             ? (
               <>
-                يردّ بوتك بـ<span className="num">{`v${ask.version}`}</span> على كلّ رسالةٍ قادمة
+                يردّ بوتك بـ<span className="num">{`v${ask.version}`}</span> على كلّ رسالة قادمة
                 بدل <span className="num">{`v${pubVersion}`}</span> — بشخصيّتها ومعرفتها كما
-                كانت يومَ نُشرت.
+                كانت يوم نشرت.
               </>
             )
             : null}
         </p>
         <p className="muted-p">
-          ومسوّدتك على الشاشة <b>لا تُمسّ</b>: بعد التراجع يعود شريطُ «تغييراتك لم تصل زبائنك
-          بعد» لأنّ ما كتبتَه صار مختلفاً عن النسخة الحيّة — وتنشره متى شئت.
+          ومسوّدتك على الشاشة <b>لا تمسّ</b>: بعد التراجع يعود شريط «تغييراتك لم تصل زبائنك
+          بعد» لأنّ ما كتبته صار مختلفا عن النسخة الحيّة — وتنشره متى شئت.
         </p>
       </Sheet>
     </div>

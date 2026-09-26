@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
  */
 export const metadata: Metadata = {
   title: 'القنوات',
-  description: 'واتساب وإنستجرام: الربطُ والتجديد وحالةُ كلِّ قناة.',
+  description: 'واتساب وإنستجرام: الربط والتجديد وحالة كلّ قناة.',
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

@@ -151,7 +151,7 @@ describe('الحرّاس', () => {
 describe('المعرفة والاسترجاع', () => {
   it('التطبيع العربيّ يوحّد الصيغ فترتفع إصابة الكاش', () => {
     expect(normalizeArabic('بِكَمْ السِّعْرُ؟')).toBe(normalizeArabic('بكم السعر'));
-    expect(normalizeArabic('أهلاً')).toBe('اهلا');
+    expect(normalizeArabic('أهلا')).toBe('اهلا');
     expect(normalizeArabic('مــرحــبا')).toBe('مرحبا');
   });
 

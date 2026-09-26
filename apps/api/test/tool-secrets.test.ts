@@ -139,7 +139,7 @@ describe('الحجبُ في مخرَج القراءة', () => {
   });
 
   it('★★★ ولا `new URL` في الحجب — العنوانُ قالبٌ لا رابط', () => {
-    /* `new URL('https://x/v1/{{id}}')` يُعيد `.../%7B%7Bid%7D%7D`، و
+    /* `new URL('https://x/v1/{{id}}')` يعيد `.../%7B%7Bid%7D%7D`، و
        `searchParams.set` يُعيد تشفير كلّ قالبٍ في الاستعلام. فأداةٌ فيها
        `{{id}}` في المسار تنكسر بمجرّد أن يمرّ عنوانُها على URL ويُكتب. */
     const url = 'https://x.example.com/v1/{{id}}/x?api_key=sk_live_9aZ8bY7c&q={{term}}';

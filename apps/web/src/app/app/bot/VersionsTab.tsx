@@ -10,24 +10,24 @@ export function VersionsTab({ c }: { c: BotCtx }) {
   return (
           <Stack gap="md">
             <Note tone="brand">
-              <b>التراجع نشرُ نسخةٍ قديمة</b> — لا تُحذف نسخةٌ ولا يُفقد تاريخ، ومسوّدتك على
-              الشاشة تبقى كما هي. ولا تُقطع محادثةٌ جاريةٌ مع زبون.
+              <b>التراجع نشر نسخة قديمة</b> — لا تحذف نسخة ولا يفقد تاريخ، ومسوّدتك على
+              الشاشة تبقى كما هي. ولا تقطع محادثة جارية مع زبون.
             </Note>
             <DataView
               state={vers}
               skeletonRows={4}
               empty={{
                 when: (d) => d.length === 0,
-                title: 'لا نسخةَ بعد',
-                hint: 'كلُّ نشرٍ يُنشئ نسخةً تبقى هنا، ومنها تعود إلى أيّ نسخةٍ سابقة. اكتب الشخصيّة والمعرفة ثمّ انشر.',
+                title: 'لا نسخة بعد',
+                hint: 'كلّ نشر ينشئ نسخة تبقى هنا، ومنها تعود إلى أيّ نسخة سابقة. اكتب الشخصيّة والمعرفة ثمّ انشر.',
                 action: <Button onClick={() => setTab('persona')}>اذهب إلى الشخصيّة</Button>,
               }}
             >
               {(rows) => (
                 <div className="sect">
                   <div className="sect-h">
-                    <h2>نسخُ بوتك</h2>
-                    <span className="sect-c">الأحدث أوّلاً</span>
+                    <h2>نسخ بوتك</h2>
+                    <span className="sect-c">الأحدث أوّلا</span>
                   </div>
                   <div className="rows bot-rows">
                     {rows.map((v) => {
@@ -37,7 +37,7 @@ export function VersionsTab({ c }: { c: BotCtx }) {
                       const why = isLive
                         ? 'هذه النسخة تخدم زبائنك الآن.'
                         : v.embedStatus === 'pending'
-                          ? 'ما زالت معرفتها تُجهَّز — انتظر جهوزها.'
+                          ? 'ما زالت معرفتها تجهّز — انتظر جهوزها.'
                           : v.embedStatus === 'failed'
                             ? 'فشل تجهيز معرفتها، فلو عادت أجاب بوتك «لا أعرف» عن كلّ شيء. انشر مسوّدتك من جديد.'
                             : rollbackReason;
@@ -53,7 +53,7 @@ export function VersionsTab({ c }: { c: BotCtx }) {
                           <span className="rm-v"><small>{fmt.when(v.publishedAt)}</small></span>
                           <span className="rm-c">
                             {isLive && <Tag tone="ok" label="تخدم زبائنك الآن" />}
-                            {!isLive && v.embedStatus === 'pending' && <Tag tone="warn" label="تُجهَّز معرفتها" />}
+                            {!isLive && v.embedStatus === 'pending' && <Tag tone="warn" label="تجهّز معرفتها" />}
                             {!isLive && v.embedStatus === 'failed' && <Tag tone="crit" label="فشل تجهيز معرفتها" />}
                             {!isLive && (
                               <Button
@@ -62,7 +62,7 @@ export function VersionsTab({ c }: { c: BotCtx }) {
                                 reason={why ?? undefined}
                                 onClick={() => setAsk({ k: 'rollback', id: v.id, version: v.version })}
                               >
-                                عُد إليها
+                                عد إليها
                               </Button>
                             )}
                           </span>

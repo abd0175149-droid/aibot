@@ -307,7 +307,7 @@ function Thin({ what, have, need, onWiden }: {
       <span className="rp-thin">{have} — {need}</span>
       {onWiden && (
         <span className="rp-thin-a">
-          <Button size="sm" onClick={onWiden}>وسِّع المدى إلى 90 يوماً</Button>
+          <Button size="sm" onClick={onWiden}>وسّع المدى إلى 90 يوما</Button>
         </span>
       )}
     </Note>
@@ -367,14 +367,14 @@ export default function ReportsPage() {
 
   const rangeLabel = data
     ? `${data.range.from} → ${data.range.to}`
-    : preset != null ? `${preset} يوماً` : `${from} → ${to}`;
+    : preset != null ? `${preset} يوما` : `${from} → ${to}`;
 
   return (
     <Stack gap="lg">
       {toastNode}
       <PageHead
         title="التقارير"
-        sub="سؤالٌ واحد: هل بوتك يتحسّن؟ — اتّجاهٌ عبر الزمن، وكلُّ رقمٍ مقارنٌ بالمدى السابق نفسِه."
+        sub="هل يتحسّن بوتك؟ كلّ رقم مقارن بالفترة السابقة."
         actions={<Pill tone="neutral" label={rangeLabel} mark={false} />}
       />
 
@@ -384,7 +384,7 @@ export default function ReportsPage() {
 
       {/* ★ الرصيف **خارج** تفريع الحالات: مدًى فارغٌ أو مرفوضٌ يجب أن يبقى
           معه مخرجٌ — وإلّا انحصر العميل في صندوق خطأٍ لا يملك منه بديلاً. */}
-      <ScreenDock hint="الملفُّ يحمل يوماً في كلّ سطرٍ على المدى نفسِه — لا الأرقامَ المجمَّعة وحدها.">
+      <ScreenDock hint="الملفّ فيه سطر لكلّ يوم.">
         <ChipRow label="المدى الزمنيّ">
           {PRESETS.map((d) => (
             <button
@@ -394,7 +394,7 @@ export default function ReportsPage() {
               aria-pressed={preset === d}
               onClick={() => setPreset(d)}
             >
-              <span className="num">{d}</span> {plural(d, 'يوم', 'يومان', 'أيّام', 'يوماً')}
+              <span className="num">{d}</span> {plural(d, 'يوم', 'يومان', 'أيّام', 'يوما')}
             </button>
           ))}
           <button
@@ -407,30 +407,30 @@ export default function ReportsPage() {
               setPickOpen(true);
             }}
           >
-            مدًى مخصَّص
+            مدى مخصّص
           </button>
         </ChipRow>
         <Button variant="primary" size="lg" wide busy={exporting} onClick={() => void exportCsv()}>
-          نزِّل الاتّجاه (CSV)
+          نزّل الاتّجاه (CSV)
         </Button>
       </ScreenDock>
 
       <Sheet
         open={pickOpen}
-        title="مدًى مخصَّص"
+        title="مدى مخصّص"
         onClose={() => setPickOpen(false)}
-        hint="المدى مشمولُ الطرفين، والمقارنةُ تكون بمدًى سابقٍ بطوله تماماً. ونهايةٌ في المستقبل تُقَصّ إلى اليوم."
+        hint="نقارن بفترة سابقة بالطول نفسه."
         footer={(
           <Row gap="xs">
-            <Button variant="primary" onClick={applyCustom}>طبِّق المدى</Button>
-            <Button variant="quiet" onClick={() => setPickOpen(false)}>أغلِق</Button>
+            <Button variant="primary" onClick={applyCustom}>طبّق المدى</Button>
+            <Button variant="quiet" onClick={() => setPickOpen(false)}>أغلق</Button>
           </Row>
         )}
       >
-        <Field label="من" id="rp-from" hint="أوّل يومٍ في التقرير — مشمول">
+        <Field label="من" id="rp-from" hint="أوّل يوم في التقرير — مشمول">
           <Input id="rp-from" type="date" value={draftFrom} onChange={setDraftFrom} dir="ltr" />
         </Field>
-        <Field label="إلى" id="rp-to" hint="آخرُ يومٍ في التقرير — مشمول">
+        <Field label="إلى" id="rp-to" hint="آخر يوم في التقرير — مشمول">
           <Input id="rp-to" type="date" value={draftTo} onChange={setDraftTo} dir="ltr" />
         </Field>
       </Sheet>
@@ -480,66 +480,66 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
   if (noData) {
     band = {
       sev: 'plain',
-      head: 'لا حركةَ في هذا المدى — ولا شيءَ يُقاس',
-      sub: <>جرّب مدًى أوسع من الرصيف أسفل، أو راجع القنوات إن كنت تتوقّع رسائل.</>,
+      head: 'لا حركة في هذا المدى — ولا شيء يقاس',
+      sub: <>جرّب مدى أوسع من الرصيف أسفل، أو راجع القنوات إن كنت تتوقّع رسائل.</>,
     };
   } else if (!enough.rate) {
     band = {
       sev: 'plain',
       head: <>
         <span className="num">{fmt.num(selfServe.billed)}</span>
-        {' '}{plural(selfServe.billed, 'محادثةٌ', 'محادثتان', 'محادثات', 'محادثةً')} لا تكفي لاتّجاه
+        {' '}{plural(selfServe.billed, 'محادثة', 'محادثتان', 'محادثات', 'محادثة')} لا تكفي لاتّجاه
       </>,
       sub: <>
-        نقرأ الاكتفاء الذاتيّ اتّجاهاً من <span className="num">{fmt.num(enough.minBilled)}</span>
-        {' '}محادثةٍ مُفوترةٍ فأكثر. وما دونها نعرض العدَّ ولا نرسم خطّاً يوحي بمعنى.
+        نقرأ الاكتفاء الذاتيّ اتّجاها من <span className="num">{fmt.num(enough.minBilled)}</span>
+        {' '}محادثة مفوترة فأكثر. وما دونها نعرض العدّ ولا نرسم خطّا يوحي بمعنى.
       </>,
     };
   } else if (dropped) {
     band = {
       sev: ratePts != null && ratePts <= -8 ? 'bad' : 'warn',
       head: <>
-        اكتفاءُ بوتك الذاتيّ نزل من <span className="num">{fmt.pct(prevRate ?? 0)}</span> إلى
+        اكتفاء بوتك الذاتيّ نزل من <span className="num">{fmt.pct(prevRate ?? 0)}</span> إلى
         {' '}<span className="num">{fmt.pct(rate ?? 0)}</span>
       </>,
       sub: <>
-        كلُّ محادثةٍ تنزل عن البوت تصير دقائقَ موظّف. وأكثرُ ما يعجز عنه في قسم
-        «أين يعجز» أسفل — يُقرأ قائمةَ عملٍ لمعرفتك لا تقريرَ عطل.
+        كلّ محادثة تنزل عن البوت تصير دقائق موظّف. وأكثر ما يعجز عنه في قسم
+        «أين يعجز» أسفل — يقرأ قائمة عمل لمعرفتك لا تقرير عطل.
       </>,
     };
   } else if (costUp) {
     band = {
       sev: 'warn',
       head: <>
-        كلفةُ المحادثة الواحدة صارت <span className="num">{fmt.money(perConv)}</span> بعد
+        كلفة المحادثة الواحدة صارت <span className="num">{fmt.money(perConv)}</span> بعد
         {' '}<span className="num">{fmt.money(cost.prevPerConv)}</span>
       </>,
       sub: <>
-        أي <span className="num">{(costRatio ?? 1).toFixed(1)}</span> ضعفَ المدى السابق، والاكتفاءُ
-        الذاتيُّ لم ينزل — فالزيادةُ في طول المحادثات أو في المعرفة المحقونة لا في التحويل.
+        أي <span className="num">{(costRatio ?? 1).toFixed(1)}</span> ضعف المدى السابق، والاكتفاء
+        الذاتيّ لم ينزل — فالزيادة في طول المحادثات أو في المعرفة المحقونة لا في التحويل.
       </>,
     };
   } else if (improved) {
     band = {
       sev: 'good',
       head: <>
-        اكتفاءُ بوتك الذاتيّ ارتفع إلى <span className="num">{fmt.pct(rate ?? 0)}</span>
+        اكتفاء بوتك الذاتيّ ارتفع إلى <span className="num">{fmt.pct(rate ?? 0)}</span>
         {' '}بعد <span className="num">{fmt.pct(prevRate ?? 0)}</span>
       </>,
       sub: <>
-        هذا مقياسُ نجاح المنتج: ما أنهاه البوت وحده لم يكلّفك موظّفاً. وأبقِ عينك على
-        الكلفة لكلّ محادثةٍ أسفل — ارتفاعُها يأكل ما كسبتَه.
+        هذا مقياس نجاح المنتج: ما أنهاه البوت وحده لم يكلّفك موظّفا. وأبق عينك على
+        الكلفة لكلّ محادثة أسفل — ارتفاعها يأكل ما كسبته.
       </>,
     };
   } else {
     band = {
       sev: 'good',
       head: <>
-        لا شيءَ يحتاجك — الاكتفاء الذاتيّ ثابتٌ عند <span className="num">{fmt.pct(rate ?? 0)}</span>
+        لا شيء يحتاجك — الاكتفاء الذاتيّ ثابت عند <span className="num">{fmt.pct(rate ?? 0)}</span>
       </>,
       sub: <>
-        على <span className="num">{fmt.num(selfServe.billed)}</span> محادثةٍ مُفوترةٍ في
-        {' '}<span className="num">{fmt.num(range.days)}</span> {plural(range.days, 'يوم', 'يومَين', 'أيّام', 'يوماً')}،
+        على <span className="num">{fmt.num(selfServe.billed)}</span> محادثة مفوترة في
+        {' '}<span className="num">{fmt.num(range.days)}</span> {plural(range.days, 'يوم', 'يومين', 'أيّام', 'يوما')}،
         {' '}مقابل <span className="num">{fmt.pct(prevRate ?? 0)}</span> في المدى السابق.
       </>,
     };
@@ -582,12 +582,12 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
     <>
       <Leg kind="line">
         هذا المدى (<span className="num">{fmt.num(range.days)}</span>{' '}
-        {plural(range.days, 'يوم', 'يومَين', 'أيّام', 'يوماً')})
+        {plural(range.days, 'يوم', 'يومين', 'أيّام', 'يوما')})
       </Leg>
       <Leg kind="prev">
         المدى السابق — <span className="num">{prev.from}</span> إلى <span className="num">{prev.to}</span>
       </Leg>
-      {openEnd && <Leg kind="open">اليومُ لم ينتهِ — نقطةٌ ناقصةٌ لا مقيسة</Leg>}
+      {openEnd && <Leg kind="open">اليوم لم ينته — نقطة ناقصة لا مقيسة</Leg>}
       {extra}
     </>
   );
@@ -603,11 +603,11 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
         </span>
       ),
     },
-    { key: 'asks', head: 'سُئل عنه', num: true, cell: (g) => fmt.num(g.asks) },
+    { key: 'asks', head: 'سئل عنه', num: true, cell: (g) => fmt.num(g.asks) },
     { key: 'hand', head: 'انتهى بموظّف', num: true, cell: (g) => fmt.num(g.handoffs) },
     {
       key: 'rate',
-      head: 'نسبةُ التحويل',
+      head: 'نسبة التحويل',
       cell: (g) => (
         <span className="rp-mrow">
           {/* وهنا العكس: نسبةُ تحويلٍ عاليةٌ خبرٌ سيّئ، فالعتباتُ التلقائيّة
@@ -630,7 +630,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
         <Hero
           sev={dropped ? (ratePts != null && ratePts <= -8 ? 'bad' : 'warn') : improved ? 'good' : 'plain'}
           value={fmt.pct(rate ?? 0)}
-          label="مِن محادثاتك أنهاها بوتك وحده — بلا تدخّلِ موظّف"
+          label="من محادثاتك أنهاها بوتك وحده"
           /* ★ `tone: 'brand'` **إلزاميّةٌ هنا**: عتباتُ `Meter` التلقائيّة مكتوبةٌ
              لمنسوبٍ يُخشى ارتفاعُه (استهلاكٌ من سقف)، فتصبغ 84٪ كهرمانيّاً —
              و84٪ اكتفاءٍ ذاتيٍّ أفضلُ رقمٍ في الشاشة. والمقياسُ هنا منسوبٌ
@@ -639,7 +639,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
           ctx={(
             <>
               <span className="num">{fmt.num(selfServe.solo)}</span> من
-              {' '}<span className="num">{fmt.num(selfServe.billed)}</span> محادثةٍ مُفوترة ·
+              {' '}<span className="num">{fmt.num(selfServe.billed)}</span> محادثة مفوترة ·
               {' '}
               {rateDelta && ratePts != null
                 ? (
@@ -656,8 +656,8 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 )
                 : (
                   <>
-                    ولا مقارنةَ بعد: المدى السابق فيه
-                    {' '}<span className="num">{fmt.num(selfServe.prevBilled)}</span> محادثةٍ مُفوترةٍ فقط
+                    ولا مقارنة بعد: المدى السابق فيه
+                    {' '}<span className="num">{fmt.num(selfServe.prevBilled)}</span> محادثة مفوترة فقط
                   </>
                 )}
             </>
@@ -668,12 +668,12 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
           sev="plain"
           value={fmt.num(selfServe.billed)}
           unit={`/ ${fmt.num(enough.minBilled)}`}
-          label="محادثةً مُفوترةً في هذا المدى — والاتّجاه يبدأ من العشر"
+          label="محادثة محسوبة في هذه الفترة. يظهر الاتّجاه بعد 10"
           ctx={(
             <>
-              فتحتَ <span className="num">{fmt.num(total.opened)}</span> محادثةً، ومنها
-              {' '}<span className="num">{fmt.num(selfServe.billed)}</span> رُدَّ فيها فصارت مُفوترة.
-              {' '}ولا نرسم اتّجاهاً على هذا العدد — الخطُّ عليه يوحي بمعنى لا يملكه.
+              فتحت <span className="num">{fmt.num(total.opened)}</span> محادثة، ومنها
+              {' '}<span className="num">{fmt.num(selfServe.billed)}</span> ردّ فيها فصارت مفوترة.
+              {' '}ولا نرسم اتّجاها على هذا العدد — الخطّ عليه يوحي بمعنى لا يملكه.
             </>
           )}
         />
@@ -681,14 +681,14 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
 
       {noData ? (
         <Empty
-          title="لا رسائلَ ولا محادثاتٍ في هذا المدى"
-          hint="التقرير يقرأ ما جرى فعلاً. إن كنت تتوقّع حركةً فراجع صفحة القنوات — قناةٌ غير موصولةٍ تبدو صامتةً لا معطوبة. وإن كان المدى قصيراً فوسِّعه من الرصيف أسفل."
+          title="لا رسائل ولا محادثات في هذا المدى"
+          hint="إن كنت تتوقّع رسائل فتأكّد من القنوات، أو اختر فترة أطول."
         />
       ) : (
         <>
           {/* ══════════════ ① الحجم ══════════════ */}
           <Section
-            title="الحجم — ومتى تحتاج موظّفاً"
+            title="الحجم — ومتى تحتاج موظّفا"
             sub={(
               <>
                 <span className="num">{range.from}</span> إلى <span className="num">{range.to}</span>
@@ -699,8 +699,8 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
             {enough.volume ? (
               <div className="rp-2">
                 <Fig
-                  head="محادثاتٌ فُتحت"
-                  sub="نافذةُ 24 ساعةً تُفتح بأوّل رسالةٍ من الزبون"
+                  head="محادثات فتحت"
+                  sub="تبدأ المحادثة بأوّل رسالة من الزبون"
                   top={fmt.num(convMax)}
                   bottom="0"
                   axis={timeAxis}
@@ -713,7 +713,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                   )}
                 >
                   <Line
-                    label={`محادثاتٌ فُتحت يوماً بيوم — المجموع ${total.opened}، وأعلى يومٍ ${convMax}`}
+                    label={`محادثات فتحت يوما بيوم — المجموع ${total.opened}، وأعلى يوم ${convMax}`}
                     values={days.map((d) => d.opened)}
                     prev={prevDays.map((d) => d.opened)}
                     max={convMax}
@@ -722,22 +722,22 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 </Fig>
 
                 <Fig
-                  head="رسائلُ الزبائن"
-                  sub="الواردُ وحده — وردُّ البوت يتبعه فلا يقول شيئاً جديداً عن الضغط"
+                  head="رسائل الزبائن"
+                  sub="رسائل الزبائن الواردة"
                   top={fmt.num(custMax)}
                   bottom="0"
                   axis={timeAxis}
                   legend={timeLegend()}
                   note={(
                     <>
-                      المجموع <b className="num">{fmt.num(total.cust)}</b>، وردَّ بوتك
+                      المجموع <b className="num">{fmt.num(total.cust)}</b>، وردّ بوتك
                       {' '}<span className="num">{fmt.num(total.bot)}</span> وموظّفوك
                       {' '}<span className="num">{fmt.num(total.agent)}</span>.
                     </>
                   )}
                 >
                   <Line
-                    label={`رسائلُ الزبائن يوماً بيوم — المجموع ${total.cust}، وأعلى يومٍ ${custMax}`}
+                    label={`رسائل الزبائن يوما بيوم — المجموع ${total.cust}، وأعلى يوم ${custMax}`}
                     values={days.map((d) => d.cust)}
                     prev={prevDays.map((d) => d.cust)}
                     max={custMax}
@@ -747,14 +747,14 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
               </div>
             ) : (
               <Thin
-                what="المدى أقصرُ من أن يُرسم عليه خطّ"
+                what="المدى أقصر من أن يرسم عليه خطّ"
                 have={(
                   <>
                     فيه <span className="num">{fmt.num(enough.liveDays)}</span>
-                    {' '}{plural(enough.liveDays, 'يومٌ', 'يومان', 'أيّام', 'يوماً')} فيها رسائل
+                    {' '}{plural(enough.liveDays, 'يوم', 'يومان', 'أيّام', 'يوما')} فيها رسائل
                   </>
                 )}
-                need="ونحتاج ثلاثةً على الأقلّ. والعدُّ أدناه مقيسٌ وصحيح — الخطُّ وحده هو ما لا نرسمه."
+                need="ونحتاج ثلاثة على الأقلّ. والعدّ أدناه مقيس وصحيح — الخطّ وحده هو ما لا نرسمه."
                 onWiden={range.days < 90 ? onWiden : undefined}
               />
             )}
@@ -762,8 +762,8 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
             {enough.busy ? (
               <div className="rp-2">
                 <Fig
-                  head="أيّ أيّام الأسبوع أكثر انشغالاً"
-                  sub="مجموعُ رسائل الزبائن في المدى كلِّه"
+                  head="أيّ أيّام الأسبوع أكثر انشغالا"
+                  sub="مجموع رسائل الزبائن في المدى كلّه"
                   top={fmt.num(dowMax)}
                   bottom="0"
                   axis={(
@@ -775,20 +775,20 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                   )}
                   legend={(
                     <>
-                      <Leg kind="bar">يومٌ من الأسبوع</Leg>
-                      <Leg kind="peak">الأكثرُ انشغالاً</Leg>
+                      <Leg kind="bar">يوم من الأسبوع</Leg>
+                      <Leg kind="peak">الأكثر انشغالا</Leg>
                     </>
                   )}
                   note={(
                     <>
-                      الأكثرُ انشغالاً <b>{DOW[data.volume.byDow[dowPeak]?.dow ?? 7] ?? ''}</b> بـ
-                      {' '}<b className="num">{fmt.num(dowMax)}</b> رسالة — وهذا يومُ الموظّف
-                      إن قرّرتَ أن تُدخل واحداً.
+                      الأكثر انشغالا <b>{DOW[data.volume.byDow[dowPeak]?.dow ?? 7] ?? ''}</b> بـ
+                      {' '}<b className="num">{fmt.num(dowMax)}</b> رسالة — وهذا يوم الموظّف
+                      إن قرّرت أن تدخل واحدا.
                     </>
                   )}
                 >
                   <Bars
-                    label={`رسائلُ الزبائن على أيّام الأسبوع — أكثرها ${DOW[data.volume.byDow[dowPeak]?.dow ?? 7] ?? ''} بـ${dowMax}`}
+                    label={`رسائل الزبائن على أيّام الأسبوع — أكثرها ${DOW[data.volume.byDow[dowPeak]?.dow ?? 7] ?? ''} بـ${dowMax}`}
                     values={dowVals}
                     max={dowMax}
                     peak={dowPeak}
@@ -796,8 +796,8 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 </Fig>
 
                 <Fig
-                  head="وأيُّ ساعات اليوم"
-                  sub={<>الساعةُ بتوقيت <span className="num">{range.tz}</span>، والزمنُ من اليمين إلى اليسار</>}
+                  head="وأيّ ساعات اليوم"
+                  sub={<>الساعة بتوقيت <span className="num">{range.tz}</span>، والزمن من اليمين إلى اليسار</>}
                   top={fmt.num(hourMax)}
                   bottom="0"
                   axis={(
@@ -810,14 +810,14 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                   )}
                   legend={(
                     <>
-                      <Leg kind="bar">ساعةٌ من اليوم</Leg>
-                      <Leg kind="peak">الأكثرُ انشغالاً</Leg>
+                      <Leg kind="bar">ساعة من اليوم</Leg>
+                      <Leg kind="peak">الأكثر انشغالا</Leg>
                     </>
                   )}
                   note={data.volume.peak
                     ? (
                       <>
-                        أعلى خليّةٍ في المدى: <b>{DOW[data.volume.peak.dow] ?? ''}</b> عند
+                        أعلى خليّة في المدى: <b>{DOW[data.volume.peak.dow] ?? ''}</b> عند
                         {' '}<b className="num">{hh(data.volume.peak.hour)}</b> بـ
                         {' '}<b className="num">{fmt.num(data.volume.peak.n)}</b> رسالة.
                       </>
@@ -825,7 +825,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                     : undefined}
                 >
                   <Bars
-                    label={`رسائلُ الزبائن على ساعات اليوم — أكثرها ${hh(hourPeak)} بـ${hourMax}`}
+                    label={`رسائل الزبائن على ساعات اليوم — أكثرها ${hh(hourPeak)} بـ${hourMax}`}
                     values={hourVals}
                     max={hourMax}
                     peak={hourPeak}
@@ -834,22 +834,22 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
               </div>
             ) : (
               <Thin
-                what="وأوقاتُ الانشغال تحتاج رسائلَ أكثر"
+                what="وأوقات الانشغال تحتاج رسائل أكثر"
                 have={(
                   <>
                     عندك <span className="num">{fmt.num(total.cust)}</span>
-                    {' '}{plural(total.cust, 'رسالةٌ', 'رسالتان', 'رسائل', 'رسالةً')} من الزبائن
+                    {' '}{plural(total.cust, 'رسالة', 'رسالتان', 'رسائل', 'رسالة')} من الزبائن
                   </>
                 )}
-                need="ونحتاج عشرين على الأقلّ قبل أن نقول «الخميس مساءً» — وإلّا فالذروةُ مصادفةٌ لا نمط."
+                need="ونحتاج عشرين على الأقلّ قبل أن نقول «الخميس مساء» — وإلّا فالذروة مصادفة لا نمط."
                 onWiden={range.days < 90 ? onWiden : undefined}
               />
             )}
 
             <Rows>
               <MetricRow
-                k="محادثاتٌ فُتحت"
-                note="نافذةٌ لكلّ قناةٍ لا لكلّ إنسان"
+                k="محادثات فتحت"
+                note="تُحسب لكلّ قناة على حدة"
                 value={fmt.num(total.opened)}
                 mid={convDelta
                   ? (
@@ -863,8 +863,8 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                   : undefined}
               />
               <MetricRow
-                k="رسائلُ الزبائن"
-                note="الواردُ وحده — لا ردودُ بوتك ولا موظّفيك"
+                k="رسائل الزبائن"
+                note="الوارد وحده — لا ردود بوتك ولا موظّفيك"
                 value={fmt.num(total.cust)}
                 mid={custDelta
                   ? (
@@ -878,12 +878,12 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                   : undefined}
               />
               <MetricRow
-                k="ردودُ بوتك لكلّ رسالةِ زبون"
-                note="أعلى من واحدٍ يعني أنّه يشرح أكثر من أن يُجيب"
+                k="ردود بوتك لكلّ رسالة زبون"
+                note="أكثر من واحد يعني أنّه يطيل"
                 value={total.cust ? (total.bot / total.cust).toFixed(2) : '—'}
                 mid={(
                   <span className="sc-ctx">
-                    <span className="num">{fmt.num(total.bot)}</span> ردّاً على
+                    <span className="num">{fmt.num(total.bot)}</span> ردّا على
                     {' '}<span className="num">{fmt.num(total.cust)}</span> رسالة
                   </span>
                 )}
@@ -893,30 +893,30 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
 
           {/* ══════════════ ② الاكتفاء الذاتيّ ══════════════ */}
           <Section
-            title="الاكتفاء الذاتيّ — مقياسُ نجاح المنتج"
-            sub="ما أنهاه البوت وحده: ردَّ فيه، ولم يكتب فيه موظّفٌ بعد فتح النافذة"
+            title="الاكتفاء الذاتيّ — مقياس نجاح المنتج"
+            sub="ما أنهاه البوت وحده دون موظّف"
           >
             {enough.line && enough.rate ? (
               <Fig
-                head="نسبةُ ما أنهاه البوت وحده — يوماً بيوم"
-                sub="والخطُّ المقطَّعُ الأفقيُّ نسبةُ المدى السابق كاملاً"
+                head="نسبة ما أنهاه البوت وحده — يوما بيوم"
+                sub="الخطّ المتقطّع: الفترة السابقة"
                 top={fmt.pct(rateMax)}
                 bottom="0"
                 axis={timeAxis}
                 legend={timeLegend(
                   prevRate != null
-                    ? <Leg kind="base">نسبةُ المدى السابق: <span className="num">{fmt.pct(prevRate)}</span></Leg>
+                    ? <Leg kind="base">نسبة المدى السابق: <span className="num">{fmt.pct(prevRate)}</span></Leg>
                     : undefined,
                 )}
                 note={(
                   <>
-                    ويومٌ بلا محادثةٍ مُفوترةٍ يهبط إلى الأرضيّة — لا «صفرَ اكتفاءٍ» بل
-                    «لا مقياسَ يومَها». والنسبةُ الجامعةُ أعلى الشاشة هي ما يُقرَّر عليه.
+                    ويوم بلا محادثة مفوترة يهبط إلى الأرضيّة — لا «صفر اكتفاء» بل
+                    «لا مقياس يومها». والنسبة الجامعة أعلى الشاشة هي ما يقرّر عليه.
                   </>
                 )}
               >
                 <Line
-                  label={`نسبةُ ما أنهاه البوت وحده يوماً بيوم — ${Math.round((rate ?? 0) * 100)}% على المدى كلِّه`}
+                  label={`نسبة ما أنهاه البوت وحده يوما بيوم — ${Math.round((rate ?? 0) * 100)}% على المدى كلّه`}
                   values={rateSeries}
                   prev={prevRateSeries}
                   max={rateMax}
@@ -926,15 +926,15 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
               </Fig>
             ) : (
               <Thin
-                what="لا خطَّ اتّجاهٍ على هذا العدد"
+                what="لا خطّ اتّجاه على هذا العدد"
                 have={(
                   <>
                     <span className="num">{fmt.num(enough.billedDays)}</span>
-                    {' '}{plural(enough.billedDays, 'يومٌ', 'يومان', 'أيّام', 'يوماً')} فيها محادثةٌ
-                    مُفوترةٌ، ومجموعُها <span className="num">{fmt.num(selfServe.billed)}</span>
+                    {' '}{plural(enough.billedDays, 'يوم', 'يومان', 'أيّام', 'يوما')} فيها محادثة
+                    مفوترة، ومجموعها <span className="num">{fmt.num(selfServe.billed)}</span>
                   </>
                 )}
-                need={`ونحتاج ثلاثةَ أيّامٍ و${enough.minBilled} محادثةً. والعدُّ أدناه مقيسٌ وصحيح.`}
+                need={`ونحتاج ثلاثة أيّام و${enough.minBilled} محادثة. والعدّ أدناه مقيس وصحيح.`}
                 onWiden={range.days < 90 ? onWiden : undefined}
               />
             )}
@@ -942,7 +942,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
             <Rows>
               <MetricRow
                 k="أنهاها البوت وحده"
-                note="من المحادثات المُفوترة في هذا المدى"
+                note="من المحادثات المفوترة في هذا المدى"
                 value={fmt.num(selfServe.solo)}
                 unit={`/ ${fmt.num(selfServe.billed)}`}
                 mid={(
@@ -956,8 +956,8 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 )}
               />
               <MetricRow
-                k="احتاجت موظّفاً"
-                note="كتب فيها موظّفٌ بعد فتح النافذة — وهي كلفةُ وقتٍ لا كلفةُ ذكاء"
+                k="احتاجت موظّفا"
+                note="محادثات احتاجت موظّفا"
                 value={fmt.num(selfServe.billed - selfServe.solo)}
                 mid={(
                   <span className="sc-ctx">
@@ -968,20 +968,20 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 )}
               />
               <MetricRow
-                k="وسيطُ زمن الردّ"
-                note="نصفُ الردود أسرعُ منه ونصفُها أبطأ — والوسيط لا يخفي ذيلاً"
+                k="وسيط زمن الردّ"
+                note="نصف الردود أسرع من هذا ونصفها أبطأ"
                 value={gaps.medianLatencyMs ? (gaps.medianLatencyMs / 1000).toFixed(1) : '—'}
                 unit={gaps.medianLatencyMs ? 'ث' : undefined}
-                mid={<Tag line mark={false} label="على مجموعات الردّ الحيّة — لا الساحة" />}
+                mid={<Tag line mark={false} label="من ردود الزبائن الحقيقيّة — لا التجارب" />}
               />
             </Rows>
           </Section>
 
           {/* ══════════════ ③ أين يعجز ══════════════ */}
           <Section
-            title="أين يعجز — قائمةُ عملٍ لمعرفتك"
+            title="أين يعجز — قائمة عمل لمعرفتك"
             sub={enough.gaps
-              ? 'الموضوعُ عنوانُ المقطع في معرفتك أنت، لا تصنيفاً نخترعه'
+              ? 'الموضوع عنوان المقطع في معرفتك أنت، لا تصنيفا نخترعه'
               : undefined}
           >
             {enough.gaps ? (
@@ -994,27 +994,27 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                   />
                 </div>
                 <p className="muted-p">
-                  كلُّ سطرٍ موضوعٌ سأل عنه زبونٌ وانتهى بموظّفٍ داخل نفس اليوم. والسؤالُ
-                  المقتبَسُ تحت الموضوع سؤالُ زبونٍ حقيقيّ — فأضِف جوابَه إلى معرفتك وستراه
-                  ينزل من هذه القائمة في المدى القادم. و«سؤالٌ لا يقابله شيءٌ في معرفتك»
-                  أقوى سطرٍ هنا: لا مقطعَ عندك يُجيبه أصلاً.
+                  كلّ سطر موضوع سأل عنه زبون وانتهى بموظّف داخل نفس اليوم. والسؤال
+                  المقتبس تحت الموضوع سؤال زبون حقيقيّ — فأضف جوابه إلى معرفتك وستراه
+                  ينزل من هذه القائمة في المدى القادم. و«سؤال لا يقابله شيء في معرفتك»
+                  أقوى سطر هنا: لا مقطع عندك يجيبه أصلا.
                 </p>
               </>
             ) : (
               <Empty
-                title="لا موضوعَ انتهى بموظّفٍ في هذا المدى"
-                hint="هذا خبرٌ سارّ إن كان لديك محادثاتٌ فعلاً: لم يعجز بوتك عن موضوعٍ متكرّر. وإن كان المدى خالياً فوسِّعه من الرصيف أسفل."
+                title="لا موضوع انتهى بموظّف في هذا المدى"
+                hint="لم يعجز بوتك عن سؤال متكرّر في هذه الفترة."
               />
             )}
 
             <Rows>
               <MetricRow
-                k="تحويلاتٌ إلى موظّف"
-                note="ردودٌ قرّر البوت فيها أن يسلّم — أداةُ التحويل نفسُها"
+                k="تحويلات إلى موظّف"
+                note="ردود حوّلها البوت لموظّف"
                 value={fmt.num(gaps.handoff)}
                 mid={(
                   <span className="sc-ctx">
-                    من <span className="num">{fmt.num(gaps.runs)}</span> ردّاً ·
+                    من <span className="num">{fmt.num(gaps.runs)}</span> ردّا ·
                     {' '}والمدى السابق <span className="num">{fmt.num(gaps.prevHandoff)}</span> من
                     {' '}<span className="num">{fmt.num(gaps.prevRuns)}</span>
                   </span>
@@ -1022,7 +1022,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
               />
               <MetricRow
                 k="«لا أعرف»"
-                note="ردودٌ قال فيها إنّه لا يملك المعلومة — ثقبٌ في معرفتك لا عطلٌ فيه"
+                note="ردود لم يجد فيها المعلومة — أضفها لمعرفته"
                 value={fmt.num(gaps.unknown)}
                 mid={gaps.runs
                   ? (
@@ -1033,12 +1033,12 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                   : undefined}
               />
               <MetricRow
-                k="أعطالُ أدوات"
-                note="أداةٌ نادَتْ نظامَك وفشلت — وهذه عندك لا عند البوت"
+                k="أعطال أدوات"
+                note="أداة فشل الاتّصال بنظامك فيها"
                 value={fmt.num(gaps.fail)}
                 mid={gaps.fail
-                  ? <Tag tone="warn" label="راجِع أدواتك في صفحة البوت" />
-                  : <Tag tone="ok" label="لا عطلَ في هذا المدى" />}
+                  ? <Tag tone="warn" label="راجع أدواتك في صفحة البوت" />
+                  : <Tag tone="ok" label="لا عطل في هذا المدى" />}
               />
             </Rows>
           </Section>
@@ -1046,18 +1046,18 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
           {/* ══════════════ ④ الكلفة ══════════════ */}
           <Section
             title="الكلفة — هل يستحقّ ثمنه"
-            sub="كلفةُ الذكاء وحدها: ما دفعناه للنموذج بسبب محادثاتك، لا سعرُ باقتك"
+            sub="كلفة الذكاء الاصطناعيّ لمحادثاتك (غير سعر الباقة)"
           >
             {enough.volume ? (
               <Fig
-                head="كلفةُ الذكاء اليوميّة"
-                sub="والخطُّ المقطَّعُ الأفقيُّ متوسّطُ اليوم في المدى السابق"
+                head="كلفة الذكاء اليوميّة"
+                sub="الخطّ المتقطّع: متوسّط الفترة السابقة"
                 top={fmt.money(costMax)}
                 bottom="0"
                 axis={timeAxis}
                 legend={timeLegend(
                   <Leg kind="base">
-                    متوسّطُ اليوم في المدى السابق: <span className="num">{fmt.money(prevDailyCost)}</span>
+                    متوسّط اليوم في المدى السابق: <span className="num">{fmt.money(prevDailyCost)}</span>
                   </Leg>,
                 )}
                 note={(
@@ -1068,7 +1068,7 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 )}
               >
                 <Line
-                  label={`كلفةُ الذكاء يوماً بيوم — المجموع ${fmt.money(cost.total)}`}
+                  label={`كلفة الذكاء يوما بيوم — المجموع ${fmt.money(cost.total)}`}
                   values={costSeries}
                   prev={prevCostSeries}
                   max={costMax}
@@ -1078,22 +1078,22 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
               </Fig>
             ) : (
               <Thin
-                what="والكلفةُ اليوميّة تحتاج أيّاماً أكثر"
+                what="والكلفة اليوميّة تحتاج أيّاما أكثر"
                 have={(
                   <>
                     فيه <span className="num">{fmt.num(enough.liveDays)}</span>
-                    {' '}{plural(enough.liveDays, 'يومٌ', 'يومان', 'أيّام', 'يوماً')} فيها حركة
+                    {' '}{plural(enough.liveDays, 'يوم', 'يومان', 'أيّام', 'يوما')} فيها حركة
                   </>
                 )}
-                need="ونحتاج ثلاثةً على الأقلّ. والمجموعُ أدناه مقيسٌ وصحيح."
+                need="ونحتاج ثلاثة على الأقلّ. والمجموع أدناه مقيس وصحيح."
                 onWiden={range.days < 90 ? onWiden : undefined}
               />
             )}
 
             <Rows>
               <MetricRow
-                k="كلفةُ المحادثة الواحدة"
-                note="وهذا الرقمُ هو ما يُقارَن بسعر باقتك — لا المجموع"
+                k="كلفة المحادثة الواحدة"
+                note="قارن هذا الرقم بسعر باقتك"
                 value={perConv == null ? '—' : fmt.money(perConv)}
                 mid={costDelta && cost.prevPerConv != null
                   ? (
@@ -1102,19 +1102,19 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                         <span className="num">{fmt.money(Math.abs(costDelta.diff))}</span>
                       </Delta>
                       {' '}عن <span className="num">{fmt.money(cost.prevPerConv)}</span> في المدى السابق
-                      {costRatio != null && <> · أي <span className="num">{costRatio.toFixed(2)}</span> ضعفَه</>}
+                      {costRatio != null && <> · أي <span className="num">{costRatio.toFixed(2)}</span> ضعفه</>}
                     </span>
                   )
                   : (
                     <span className="sc-ctx">
-                      لا مقارنةَ بعد — المدى السابق فيه
-                      {' '}<span className="num">{fmt.num(selfServe.prevBilled)}</span> محادثةٍ مُفوترة
+                      لا مقارنة بعد — المدى السابق فيه
+                      {' '}<span className="num">{fmt.num(selfServe.prevBilled)}</span> محادثة مفوترة
                     </span>
                   )}
               />
               <MetricRow
-                k="مجموعُ كلفة الذكاء"
-                note="على المدى كلِّه — ويكبر بالحجم وحده فلا يُقرَّر عليه"
+                k="مجموع كلفة الذكاء"
+                note="للفترة كلّها"
                 value={fmt.money(cost.total)}
                 mid={(
                   <span className="sc-ctx">
@@ -1124,12 +1124,12 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
                 )}
               />
               <MetricRow
-                k="كلفةُ ما أنهاه البوت وحده"
-                note="ما دفعتَه مقابل محادثاتٍ لم تكلّفك دقيقةَ موظّف"
+                k="كلفة ما أنهاه البوت وحده"
+                note="كلفة المحادثات التي أنهاها البوت وحده"
                 value={perConv == null ? '—' : fmt.money(perConv * selfServe.solo)}
                 mid={(
                   <span className="sc-ctx">
-                    <span className="num">{fmt.num(selfServe.solo)}</span> محادثةً بكلفة
+                    <span className="num">{fmt.num(selfServe.solo)}</span> محادثة بكلفة
                     {' '}<span className="num">{perConv == null ? '—' : fmt.money(perConv)}</span> للواحدة
                   </span>
                 )}
@@ -1137,30 +1137,30 @@ function Body({ data, onWiden }: { data: Trend; onWiden: () => void }) {
             </Rows>
           </Section>
 
-          <Fold summary="كيف نحسب هذه الأرقام، ولماذا لا نرسم خطّاً على ثلاث محادثات">
+          <Fold summary="كيف نحسب هذه الأرقام؟">
             <Note>
-              <b>«أنهاه البوت وحده»</b> تعريفٌ واحدٌ في المنتج كلِّه: نافذةٌ مُفوترةٌ ردَّ
-              فيها بوتك ولم يكتب فيها موظّفٌ بعد فتحها. وهو نفسُ التعريف الذي تقرؤه
-              الرئيسيّة — فرقمٌ واحدٌ لا رقمان.
+              <b>«أنهاه البوت وحده»</b> تعريف واحد في المنتج كلّه: محادثة محسوبة ردّ
+              فيها بوتك ولم يكتب فيها موظّف بعد فتحها. وهو نفس التعريف الذي تقرؤه
+              الرئيسيّة — فرقم واحد لا رقمان.
             </Note>
             <Note>
-              <b>اليومُ يومٌ عندك لا عند الخادم.</b> كلُّ دلوٍ هنا يُقطَع بتوقيت
-              {' '}<span className="num">{range.tz}</span>، وإلّا انقسمت رسائلُ ما بعد منتصف
-              الليل بين يومَين فقُرئ هبوطٌ لم يحدث.
+              <b>اليوم يوم عندك لا عند الخادم.</b> كلّ دلو هنا يقطع بتوقيت
+              {' '}<span className="num">{range.tz}</span>، وإلّا انقسمت رسائل ما بعد منتصف
+              الليل بين يومين فقرئ هبوط لم يحدث.
             </Note>
             <Note>
-              <b>والمقارنةُ بمدًى سابقٍ بطوله تماماً</b> وملاصقٍ له:
+              <b>والمقارنة بمدى سابق بطوله تماما</b> وملاصق له:
               {' '}<span className="num">{prev.from}</span> إلى <span className="num">{prev.to}</span>.
-              فلا يومَ يُحسَب في المدَيَين — ويومُ تراكبٍ واحدٌ يكفي ليخترع «تحسُّناً».
+              فلا يوم يحسب في المديين — ويوم تراكب واحد يكفي ليخترع «تحسّنا».
             </Note>
             <Note tone="warn">
               <b>ولا نرسم ما لا نقيس.</b> دون <span className="num">{fmt.num(enough.minBilled)}</span>
-              {' '}محادثةٍ مُفوترةٍ لا نرسم اتّجاه اكتفاءٍ، ودون ثلاثة أيّامٍ فيها حركةٍ لا
-              نرسم خطّاً، ودون <span className="num">20</span> رسالةً لا نسمّي ساعةَ ذروة.
+              {' '}محادثة مفوترة لا نرسم اتّجاه اكتفاء، ودون ثلاثة أيّام فيها حركة لا
+              نرسم خطّا، ودون <span className="num">20</span> رسالة لا نسمّي ساعة ذروة.
               {openEnd && (
-                <> واليومُ الجاري نقطةٌ ناقصةٌ: قطعتُه الأخيرةُ مقطَّعةٌ في كلّ رسم،
-                  ومجاميعُ هذا المدى أقلُّ من حقيقتها بما لم يمضِ من اليوم — فالمقارنةُ
-                  بالمدى السابق في صالحه بساعاتٍ لا أكثر.</>
+                <> واليوم الجاري نقطة ناقصة: قطعته الأخيرة مقطّعة في كلّ رسم،
+                  ومجاميع هذا المدى أقلّ من حقيقتها بما لم يمض من اليوم — فالمقارنة
+                  بالمدى السابق في صالحه بساعات لا أكثر.</>
               )}
             </Note>
           </Fold>

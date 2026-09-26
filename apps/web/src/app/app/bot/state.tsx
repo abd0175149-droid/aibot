@@ -198,14 +198,14 @@ export function deriveBotView(s: BotStateCtx) {
    * صلاحيّة الإعدادات أصلاً. وإخفاء الفرق يجعل الموظّف يظنّ الشاشة معطوبة.
    */
   const lockReason = can.readOnly
-    ? 'أنت تشاهد بهويّة العميل — والانتحال قراءةٌ فقط.'
+    ? 'أنت تشاهد بهويّة العميل — والانتحال قراءة فقط.'
     : !can.settings
       ? 'ضبط البوت لمالك الحساب. اطلب الصلاحيّة منه — وحسابك يقرأ كلّ شيء هنا.'
       : null;
   /* ★★ وسببٌ ثالثٌ من الخادم لا من الصلاحيّة: أوقفته المنصّةُ. زرٌّ يُضغط ويردّ
      ٤٠٩ في كلّ مرّةٍ يكسر الثقة — فيُعطَّل ويُقال لماذا، والسببُ ما كتبه فريقُنا. */
   const platformLock = cfg?.platformLockedAt
-    ? `أوقف فريقُ المنصّة بوتك${cfg.platformLockReason ? ` — ${cfg.platformLockReason}` : ''}. لا يعود إلّا بقرارٍ منهم — تواصل مع الدعم.`
+    ? `أوقف فريق المنصّة بوتك${cfg.platformLockReason ? ` — ${cfg.platformLockReason}` : ''}. لا يعود إلّا بقرار منهم — تواصل مع الدعم.`
     : null;
   const locked = Boolean(lockReason) || Boolean(platformLock);
 
@@ -240,18 +240,18 @@ export function deriveBotView(s: BotStateCtx) {
 
   const publishReason = lockReason
     ?? (pendingEmbed
-      ? `v${pendingVersion} تُجهَّز معرفتها الآن — انتظر جهوزها قبل نشرٍ جديد.`
+      ? `v${pendingVersion} تجهّز معرفتها الآن — انتظر جهوزها قبل نشر جديد.`
       : null)
     ?? (!changed ? 'لا فرق عن النسخة المنشورة — لا شيء لتنشره.' : null)
-    ?? (unsaved ? 'على الشاشة تغييرٌ غير محفوظ. احفظ المسوّدة أوّلاً — النشر ينشر المحفوظة.' : null);
-  const saveReason = lockReason ?? (!unsaved ? 'لا تغييرَ غير محفوظ.' : null);
+    ?? (unsaved ? 'على الشاشة تغيير غير محفوظ. احفظ أوّلا، ثمّ انشر.' : null);
+  const saveReason = lockReason ?? (!unsaved ? 'لا تغيير غير محفوظ.' : null);
   /**
    * ★ سببُ منع التراجع — والثاني منه ليس تجميلاً: `embed.ts` يكتب النسخةَ
    *   الحيّةَ بلا شرطٍ عند الجهوز، فتراجعٌ الآن يُمحى بعد دقيقةٍ بلا رسالة.
    */
   const rollbackReason = lockReason
     ?? (pendingEmbed
-      ? `v${pendingVersion} تُجهَّز معرفتها الآن — والتراجع يُتاح بعد جهوزها.`
+      ? `v${pendingVersion} تجهّز معرفتها الآن — والتراجع يتاح بعد جهوزها.`
       : null);
 
   /**
@@ -281,14 +281,14 @@ export function deriveBotView(s: BotStateCtx) {
       setServer({ persona, knowledge, full: true });
       setConflict(false);
       await bot.reload();
-      toast('حُفظت المسوّدة — والبوت الحيّ ما زال على النسخة المنشورة');
+      toast('حُفظت تعديلاتك — ولا يراها زبائنك حتّى تنشر');
     } catch (e) {
       /* ★ التعارضُ ليس فشلاً عابراً يُعاد: هو خبرٌ يوقف الحفظ التلقائيّ
          حتّى يقرّر المالك — وإلّا كتبت الشاشةُ فوق عمل غيرها في المحاولة
          التالية بعد ثوانٍ. */
       if (e instanceof ApiError && e.status === 409) {
         setConflict(true);
-        toast('تغيّرت المسوّدة من مكانٍ آخر — حمّل الأحدث قبل أن تحفظ');
+        toast('تغيّرت تعديلاتك من مكان آخر — حمّل الأحدث قبل أن تحفظ');
       } else {
         toast(e instanceof ApiError ? e.message : 'تعذّر الحفظ');
       }
@@ -307,7 +307,7 @@ export function deriveBotView(s: BotStateCtx) {
     setConflict(false);
     dirtyRef.current = false;
     await bot.reload();
-    toast('حُمّلت المسوّدة الأحدث');
+    toast('حُمّلت آخر نسخة من تعديلاتك');
   }
 
   /**
@@ -344,7 +344,7 @@ export function deriveBotView(s: BotStateCtx) {
       setAsk(null);
       if (r.embedding) {
         setPending(r.version.version);
-        toast(`نُشرت v${r.version.version} — تُجهَّز معرفتها الآن، والنسخة السابقة تخدم حتّى تجهز.`);
+        toast(`نشرت v${r.version.version} — تجهّز معرفتها الآن، والنسخة السابقة تخدم حتّى تجهز.`);
       } else {
         setPending(null);
         /* ★ التوستة تقرأ `live` من الخادم ولا تفترض.
@@ -352,8 +352,8 @@ export function deriveBotView(s: BotStateCtx) {
            مطفأً فلا يردّ بشيء. وإعلانُ نجاحٍ لم يقع هو العطل الذي يدفع ثمنَه
            العميلُ حين يكتشف من شكوى زبون. */
         toast(r.live
-          ? 'نُشرت النسخة الجديدة — بوتك يردّ بها من الآن'
-          : 'نُشرت النسخة الجديدة — وبوتك متوقّف، فلن يردّ حتّى تشغّله.');
+          ? 'نشرت النسخة الجديدة — بوتك يردّ بها من الآن'
+          : 'نشرت النسخة الجديدة — وبوتك متوقّف، فلن يردّ حتّى تشغّله.');
       }
       await bot.reload();
       await kb.reload();
@@ -375,7 +375,7 @@ export function deriveBotView(s: BotStateCtx) {
       setAsk(null);
       toast(next
         ? 'عاد بوتك يردّ على زبائنك'
-        : 'أُوقف بوتك — كلّ رسالةٍ تصل تنتظر موظّفاً الآن');
+        : 'أوقف بوتك — كلّ رسالة تصل تنتظر موظّفا الآن');
       await bot.reload();
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'تعذّر تغيير حالة البوت');
@@ -395,8 +395,8 @@ export function deriveBotView(s: BotStateCtx) {
     try {
       await patch(`/bot/tools/${id}`, { enabled });
       toast(enabled
-        ? 'شُغّلت، وصُفّر عدّاد الإخفاق — ويراها بوتك من الآن'
-        : 'أُوقفت مؤقّتاً — لا يراها بوتك، وسرُّها ومسارُها محفوظان');
+        ? 'شغّلت، وصفّر عدّاد الإخفاق — ويراها بوتك من الآن'
+        : 'أوقفت مؤقّتا — لا يراها بوتك، وسرّها ومسارها محفوظان');
       await tools.reload();
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'تعذّر التغيير');
@@ -412,7 +412,7 @@ export function deriveBotView(s: BotStateCtx) {
     try {
       await del(`/bot/tools/${id}`);
       setAsk(null);
-      toast(`حُذفت أداة «${name}» — ولن يناديها بوتك بعد الآن`);
+      toast(`حذفت أداة «${name}» — ولن يناديها بوتك بعد الآن`);
       await tools.reload();
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'تعذّر الحذف');
@@ -459,7 +459,7 @@ export function deriveBotView(s: BotStateCtx) {
       reason={lockReason ?? undefined}
       onClick={() => setEditing({ ...EMPTY_DRAFT })}
     >
-      + أداةٌ جديدة
+      + أداة جديدة
     </Button>
   );
 
@@ -472,7 +472,7 @@ export function deriveBotView(s: BotStateCtx) {
       disabled={Boolean(saveReason)}
       reason={saveReason ?? undefined}
     >
-      احفظ المسوّدة
+      احفظ التعديلات
     </Button>
   );
 
@@ -501,17 +501,17 @@ export function deriveBotView(s: BotStateCtx) {
   if (!cfg) {
     bandTone = 'info';
     bandMark = '○';
-    bandTitle = 'لم يُضبط بوتك بعد';
-    bandSub = <>اكتب شخصيّته ومعرفته ثمّ انشرهما — ولا يردّ على زبونٍ قبل أن تنشر.</>;
+    bandTitle = 'لم يضبط بوتك بعد';
+    bandSub = <>اكتب شخصيّته ومعرفته ثمّ انشرهما — ولا يردّ على زبون قبل أن تنشر.</>;
   } else if (platformLock) {
     bandTone = 'crit';
     bandMark = '■';
-    bandTitle = 'أوقف فريقُ المنصّة بوتك — لا يردّ على أحد';
+    bandTitle = 'أوقف فريق المنصّة بوتك — لا يردّ على أحد';
     bandSub = (
       <>
         {cfg.platformLockReason ? <>السبب: <span dir="auto">{cfg.platformLockReason}</span>. </> : null}
-        لا يعود بزرّ «شغّل» — يرفعه فريقُ المنصّة بعد التواصل، ثمّ تشغّله أنت.
-        {pub ? <> ونسختك <span className="num">{`v${pub.version}`}</span> محفوظةٌ كما هي.</> : null}
+        لا يعود بزرّ «شغّل» — يرفعه فريق المنصّة بعد التواصل، ثمّ تشغّله أنت.
+        {pub ? <> ونسختك <span className="num">{`v${pub.version}`}</span> محفوظة كما هي.</> : null}
       </>
     );
   } else if (!cfg.enabled) {
@@ -520,21 +520,21 @@ export function deriveBotView(s: BotStateCtx) {
     bandTitle = 'بوتك متوقّف — لا يردّ على أحد';
     bandSub = (
       <>
-        كلّ رسالةٍ تصل تنتظر موظّفاً، ولا يعلم زبونك أنّ أحداً سيردّ.
-        {pub ? <> ونسختك <span className="num">{`v${pub.version}`}</span> محفوظةٌ كما هي.</> : null}
+        كلّ رسالة تصل تنتظر موظّفا، ولا يعلم زبونك أنّ أحدا سيردّ.
+        {pub ? <> ونسختك <span className="num">{`v${pub.version}`}</span> محفوظة كما هي.</> : null}
         {' '}ويعود بضغطة «شغّل البوت».
       </>
     );
   } else if (brokenTools.length > 0) {
     bandTone = 'crit';
     bandMark = '■';
-    bandTitle = 'أداةٌ عُطِّلت آليّاً — بوتك يجيب بلا نظامك';
+    bandTitle = 'أداة عطّلت آليّا — بوتك يجيب بلا نظامك';
     bandSub = (
       <>
         <Amount n={brokenTools.length} forms={TOOL_FORMS} /> من{' '}
-        <Amount n={toolList.length} forms={['أداةٍ واحدة', 'أداتَين', 'أدوات', 'أداةً']} />{' '}
-        توقّفت بعد إخفاقاتٍ متتالية عند نظامك. وحتّى تُصلحها، يجيب بوتك من نصّ معرفتك
-        وحده — وقد يُعطي سعراً قديماً.
+        <Amount n={toolList.length} forms={['أداة واحدة', 'أداتين', 'أدوات', 'أداة']} />{' '}
+        توقّفت بعد إخفاقات متتالية عند نظامك. وحتّى تصلحها، يجيب بوتك من نصّ معرفتك
+        وحده — وقد يعطي سعرا قديما.
       </>
     );
     bandAction = <Button size="sm" onClick={() => setTab('tools')}>افتح الأدوات</Button>;
@@ -544,29 +544,29 @@ export function deriveBotView(s: BotStateCtx) {
     bandTitle = 'تعذّر تجهيز معرفة النسخة الجديدة';
     bandSub = (
       <>
-        <span className="num">{`v${failedVersion}`}</span> نُشرت ولم يكتمل تجهيز معرفتها، فبقيت{' '}
+        <span className="num">{`v${failedVersion}`}</span> نشرت ولم يكتمل تجهيز معرفتها، فبقيت{' '}
         {pub ? <span className="num">{`v${pub.version}`}</span> : 'النسخة السابقة'} تخدم زبائنك بلا انقطاع.
-        راجِع معرفتك وانشر من جديد — وإن تكرّر فأبلِغنا.
+        راجع معرفتك وانشر من جديد — وإن تكرّر فأبلغنا.
       </>
     );
   } else if (pendingEmbed) {
     bandTone = 'warn';
     bandMark = '▲';
-    bandTitle = 'نُشرت نسختك — وتُجهَّز معرفتها الآن';
+    bandTitle = 'نشرت نسختك — وتجهّز معرفتها الآن';
     bandSub = (
       <>
-        معرفتك فوق العتبة الأولى، فتُقطَّع وتُضمَّن قبل أن تصير النسخةَ الحيّة.
+        معرفتك فوق العتبة الأولى، فتقطّع وتضمّن قبل أن تصير النسخة الحيّة.
         و{pub ? <span className="num">{`v${pub.version}`}</span> : 'النسخة السابقة'} تخدم زبائنك
         حتّى تجهز — بلا انقطاع.
         {embedStalled
-          ? ' وقد تأخّر التجهيز أكثر من المعتاد — حدِّث الحالة أو عُد بعد قليل.'
-          : ' وتُحدَّث هذه اللافتة من نفسها عند الجهوز.'}
+          ? ' وقد تأخّر التجهيز أكثر من المعتاد — حدّث الحالة أو عد بعد قليل.'
+          : ' وتحدّث هذه اللافتة من نفسها عند الجهوز.'}
       </>
     );
     if (embedStalled) {
       bandAction = (
         <Button size="sm" onClick={() => { void bot.reload(); void vers.reload(); }}>
-          حدِّث الحالة
+          حدّث الحالة
         </Button>
       );
     }
@@ -577,12 +577,12 @@ export function deriveBotView(s: BotStateCtx) {
     bandSub = (
       <>
         {unsaved
-          ? 'على الشاشة تغييرٌ غير محفوظ — احفظ المسوّدة أوّلاً. '
-          : 'محفوظةٌ كمسوّدة. '}
+          ? 'على الشاشة تغيير غير محفوظ — احفظ أوّلا. '
+          : 'محفوظة وغير منشورة. '}
         {pub
           ? <>وبوتك ما زال يردّ بـ<span className="num">{`v${pub.version}`}</span> حتّى تنشر،
-            فلا تُقطع محادثةٌ جارية.</>
-          : <>ولا نسخةَ منشورةَ بعد: لا يصل زبائنك شيءٌ ممّا كتبتَه حتّى تنشر.</>}
+            فلا تقطع محادثة جارية.</>
+          : <>ولا نسخة منشورة بعد: لا يصل زبائنك شيء ممّا كتبته حتّى تنشر.</>}
       </>
     );
   } else {
@@ -593,8 +593,8 @@ export function deriveBotView(s: BotStateCtx) {
       <>
         {pub
           ? <>النسخة <span className="num">{`v${pub.version}`}</span> هي التي تردّ على زبائنك
-            {publishedAt ? <> · نُشرت {fmt.when(publishedAt)}</> : null} · لا تغييرَ معلَّق.</>
-          : <>لا نسخةَ منشورةَ بعد: اكتب الشخصيّة والمعرفة ثمّ انشر.</>}
+            {publishedAt ? <> · نشرت {fmt.when(publishedAt)}</> : null} · لا تغيير معلّق.</>
+          : <>لا نسخة منشورة بعد: اكتب الشخصيّة والمعرفة ثمّ انشر.</>}
       </>
     );
   }
@@ -606,28 +606,28 @@ export function deriveBotView(s: BotStateCtx) {
 
   if (unsaved) {
     dockPrimary = saveBtn(true);
-    dockHint = 'الحفظ لا يمسّ زبوناً: يبقى بوتك على نسخته المنشورة حتّى تنشر.';
+    dockHint = 'الحفظ لا يمسّ زبونا: يبقى بوتك على نسخته المنشورة حتّى تنشر.';
     if (tab === 'tools') dockSecondary = newToolBtn(false);
   } else if (changed) {
     dockPrimary = publishBtn(true);
     dockHint = pendingEmbed
-      ? 'نسخةٌ تُجهَّز معرفتها الآن — والنشر يُتاح بعد جهوزها.'
-      : 'النشر يُبدّل النسخة التي تخدم زبائنك — ولا يقطع محادثةً جارية.';
+      ? 'نسخة تجهّز معرفتها الآن — والنشر يتاح بعد جهوزها.'
+      : 'النشر يبدّل النسخة التي تخدم زبائنك — ولا يقطع محادثة جارية.';
     if (tab === 'tools') dockSecondary = newToolBtn(false);
   } else if (tab === 'tools') {
     dockPrimary = newToolBtn(true);
-    dockHint = 'كلّ أداةٍ نداءٌ إلى نظامك — والبوت يستعملها بوصفها، فالوصف نصف الأداة.';
+    dockHint = 'كلّ أداة نداء إلى نظامك — والبوت يستعملها بوصفها، فالوصف نصف الأداة.';
   } else if (tab === 'versions') {
     /* ولا `dockPrimary` هنا: الفعلُ في صفّ النسخة نفسِها لا في الرصيف —
        فعلٌ لكلّ سطرٍ لا فعلٌ واحدٌ للشاشة. */
-    dockHint = 'التراجع نشرُ نسخةٍ قديمة — لا يُحذف شيءٌ، ومسوّدتك على الشاشة تبقى كما هي.';
+    dockHint = 'التراجع نشر نسخة قديمة — لا يحذف شيء، ومسوّدتك على الشاشة تبقى كما هي.';
   } else if (tab === 'behave') {
-    dockHint = 'لا شيء في هذا التبويب يُعدَّل من هنا — وما تُعدّله أنت في «الشخصيّة» و«المعرفة».';
+    dockHint = 'لا شيء في هذا التبويب يعدّل من هنا — وما تعدّله أنت في «الشخصيّة» و«المعرفة».';
     dockPrimary = <Button onClick={() => setTab('persona')}>اذهب إلى الشخصيّة</Button>;
   } else {
     dockHint = pub
-      ? 'لا تغييرَ معلَّق — ما تقرؤه هنا هو نفسه ما يخدم زبائنك الآن.'
-      : 'لا نسخةَ منشورةَ بعد: اكتب الشخصيّة والمعرفة ثمّ انشر.';
+      ? 'لا تغيير معلّق — ما تقرؤه هنا هو نفسه ما يخدم زبائنك الآن.'
+      : 'لا نسخة منشورة بعد: اكتب الشخصيّة والمعرفة ثمّ انشر.';
   }
 
   return { ...s, personaUnits, kbUnits, fileChars, fileUnits, draftMode, liveMode, lockReason, platformLock, locked, personaChanged, kbChanged, readyChars, publishedFileChars, filesChanged, changed, textChanged, unsaved, personaDelta, kbDelta, publishReason, saveReason, rollbackReason, toolList, brokenTools, okTools, tabs, newToolBtn, saveBtn, publishBtn, bandTone, bandMark, bandTitle, bandSub, bandAction, dockPrimary, dockSecondary, dockHint, saveDraft, takeLatest, autoSave, publish, toggleBot, setToolEnabled, deleteTool, rollback };

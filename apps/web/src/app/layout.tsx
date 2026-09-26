@@ -25,7 +25,7 @@ export const metadata: Metadata = {
     template: '%s · AiBot',
     default: 'AiBot — بوت واتساب وإنستجرام لنشاطك',
   },
-  description: 'بوت واتساب وإنستجرام مخصَّص لنشاطك، تديره بنفسك.',
+  description: 'بوت واتساب وإنستجرام مخصّص لنشاطك، تديره بنفسك.',
   manifest: '/manifest.json',
 };
 

@@ -124,12 +124,12 @@ export function NotifBell() {
             <b>التنبيهات</b>
             {unread > 0 && (
               <button type="button" className="nb-all" onClick={() => void readAll()}>
-                تعليم الكلّ مقروءاً
+                تعليم الكلّ مقروءا
               </button>
             )}
           </div>
 
-          {failed && <p className="nb-note bad">تعذّر تحديث التنبيهات — هذه آخرُ قائمةٍ وصلت.</p>}
+          {failed && <p className="nb-note bad">تعذّر تحديث التنبيهات — هذه آخر قائمة وصلت.</p>}
 
           {items.length === 0 ? (
             /* «لا تنبيهات» تُقال صراحةً: لوحةٌ فارغةٌ تُقرأ عطلاً. */

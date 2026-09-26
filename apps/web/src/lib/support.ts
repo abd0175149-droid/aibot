@@ -33,16 +33,16 @@ export function supportMailto(subject: string, body?: string): string {
  */
 export function planTalkLabel(policy: string | undefined): string {
   return policy === 'allow_bill'
-    ? 'راسلنا لمراجعة باقتك — الزائد يُفوتَر'
+    ? 'راسلنا لمراجعة باقتك — الزائد يفوتر'
     : 'راسلنا لرفع سقف باقتك';
 }
 
 export function planTalkSubject(period?: string): string {
-  return period ? `رفعُ سقف الباقة — ${period}` : 'رفعُ سقف الباقة';
+  return period ? `رفع سقف الباقة — ${period}` : 'رفع سقف الباقة';
 }
 
 /** جسمُ الرسالة يحمل الأرقام، فلا يُسأل العميلُ عمّا تعرفه الشاشة. */
 export function planTalkBody(used: number, limit: number, period?: string): string {
   const where = period ? `في دورة ${period}` : 'هذا الشهر';
-  return `المستهلَك ${used} من ${limit} نافذة ${where}.`;
+  return `المستهلك ${used} من ${limit} محادثة ${where}.`;
 }

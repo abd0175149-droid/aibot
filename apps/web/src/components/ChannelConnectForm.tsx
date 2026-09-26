@@ -73,17 +73,17 @@ export function ChannelConnectForm({
   return (
     <Stack gap="sm">
       <p className="muted-p">
-        {hint ?? 'أربع قيمٍ من لوحة العميل عند ميتا. ولا نحفظ شيئاً قبل أن نفحصها فعلاً عند ميتا — فتوكنٌ مكسورٌ محفوظ يُنتج بوتاً صامتاً لا عطلاً ظاهراً.'}
+        {hint ?? 'أربع قيم من لوحة العميل عند ميتا. ولا نحفظ شيئا قبل أن نفحصها فعلا عند ميتا — فتوكن مكسور محفوظ ينتج بوتا صامتا لا عطلا ظاهرا.'}
       </p>
       <Field id="cc-phone" label="معرّف الرقم" hint="Phone number ID — من WhatsApp ← API Setup.">
         <Input id="cc-phone" value={phoneId} dir="ltr" onChange={setPhoneId} />
       </Field>
-      <Field id="cc-waba" label="معرّف حساب واتساب (اختياريّ)" hint="WABA ID — يُمكّن فحص اشتراك الويبهوك.">
+      <Field id="cc-waba" label="معرّف حساب واتساب (اختياريّ)" hint="WABA ID — يمكّن فحص اشتراك الويبهوك.">
         <Input id="cc-waba" value={wabaId} dir="ltr" onChange={setWabaId} />
       </Field>
       <Field
         id="cc-token" label="التوكن الدائم"
-        hint="من Business Settings ← System users ← Generate token، وانتهاؤه «Never». والتوكن المؤقّت عمره 24 ساعة ويُوقف البوت بلا إنذار."
+        hint="من Business Settings ← System users ← Generate token، وانتهاؤه «Never». والتوكن المؤقّت عمره 24 ساعة ويوقف البوت بلا إنذار."
       >
         <Input id="cc-token" type="password" value={token} dir="ltr" onChange={setToken} />
       </Field>
@@ -100,7 +100,7 @@ export function ChannelConnectForm({
       )}
 
       <Note tone="warn">
-        <b>السرّان لا يُعادان إلى أيّ شاشة بعد الحفظ</b> — بصمةٌ وتاريخٌ فقط، ولا حتّى لك.
+        <b>السرّان لا يعادان إلى أيّ شاشة بعد الحفظ</b> — بصمة وتاريخ فقط، ولا حتّى لك.
       </Note>
 
       <Button variant="primary" wide busy={busy} disabled={!ready} onClick={() => void submit()}>

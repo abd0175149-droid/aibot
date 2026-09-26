@@ -52,13 +52,13 @@ describe('الإيقافُ المؤقّت له زرّ', () => {
   const page = readBotScreen();
 
   it('★ وكان المخرجُ الوحيد الحذف — بسرّ الأداة ومسارها', () => {
-    expect(page).toContain('أوقفها مؤقّتاً');
+    expect(page).toContain('أوقفها مؤقّتا');
     expect(page).toContain('شغّلها');
     expect(strip(page)).toMatch(/async function setToolEnabled\(id: string, enabled: boolean\)/);
   });
 
   it('ووسمُ «مسوّدة» يفرّق ما لم يُحفظ عمّا عطّله قاطعُ الدائرة', () => {
-    expect(page).toContain('مسوّدة — لا يراها بوتك');
+    expect(page).toContain('غير منشورة — لا يراها بوتك');
     expect(strip(page), 'الوسمُ مشروطٌ بغياب سبب التعطيل الآليّ')
       .toMatch(/!t\.enabled && !t\.disabledReason/);
   });

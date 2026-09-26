@@ -103,7 +103,7 @@ describe('CSP — ما تمنعه فعلاً', () => {
 
 /**
  * ★ **المفتاحُ الذي لا يصل** — وهذا صنفُ عطلٍ ضُبط مرّتين في مراجعةٍ واحدة:
- *   `TRUST_PROXY` يُقرأ في `main.ts` ولا يُمرَّر في `docker-compose.yml` إطلاقاً،
+ *   `TRUST_PROXY` يقرأ في `main.ts` ولا يُمرَّر في `docker-compose.yml` إطلاقاً،
  *   و`NEXT_PUBLIC_API_URL` يُمرَّر في `environment` وحدَه — و`NEXT_PUBLIC_*`
  *   تُحقن وقت **البناء**، ورؤوسُ `headers()` تُخبز في `routes-manifest.json`
  *   وقتَه أيضاً. فقيمةُ التشغيل لا تصل أيّاً منهما، و`connect-src` كان يُشتقّ

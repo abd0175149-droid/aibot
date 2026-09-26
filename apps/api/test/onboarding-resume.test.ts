@@ -14,7 +14,7 @@ import { join } from 'node:path';
  *    ② ولا مسارَ إطلاقاً لإعادة كلمةِ مالك: الانتحالُ قراءةٌ فقط عن قصد،
  *      و`/team/:id/reset-password` مُقيَّدٌ بمستأجر التوكن — فبقي
  *      `ops/set-password.ts` على الخادم.
- *    ③ و`verifyToken` مُسقَطٌ عمداً من `GET /channels` ومحجوبٌ في السجلّ،
+ *    ③ و`verifyToken` مسقط عمدا من `GET /channels` ومحجوبٌ في السجلّ،
  *      فمن أغلق معالجَه قبل الخطوة الأخيرة فقد الـCallback URL وتوكنَ التحقّق.
  *
  * ★ ورابعٌ يُخفي الثلاثة: `coalesce(bv.mode,'full')` كان يجعل عميلاً بلا نسخةٍ
@@ -57,7 +57,7 @@ describe('النقصُ يُرى قبل أن يُصلَح', () => {
   });
 
   it('★ والبنرُ يقول ما نقص ومن أين يُكمَل', () => {
-    expect(PAGE).toContain('تهيئةٌ لم تكتمل');
+    expect(PAGE).toContain('تهيئة لم تكتمل');
     expect(PAGE).toContain('!sel.botSeeded || sel.ownerPending');
   });
 });

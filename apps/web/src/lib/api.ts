@@ -76,14 +76,14 @@ export class ApiError extends Error {
 
 /** رسائل بشريّة لأكواد المجال — لا «WINDOW_CLOSED» في وجه صاحب مطعم. */
 const HUMAN: Record<string, string> = {
-  WINDOW_CLOSED: 'نافذة الـ24 ساعة مغلقة. تُفتح حين يُرسل الزبون رسالة.',
+  WINDOW_CLOSED: 'نافذة الـ24 ساعة مغلقة. تفتح حين يرسل الزبون رسالة.',
   QUOTA_EXCEEDED: 'بلغ حسابك سقف الباقة لهذا الشهر.',
   CHANNEL_DISCONNECTED: 'القناة غير موصولة — راجع صفحة القنوات.',
   UNAUTHORIZED: 'انتهت جلستك. سجّل الدخول من جديد.',
   FORBIDDEN: 'لا صلاحيّة لديك لهذا الإجراء.',
-  RATE_LIMITED: 'محاولاتٌ كثيرة. انتظر قليلاً.',
+  RATE_LIMITED: 'محاولات كثيرة. انتظر قليلا.',
   VALIDATION: 'تحقّق من الحقول — بعضها غير صالح.',
-  INTERNAL: 'صار خطأ عندنا. حاول ثانيةً، وإن تكرّر فأبلغنا.',
+  INTERNAL: 'صار خطأ عندنا. حاول ثانية، وإن تكرّر فأبلغنا.',
 };
 
 async function refresh(): Promise<boolean> {

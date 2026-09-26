@@ -68,7 +68,7 @@ export function SessionGate({ email, onDone }: { email: string; onDone: () => vo
         <div className="auth-b">
           <div className="auth-h">
             <h1 id="sg-h">انتهت جلستك</h1>
-            <p>اكتب كلمة سرّك لتُكمل من حيث توقّفت — ما كتبتَه على الشاشة باقٍ خلف هذا اللوح.</p>
+            <p>اكتب كلمة سرّك لتكمل من حيث توقّفت — ما كتبته على الشاشة باق خلف هذا اللوح.</p>
           </div>
 
           {err && <Note tone="crit">{err}</Note>}
@@ -95,7 +95,7 @@ export function SessionGate({ email, onDone }: { email: string; onDone: () => vo
           <Stack gap="sm">
             <Button type="submit" variant="primary" size="lg" wide busy={busy} disabled={!pass}
               reason="اكتب كلمة سرّك">
-              أكمِل
+              أكمل
             </Button>
             {/* ومخرجٌ صريحٌ دائماً: من لا يريد الاستئناف لا يُحبس أمام نموذج. */}
             <Button size="lg" wide onClick={hardExit}>اخرج وسجّل الدخول من جديد</Button>

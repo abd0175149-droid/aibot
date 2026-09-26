@@ -25,7 +25,7 @@ export default function AppError({
       <p className="oops-k" aria-hidden="true">✕</p>
       <h1>صار خطأ عندنا</h1>
       <p className="oops-b">
-        مش غلطتك. جرّب تعيد المحاولة — وإذا تكرّر، احكِ للدعم وأعطِه الرمز
+        مش غلطتك. جرّب تعيد المحاولة — وإذا تكرّر، احك للدعم وأعطه الرمز
         اللي تحت، فيه بنلاقي السطر بالضبط.
       </p>
       {error.digest && (
@@ -34,7 +34,7 @@ export default function AppError({
         </p>
       )}
       <div className="oops-a">
-        <button type="button" className="btn primary" onClick={reset}>أعِد المحاولة</button>
+        <button type="button" className="btn primary" onClick={reset}>أعد المحاولة</button>
         <a className="btn quiet" href="/app">ارجع للوحة</a>
       </div>
     </main>

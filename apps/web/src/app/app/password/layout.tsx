@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
  */
 export const metadata: Metadata = {
   title: 'كلمة المرور',
-  description: 'غيّر كلمةَ مرورك.',
+  description: 'غيّر كلمة مرورك.',
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

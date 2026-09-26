@@ -82,14 +82,14 @@ function LoginForm() {
       }
       await finish(r);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : 'تعذّر تسجيل الدخول. حاول ثانيةً.');
+      setError(e instanceof ApiError ? e.message : 'تعذّر تسجيل الدخول. حاول ثانية.');
       setBusy(false);
     }
   }
 
   /** ما بعد وصول التوكن — من الخطوة الأولى أو الثانية، بلا نسختَين. */
   async function finish(r: LoginResult) {
-    if (!r.access || !r.user) throw new ApiError('INTERNAL', 'ردٌّ ناقصٌ من الخادم', 500);
+    if (!r.access || !r.user) throw new ApiError('INTERNAL', 'ردّ ناقص من الخادم', 500);
     setToken(r.access);
     await reload();
 
@@ -116,7 +116,7 @@ function LoginForm() {
     try {
       await finish(await post<LoginResult>('/auth/mfa/verify', { challenge, code }));
     } catch (x) {
-      setError(x instanceof ApiError ? x.message : 'تعذّر التحقّق. حاول ثانيةً.');
+      setError(x instanceof ApiError ? x.message : 'تعذّر التحقّق. حاول ثانية.');
       setBusy(false);
     }
   }
@@ -131,11 +131,11 @@ function LoginForm() {
 
       <div className="auth-b">
         <div className="auth-h">
-          <h1>{challenge ? 'رمزُ المصادقة الثنائيّة' : 'سجّل الدخول'}</h1>
+          <h1>{challenge ? 'رمز المصادقة الثنائيّة' : 'سجّل الدخول'}</h1>
           <p>
             {challenge
               ? 'افتح تطبيق المصادقة واكتب الرمز الظاهر الآن — يتبدّل كلّ نصف دقيقة.'
-              : 'بوتك ومحادثات زبائنك — من مكانٍ واحد.'}
+              : 'بوتك ومحادثات زبائنك — من مكان واحد.'}
           </p>
         </div>
 
@@ -215,7 +215,7 @@ function LoginForm() {
               aria-controls="lg-pass"
               onClick={() => setShow((v) => !v)}
             >
-              {show ? 'أخفِ' : 'أظهِر'}
+              {show ? 'أخف' : 'أظهر'}
             </button>
           </div>
         </Field>
@@ -228,18 +228,18 @@ function LoginForm() {
         <details className="auth-fold">
           <summary>نسيت كلمة السرّ؟</summary>
           <p>
-            راسل من أنشأ حسابك — هو وحده من يستطيع ضبط كلمةٍ مؤقّتةٍ لك الآن،
-            وستُطلب منك كلمتك الخاصّة عند أوّل دخول. والاستعادة الذاتيّة قادمة.
+            راسل من أنشأ حسابك — هو وحده من يستطيع ضبط كلمة مؤقّتة لك الآن،
+            وستطلب منك كلمتك الخاصّة عند أوّل دخول. والاستعادة الذاتيّة قادمة.
           </p>
         </details>
         )}
 
         {challenge && (
           <details className="auth-fold">
-            <summary>فقدتُ هاتفي</summary>
+            <summary>فقدت هاتفي</summary>
             <p>
-              لا بابَ ذاتيّاً للعامل الثاني عن قصد — أيُّ بابٍ ذاتيٍّ هو بعينه ما يُبطله.
-              راسل مشغّل المنصّة ليمسحه عن حسابك، ثمّ سجّل عاملاً جديداً عند أوّل دخول.
+              لا باب ذاتيّا للعامل الثاني عن قصد — أيّ باب ذاتيّ هو بعينه ما يبطله.
+              راسل مشغّل المنصّة ليمسحه عن حسابك، ثمّ سجّل عاملا جديدا عند أوّل دخول.
             </p>
           </details>
         )}
@@ -247,8 +247,8 @@ function LoginForm() {
 
       {/* الرصيف: الفعلُ الأوّل وحده، وسطرٌ يقول عاقبتَه قبل الضغط لا بعده */}
       <Dock hint={challenge
-        ? 'لم تُفتح جلسةٌ بعد — كلمةُ السرّ وحدها لا تفتح لوحة المالك.'
-        : 'تبقى جلستك مفتوحةً على هذا المتصفّح حتّى تخرج بنفسك.'}>
+        ? 'لم تفتح جلسة بعد — كلمة السرّ وحدها لا تفتح لوحة المالك.'
+        : 'تبقى جلستك مفتوحة على هذا المتصفّح حتّى تخرج بنفسك.'}>
         <Button type="submit" variant="primary" size="lg" wide busy={busy}>
           {challenge ? 'تحقّق' : 'دخول'}
         </Button>

@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
  */
 export const metadata: Metadata = {
   title: 'الإنبوكس',
-  description: 'محادثاتُ زبائنك ومن ينتظر ردَّك الآن.',
+  description: 'محادثات زبائنك ومن ينتظر ردّك الآن.',
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

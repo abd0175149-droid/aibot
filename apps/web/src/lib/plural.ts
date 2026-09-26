@@ -19,5 +19,5 @@ export function arCount(n: number, forms: Forms): string {
   return `${fmt.num(n)} ${word}`;
 }
 
-export const INCIDENT_OPEN: Forms = ['حادثةٌ مفتوحةٌ واحدة', 'حادثتان مفتوحتان', 'حوادث مفتوحة', 'حادثةً مفتوحة'];
-export const CLIENTS: Forms = ['عميلٌ واحد', 'عميلان', 'عملاء', 'عميلاً'];
+export const INCIDENT_OPEN: Forms = ['حادثة مفتوحة واحدة', 'حادثتان مفتوحتان', 'حوادث مفتوحة', 'حادثة مفتوحة'];
+export const CLIENTS: Forms = ['عميل واحد', 'عميلان', 'عملاء', 'عميلا'];

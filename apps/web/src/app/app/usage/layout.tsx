@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
  */
 export const metadata: Metadata = {
   title: 'الاستهلاك',
-  description: 'نوافذُك المفوترة وكلفةُ الذكاء وسقفُ باقتك.',
+  description: 'محادثاتك المحسوبة وكلفة الذكاء وسقف باقتك.',
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

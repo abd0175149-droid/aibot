@@ -26,9 +26,9 @@ export function KbTab({ c }: { c: BotCtx }) {
                     عمل أيّاماً هكذا ويجيب زبائنه «لا توجد عروض». */}
                 {!knowledge.trim() && !fileSources.some((s) => s.status === 'ready') && (
                   <Note tone="crit">
-                    <b>بوتك لا يعرف شيئاً عن نشاطك بعد.</b> بلا معرفةٍ يجيب من شخصيّته وحدها،
+                    <b>بوتك لا يعرف شيئا عن نشاطك بعد.</b> بلا معرفة يجيب من شخصيّته وحدها،
                     فيقول «لا يوجد» أو يخمّن. اكتب في الحقل أدناه الأسعار والدوام والخدمات
-                    — أو ارفع ملفّاً — ثمّ انشر.
+                    — أو ارفع ملفّا — ثمّ انشر.
                   </Note>
                 )}
                 {/* ★ الرقمُ البطوليُّ الواحد في هذه الشاشة: حجمُ نصّ معرفتك —
@@ -40,7 +40,7 @@ export function KbTab({ c }: { c: BotCtx }) {
                     hero
                     value={fmt.num(kbUnits)}
                     unit={UNIT}
-                    label="في نصّ معرفتك — وهو ما يقرّر كيف يقرأ بوتك معرفته"
+                    label="حجم معرفة بوتك"
                   />
                   <KbScale units={kbUnits} />
                   <p className="muted-p">
@@ -52,12 +52,12 @@ export function KbTab({ c }: { c: BotCtx }) {
                 <div className="sect">
                   <div className="sect-h">
                     <h2>كيف يقرأ بوتك معرفته</h2>
-                    <span className="sect-c">المسوّدة مقابل ما يخدم زبائنك الآن</span>
+                    <span className="sect-c">تعديلاتك مقابل ما يخدم زبائنك الآن</span>
                   </div>
                   <div className="rows bot-rows">
                     <div className="row-m">
                       <span className="rm-k">
-                        وضعُ مسوّدتك
+                        وضع مسوّدتك
                         <span className="rm-note">ما سيصير عليه بوتك عند أوّل نشر</span>
                       </span>
                       <span className="rm-c">
@@ -68,13 +68,13 @@ export function KbTab({ c }: { c: BotCtx }) {
                       <span className="rm-k">
                         الوضع الذي يخدم زبائنك الآن
                         <span className="rm-note">
-                          {pub ? 'من النسخة المنشورة، لا من المسوّدة' : 'لا نسخةَ منشورةَ بعد'}
+                          {pub ? 'من النسخة المنشورة، لا من تعديلاتك' : 'لا نسخة منشورة بعد'}
                         </span>
                       </span>
                       <span className="rm-c">
                         {liveMode
                           ? <Tag line label={MODE[liveMode]!.label} />
-                          : <Tag line label="لم يُنشر بعد" />}
+                          : <Tag line label="لم ينشر بعد" />}
                         {liveMode && liveMode === draftMode && <Tag line label="لا فرق" />}
                       </span>
                     </div>
@@ -83,12 +83,12 @@ export function KbTab({ c }: { c: BotCtx }) {
                         ملفّاتك
                         <span className="rm-note">
                           {fileSources.length === 0
-                            ? 'لا ملفّات — نصُّك وحده معرفتُه'
+                            ? 'لا ملفّات — نصّك وحده معرفته'
                             : liveMode === 'full'
-                              ? `في وضع «${MODE.full.label}» لا تدخل ردودَه — يُرسَل نصُّك وحده`
+                              ? `في وضع «${MODE.full.label}» لا تدخل ردوده — يرسل نصّك وحده`
                               : liveMode
                                 ? 'منها يستخرج بوتك ما يرتبط بالسؤال'
-                                : 'تدخل معرفته عند أوّل نشرٍ يتجاوز العتبة الأولى'}
+                                : 'تدخل معرفته عند أوّل نشر يتجاوز العتبة الأولى'}
                         </span>
                       </span>
                       <span className="rm-v">
@@ -99,10 +99,10 @@ export function KbTab({ c }: { c: BotCtx }) {
                           line
                           label={fileSources.length === 0
                             ? 'لا ملفّات'
-                            : amountText(fileSources.length, ['ملفٌّ واحد', 'ملفّان', 'ملفّات', 'ملفّاً'])}
+                            : amountText(fileSources.length, ['ملفّ واحد', 'ملفّان', 'ملفّات', 'ملفّا'])}
                         />
                         {liveMode !== 'full' && kb.data && kb.data.chunks > 0 && (
-                          <Tag line label={`${fmt.num(kb.data.chunks)} مقطعاً مُضمَّناً`} />
+                          <Tag line label={`${fmt.num(kb.data.chunks)} مقطعا مضمّنا`} />
                         )}
                       </span>
                     </div>
@@ -115,9 +115,9 @@ export function KbTab({ c }: { c: BotCtx }) {
                     يكتشف ذلك من ردٍّ خاطئٍ أمام زبون. */}
                 {liveMode === 'full' && fileSources.length > 0 && (
                   <Note tone="warn">
-                    <b>ملفّاتك لا تدخل ردود بوتك في الوضع الحاليّ.</b> دون العتبة الأولى يُرسَل
-                    نصُّ معرفتك كاملاً ويكفيه، فلا يستخرج من الملفّات. انقل ما يجب أن يعرفه
-                    منها إلى نصّ المعرفة أدناه — أو أبقِها حتّى يتجاوز نصُّك العتبة.
+                    <b>ملفّاتك لا تدخل ردود بوتك في الوضع الحاليّ.</b> دون العتبة الأولى يرسل
+                    نصّ معرفتك كاملا ويكفيه، فلا يستخرج من الملفّات. انقل ما يجب أن يعرفه
+                    منها إلى نصّ المعرفة أدناه — أو أبقها حتّى يتجاوز نصّك العتبة.
                   </Note>
                 )}
 
@@ -129,8 +129,8 @@ export function KbTab({ c }: { c: BotCtx }) {
                   && fileSources.some((s) => s.status === 'ready' && s.charCount > 0) && (
                   <Note tone="warn">
                     <b>في الوضع الحاليّ يجيب بوتك من ملفّاتك، لا من نصّ المعرفة.</b> فوق العتبة
-                    الأولى تُبنى معرفتُه من ملفّاتك الجاهزة وحدها، ويبقى النصّ أدناه مسوّدةً
-                    لا يقرأها. فضَع ما يجب أن يعرفه في ملفّاتك — أو احذفها ليعود نصُّك هو
+                    الأولى تبنى معرفته من ملفّاتك الجاهزة وحدها، ويبقى النصّ أدناه غير منشور
+                    لا يقرأها. فضع ما يجب أن يعرفه في ملفّاتك — أو احذفها ليعود نصّك هو
                     المصدر.
                   </Note>
                 )}
@@ -140,8 +140,8 @@ export function KbTab({ c }: { c: BotCtx }) {
                 {draftMode !== 'full' && publishedAt
                   && fileSources.some((s) => s.status === 'ready' && s.createdAt > publishedAt) && (
                   <Note tone="warn">
-                    <b>رفعتَ ملفّاً بعد آخر نشر.</b> معرفةُ كلّ نسخةٍ تُبنى لحظةَ نشرها،
-                    فلا يدخل هذا الملفّ ردودَ بوتك قبل أن تنشر من جديد.
+                    <b>رفعت ملفّا بعد آخر نشر.</b> معرفة كلّ نسخة تبنى لحظة نشرها،
+                    فلا يدخل هذا الملفّ ردود بوتك قبل أن تنشر من جديد.
                   </Note>
                 )}
               </>
@@ -154,7 +154,7 @@ export function KbTab({ c }: { c: BotCtx }) {
                     id={locked ? 'kb-text-ro' : 'kb-text'}
                     labelless={locked}
                     label="ماذا يعرف بوتك عن نشاطك؟"
-                    hint="ابدأ كلّ قسمٍ بسطر عنوانٍ ينتهي بنقطتين — فالبوت يستخرج بالأقسام، والعنوان يرفع دقّة ما يجده."
+                    hint="ابدأ كلّ قسم بعنوان ينتهي بنقطتين، مثل «الأسعار:». هذا يرفع دقّة بوتك."
                   >
                     {locked ? (
                       <div id="kb-text-ro" className="bot-ro" dir="auto">{knowledge}</div>
@@ -168,8 +168,8 @@ export function KbTab({ c }: { c: BotCtx }) {
                   <p className="muted-p">
                     <Amount n={headingsOf(knowledge)} forms={HEAD_FORMS} />
                     {headingsOf(knowledge) === 0
-                      ? ' — أضِف عناوين («الأسعار:» · «ساعات العمل:») ترفع دقّة بوتك كثيراً.'
-                      : ' — وكلّ قسمٍ بعنوانه يُسترجَع وحدةً واحدة.'}
+                      ? ' — أضف عناوين («الأسعار:» · «ساعات العمل:») ترفع دقّة بوتك كثيرا.'
+                      : ' — وكلّ قسم بعنوانه يسترجع وحدة واحدة.'}
                   </p>
                 </Stack>
               </div>

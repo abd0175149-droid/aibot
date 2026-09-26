@@ -130,16 +130,16 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
   return (
     <Modal
       wide
-      title="عميلٌ جديد"
+      title="عميل جديد"
       onClose={requestClose}
       footer={(
         <>
           {step === 1 && (
             <Button variant="primary" busy={busy} onClick={createTenant}
               disabled={!name.trim() || !SLUG_RE.test(slug) || !EMAIL_RE.test(email)}
-              reason={!name.trim() ? 'اكتب اسمَ النشاط.'
-                : !SLUG_RE.test(slug) ? 'المعرّف ٣–٣٠ حرفاً لاتينيّاً أو رقماً، يبدأ وينتهي بحرفٍ أو رقم.'
-                  : !EMAIL_RE.test(email) ? 'بريدُ المالك غيرُ مكتمل.' : undefined}>
+              reason={!name.trim() ? 'اكتب اسم النشاط.'
+                : !SLUG_RE.test(slug) ? 'المعرّف ٣–٣٠ حرفا لاتينيّا أو رقما، يبدأ وينتهي بحرف أو رقم.'
+                  : !EMAIL_RE.test(email) ? 'بريد المالك غير مكتمل.' : undefined}>
               أنشئ العميل
             </Button>
           )}
@@ -151,12 +151,12 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
                 افحص واربط
               </Button>
               {/* والتخطّي يمسح خطأَ الربط: كان يتبع المالكَ إلى خطوة البوت (رُئي حيّاً). */}
-              <Button onClick={() => { setErr(null); setIssues([]); setStep(3); }}>أكمِل بلا ربط</Button>
+              <Button onClick={() => { setErr(null); setIssues([]); setStep(3); }}>أكمل بلا ربط</Button>
             </>
           )}
           {/* الخطوةُ الثالثة لا فعلَ لها في الرصيف: زرُّ «انشر وابدأ» داخل
               النموذج نفسِه، فلا يُقسَّم فعلٌ واحدٌ على موضعَين. */}
-          {step === 4 && <Button variant="primary" onClick={onDone}>أنهِ</Button>}
+          {step === 4 && <Button variant="primary" onClick={onDone}>أنه</Button>}
           {step > 1 && step < 4 && <Button onClick={() => setStep((s) => (s - 1) as Step)}>السابق</Button>}
         </>
       )}
@@ -171,18 +171,18 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
 
         {leaving && created && (
           <Note tone="warn">
-            <b>تهيئةٌ لم تكتمل.</b> أُنشئ العميل «{created.tenant.name}» ومالكُه بالفعل
-            {!conn && <>، ولم تُربَط قناتُه بعد</>}
-            {step < 4 && <>، ولا نسخةَ بوتٍ منشورةً له — فلن يردّ على أحد</>}.
+            <b>تهيئة لم تكتمل.</b> أنشئ العميل «{created.tenant.name}» ومالكه بالفعل
+            {!conn && <>، ولم تربط قناته بعد</>}
+            {step < 4 && <>، ولا نسخة بوت منشورة له — فلن يردّ على أحد</>}.
             <p className="muted-p">
-              وهذه <b>آخرُ مرّةٍ</b> تظهر فيها كلمتُه المؤقّتة — لا تُخزَّن نصّاً في أيّ مكان.
-              وما بقي يُكمَل من ورقة العميل في اللوحة: ربطُ القناة، وبذرُ بوته، وتوليدُ كلمةٍ
-              مؤقّتةٍ جديدةٍ لمالكه.
+              وهذه <b>آخر مرّة</b> تظهر فيها كلمته المؤقّتة — لا تخزّن نصّا في أيّ مكان.
+              وما بقي يكمل من ورقة العميل في اللوحة: ربط القناة، وبذر بوته، وتوليد كلمة
+              مؤقّتة جديدة لمالكه.
             </p>
             <CodeBlock label="كلمة المرور المؤقّتة" text={created.tempPassword} />
             <Row gap="sm">
-              <Button variant="primary" onClick={() => setLeaving(false)}>أكمِل التهيئة</Button>
-              <Button onClick={onClose}>أغلِق — وأكمّلها من ورقة العميل</Button>
+              <Button variant="primary" onClick={() => setLeaving(false)}>أكمل التهيئة</Button>
+              <Button onClick={onClose}>أغلق — وأكمّلها من ورقة العميل</Button>
             </Row>
           </Note>
         )}
@@ -190,7 +190,7 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
         {err && <Note tone="crit">{err}</Note>}
         {!!issues.length && (
           <Note tone="warn">
-            <b>ملاحظاتٌ من ميتا:</b>
+            <b>ملاحظات من ميتا:</b>
             <ul>{issues.map((x) => <li key={x}>{x}</li>)}</ul>
           </Note>
         )}
@@ -206,8 +206,8 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
             </Field>
             <Field id="o-slug" label="المعرّف"
               hint={slugDropped
-                ? 'المعرّف بحروفٍ لاتينيّةٍ فقط — مثل: bait-alsham. حُذف ما ليس منها.'
-                : 'حروفٌ لاتينيّة وأرقامٌ وشرطات. لا يُعدَّل بعد الإنشاء.'}>
+                ? 'المعرّف بحروف لاتينيّة فقط — مثل: bait-alsham. حذف ما ليس منها.'
+                : 'حروف لاتينيّة وأرقام وشرطات. لا يعدّل بعد الإنشاء.'}>
               {/* ★ ما ليس لاتينيّاً يُحذف ولا يصير شرطة: «مطعم تجربة» كانت تصير
                   «----------» فيُفعَّل الزرّ على معرّفٍ من شرطاتٍ وحدها (رُئي حيّاً). */}
               <Input id="o-slug" value={slug} dir="ltr"
@@ -217,7 +217,7 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
                   setSlug(clean);
                 }} />
             </Field>
-            <Field id="o-mail" label="بريد المالك" hint="نُنشئ له حساباً بكلمة مرورٍ مؤقّتة يجب تغييرها.">
+            <Field id="o-mail" label="بريد المالك" hint="ننشئ له حسابا بكلمة مرور مؤقّتة يجب تغييرها.">
               <Input id="o-mail" type="email" value={email} dir="ltr" onChange={setEmail} />
             </Field>
           </Stack>
@@ -227,24 +227,24 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
           <Stack gap="sm">
             {created && (
               <Note>
-                <b>أُنشئ «{created.tenant.name}».</b> كلمة المرور المؤقّتة تُعرض
-                <b> مرّةً واحدة</b> ولا تُخزَّن نصّاً في أيّ مكان — انسخها الآن.
+                <b>أنشئ «{created.tenant.name}».</b> كلمة المرور المؤقّتة تعرض
+                <b> مرّة واحدة</b> ولا تخزّن نصّا في أيّ مكان — انسخها الآن.
                 <CodeBlock label="كلمة المرور المؤقّتة" text={created.tempPassword} />
               </Note>
             )}
             <p className="muted-p">
-              أربع قيمٍ من لوحة العميل عند ميتا. ولا نحفظ شيئاً قبل أن نفحصها
-              <b> فعلاً عند ميتا</b> — فتوكنٌ مكسورٌ محفوظ يُنتج بوتاً صامتاً لا عطلاً ظاهراً.
+              أربع قيم من لوحة العميل عند ميتا. ولا نحفظ شيئا قبل أن نفحصها
+              <b> فعلا عند ميتا</b> — فتوكن مكسور محفوظ ينتج بوتا صامتا لا عطلا ظاهرا.
             </p>
             <Field id="o-phone" label="معرّف الرقم" hint="Phone number ID — من WhatsApp ← API Setup.">
               <Input id="o-phone" value={phoneId} dir="ltr" onChange={setPhoneId} />
             </Field>
-            <Field id="o-waba" label="معرّف حساب واتساب (اختياريّ)" hint="WABA ID — يُمكّن فحص اشتراك الويبهوك.">
+            <Field id="o-waba" label="معرّف حساب واتساب (اختياريّ)" hint="WABA ID — يمكّن فحص اشتراك الويبهوك.">
               <Input id="o-waba" value={wabaId} dir="ltr" onChange={setWabaId} />
             </Field>
             <Field
               id="o-token" label="التوكن الدائم"
-              hint="من Business Settings ← System users ← Generate token، وانتهاؤه «Never». والتوكن المؤقّت عمره 24 ساعة ويُوقف البوت بلا إنذار."
+              hint="من Business Settings ← System users ← Generate token، وانتهاؤه «Never». والتوكن المؤقّت عمره 24 ساعة ويوقف البوت بلا إنذار."
             >
               <Input id="o-token" type="password" value={token} dir="ltr" onChange={setToken} />
             </Field>
@@ -252,7 +252,7 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
               <Input id="o-secret" type="password" value={appSecret} dir="ltr" onChange={setAppSecret} />
             </Field>
             <Note tone="warn">
-              <b>السرّان لا يُعادان إلى أيّ شاشة بعد الحفظ</b> — بصمةٌ وتاريخٌ فقط، ولا حتّى لك.
+              <b>السرّان لا يعادان إلى أيّ شاشة بعد الحفظ</b> — بصمة وتاريخ فقط، ولا حتّى لك.
             </Note>
           </Stack>
         )}
@@ -289,14 +289,14 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
             <Note>
               {/* ★ «منشورٌ ويستقبل» كانت تُقال والبوتُ قد يكون مطفأً ولا قناةَ
                   موصولة. والنصّ الآن يقول ما تمّ وما بقي — لا أكثر. */}
-              <b>جاهز.</b> نُشرت نسخة بوت «{created.tenant.name}» وشُغِّل. والخطوة الأخيرة عند ميتا:
-              الصِق هذين في WhatsApp ← Configuration، ثمّ فعّل الحقل <b>messages</b>.
+              <b>جاهز.</b> نشرت نسخة بوت «{created.tenant.name}» وشغّل. والخطوة الأخيرة عند ميتا:
+              الصق هذين في WhatsApp ← Configuration، ثمّ فعّل الحقل <b>messages</b>.
             </Note>
             <CodeBlock label="Callback URL" text={conn?.webhookUrl ?? created.webhookUrl} />
             {conn?.verifyToken && <CodeBlock label="Verify token" text={conn.verifyToken} />}
             <Note tone="warn">
-              <b>بلا حقل <span className="mono">messages</span> لا تصل رسالةٌ واحدة</b> — وكلّ شيءٍ
-              آخر سيبدو سليماً: التوكن صالح والرقم أخضر والشاشات خضراء. هذا أوّل ما نفحصه
+              <b>بلا حقل <span className="mono">messages</span> لا تصل رسالة واحدة</b> — وكلّ شيء
+              آخر سيبدو سليما: التوكن صالح والرقم أخضر والشاشات خضراء. هذا أوّل ما نفحصه
               عند أيّ «البوت لا يردّ».
             </Note>
           </Stack>

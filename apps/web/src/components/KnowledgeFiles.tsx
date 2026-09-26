@@ -63,12 +63,12 @@ interface Preview {
  *   تعني أنّنا قرأنا الملفّ — لا أنّ ما قرأناه صالح، وذاك ما تقوله المعاينة.
  */
 const STATUS: Record<string, { tone: 'ok' | 'warn' | 'crit' | 'neutral'; label: string }> = {
-  ready: { tone: 'ok', label: 'استُخرج نصُّه' },
+  ready: { tone: 'ok', label: 'استخرج نصّه' },
   /* ★ محايدةٌ لا تحذير: «قيد المعالجة» حالةٌ تزول وحدها في ثوانٍ،
      و`weak` أدناه تحتاج المالك فعلاً. ولو تشابهتا لوناً **وشكلاً** لصارت
      التي تطلب فعلاً كالتي لا تطلب شيئاً — والتمييز يقع على النصّ وحده. */
   pending: { tone: 'neutral', label: 'قيد المعالجة' },
-  failed: { tone: 'crit', label: 'لم يُستخرج نصّ' },
+  failed: { tone: 'crit', label: 'لم يستخرج نصّ' },
   /**
    * ★ حالةٌ رابعة: **استُخرج قليلاً**.
    *
@@ -78,7 +78,7 @@ const STATUS: Record<string, { tone: 'ok' | 'warn' | 'crit' | 'neutral'; label: 
    *   ضغطة «عايِن». فينشر المالك وهو مطمئنّ، والبوت لا يعرف صنفاً واحداً،
    *   ويأتي التشخيصُ من شكوى زبونٍ لا من الجدول.
    */
-  weak: { tone: 'warn', label: 'استُخرج قليلاً — عايِنه' },
+  weak: { tone: 'warn', label: 'استخرج قليلا — عاينه' },
 };
 
 /** الحالةُ المعروضة: `ready` مع تحذيرٍ ليست `ready`. */
@@ -91,9 +91,9 @@ interface UpItem { name: string; state: 'wait' | 'up' | 'done' | 'fail'; err?: s
 
 const UP_TEXT: Record<UpItem['state'], string> = {
   wait: 'في الانتظار',
-  up: 'يُرفع الآن…',
+  up: 'يرفع الآن…',
   done: 'وصل — وقيد المعالجة',
-  fail: 'لم يُرفع',
+  fail: 'لم يرفع',
 };
 
 /**
@@ -206,7 +206,7 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
     { key: 'title', head: 'الملفّ', cell: (r) => <span className="kb-name">{r.title}</span> },
     {
       key: 'status',
-      head: 'هل قُرئ؟',
+      head: 'هل قرئ؟',
       cell: (r) => (
         <Pill
           tone={STATUS[shownStatus(r)]?.tone ?? 'warn'}
@@ -224,7 +224,7 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
         ? <span className="num">{fmt.num(fileUnits(r.charCount))}</span>
         : '—'),
     },
-    { key: 'up', head: 'رُفع', cell: (r) => fmt.when(r.createdAt) },
+    { key: 'up', head: 'رفع', cell: (r) => fmt.when(r.createdAt) },
     {
       key: 'act',
       head: 'أفعال',
@@ -234,9 +234,9 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
             size="sm"
             onClick={() => void openPreview(r.id)}
             disabled={r.status === 'pending'}
-            reason="ما زال قيد المعالجة — لا نصَّ لنعرضه بعد"
+            reason="ما زال قيد المعالجة — لا نصّ لنعرضه بعد"
           >
-            عايِن
+            عاين
           </Button>
           {/* ★ الخطرُ في نهاية الصفّ وخلفه ورقة: كان بنقرةٍ واحدةٍ بجوار «عايِن» */}
           <Button
@@ -269,13 +269,13 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
         onDragLeave={() => setDrag(false)}
         onDrop={(e) => { e.preventDefault(); setDrag(false); if (!readOnly) void upload(e.dataTransfer.files); }}
       >
-        <b>أفلِت ملفّاتك هنا</b>
+        <b>أفلت ملفّاتك هنا</b>
         <p>نصّ · Markdown · CSV · PDF · Word · Excel — حتّى {MAX_MB} ميجابايت للملفّ</p>
         <Button
           variant="primary" busy={busy} disabled={readOnly} reason={lock}
           onClick={() => input.current?.click()}
         >
-          اختر ملفّاً
+          اختر ملفّا
         </Button>
         <input
           ref={input} type="file" multiple accept={ACCEPT} className="hidden-file"
@@ -287,9 +287,9 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
       {queue && (
         <div className="kb-up" role="status" aria-live="polite">
           <div className="kb-up-h">
-            <span>{busy ? 'يُرفع الآن' : 'انتهى الرفع'}</span>
+            <span>{busy ? 'يرفع الآن' : 'انتهى الرفع'}</span>
             <span className="kb-up-c">
-              <span className="num">{fmt.num(upDone)} / {fmt.num(upTotal)}</span> ملفّاً
+              <span className="num">{fmt.num(upDone)} / {fmt.num(upTotal)}</span> ملفّا
             </span>
           </div>
           <Meter pct={upTotal ? upDone / upTotal : 0} tone="brand" />
@@ -313,14 +313,14 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
           {stalled
             ? (
               <>
-                <b>تأخّرت المعالجة أكثر من المعتاد.</b> الملفّ ما زال في الطابور — أعِد تحميل
-                الصفحة بعد قليل. وإن بقي هكذا فأبلِغنا باسم الملفّ.
+                <b>تأخّرت المعالجة أكثر من المعتاد.</b> الملفّ ما زال في الطابور — أعد تحميل
+                الصفحة بعد قليل. وإن بقي هكذا فأبلغنا باسم الملفّ.
               </>
             )
             : (
               <>
                 <b>نقرأ ملفّك الآن</b> ونستخرج نصّه — والصفّ يتحدّث من نفسه حين يجهز، بلا أن
-                تُحدِّث الصفحة.
+                تحدّث الصفحة.
               </>
             )}
         </Note>
@@ -329,7 +329,7 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
       {!loading && !files.length && (
         <Empty
           title="لا ملفّات بعد"
-          hint="ارفع قائمة أسعارٍ أو كتيّب خدماتٍ أو أسئلةً شائعة. نستخرج نصّه وتعاينه قبل أن تنشره — فلا يقرأ البوت جدولاً مشوّهاً."
+          hint="ارفع قائمة أسعار أو كتيّب خدمات أو أسئلة شائعة. نستخرج نصّه وتعاينه قبل أن تنشره — فلا يقرأ البوت جدولا مشوّها."
         />
       )}
 
@@ -338,15 +338,15 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
       )}
 
       <Note>
-        <b>عايِن قبل أن تنشر.</b> «استُخرج» تعني أنّنا قرأنا الملفّ، لا أنّه صالح. PDF من صورٍ
-        ممسوحة يُخرج فراغاً، وجدولاً معقّداً يُخرج سطوراً مشوّهة — وكلٌّ منهما يُفسد ردود بوتك
-        بلا أن يُعلن. المعاينة دقيقةٌ واحدة تمنع أسبوعاً من تشخيصٍ خاطئ.
+        <b>عاين قبل أن تنشر.</b> «استخرج» تعني أنّنا قرأنا الملفّ، لا أنّه صالح. PDF من صور
+        ممسوحة يخرج فراغا، وجدولا معقّدا يخرج سطورا مشوّهة — وكلّ منهما يفسد ردود بوتك
+        بلا أن يعلن. المعاينة دقيقة واحدة تمنع أسبوعا من تشخيص خاطئ.
       </Note>
 
       {preview && (
         <Modal
           wide title={`معاينة «${preview.title}»`} onClose={() => setPreview(null)}
-          footer={<Button onClick={() => setPreview(null)}>أغلِق</Button>}
+          footer={<Button onClick={() => setPreview(null)}>أغلق</Button>}
         >
           <Stack gap="sm">
             <Row gap="sm">
@@ -359,8 +359,8 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
             {preview.error && <Note tone="crit">{preview.error}</Note>}
             {!preview.preview.trim() && (
               <Note tone="crit">
-                <b>لم يُستخرج أيّ نصّ.</b> الملفّ صورٌ ممسوحة على الأرجح. الحلّ: انسخ محتواه
-                نصّاً في حقل المعرفة، أو حوّله بأداة OCR أوّلاً.
+                <b>لم يستخرج أيّ نصّ.</b> الملفّ صور ممسوحة على الأرجح. الحلّ: انسخ محتواه
+                نصّا في حقل المعرفة، أو حوّله بأداة OCR أوّلا.
               </Note>
             )}
             {preview.preview.trim() && <pre className="kb-prev">{preview.preview}</pre>}
@@ -378,27 +378,27 @@ export function KnowledgeFiles({ sources, loading, onChanged, readOnly, lockReas
         open={Boolean(doomed)}
         title="احذف هذا الملفّ من معرفة بوتك؟"
         onClose={() => setDoomed(null)}
-        hint="ولا يُرجَع إلّا برفعه من جديد — النصّ المستخرَج يُمحى معه."
+        hint="ولا يرجع إلّا برفعه من جديد — النصّ المستخرج يمحى معه."
         footer={(
           <Row gap="sm">
             <Button
               variant="danger" wide busy={removing}
               onClick={() => { if (doomed) void remove(doomed); }}
             >
-              احذفه نهائيّاً
+              احذفه نهائيّا
             </Button>
-            <Button onClick={() => setDoomed(null)}>أبقِه</Button>
+            <Button onClick={() => setDoomed(null)}>أبقه</Button>
           </Row>
         )}
       >
         <p className="muted-p">
           {doomed && <b dir="auto">«{doomed.title}»</b>}
-          {' '}— بعد الحذف <b>ينسى بوتك ما فيه من أوّل ردٍّ قادم</b>، بلا انتظار نشر: مقاطعه
+          {' '}— بعد الحذف <b>ينسى بوتك ما فيه من أوّل ردّ قادم</b>، بلا انتظار نشر: مقاطعه
           تزول من النسخة التي تخدم زبائنك الآن.
         </p>
         <p className="muted-p">
-          وإن كان فيه سعرٌ قديمٌ وحده فالأفضل رفعُ نسخةٍ محدَّثةٍ ثمّ حذفُ القديم — فلا تبقى
-          فترةٌ يجيب فيها بوتك بلا هذه المعلومة.
+          وإن كان فيه سعر قديم وحده فالأفضل رفع نسخة محدّثة ثمّ حذف القديم — فلا تبقى
+          فترة يجيب فيها بوتك بلا هذه المعلومة.
         </p>
       </Sheet>
     </Stack>

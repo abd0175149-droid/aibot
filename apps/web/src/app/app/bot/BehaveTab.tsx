@@ -26,7 +26,7 @@ export function BehaveTab({ c }: { c: BotCtx }) {
                   وأرقاماً بلا وحدةٍ ولا عاقبة («دورات الأدوات: 3»). فما لا يُعدَّل
                   من هنا يُقال صريحاً ويُطوى، وكلّ رقمٍ معه عاقبتُه. */}
               <details className="bot-more">
-                <summary>ثلاثةٌ يضبطها فريق المنصّة معك — لا تُعدَّل من هذه الشاشة</summary>
+                <summary>ثلاثة يضبطها فريق المنصّة معك — لا تعدّل من هذه الشاشة</summary>
                 <div className="bot-more-b">
                   <div className="sect">
                     <div className="rows bot-rows">
@@ -40,14 +40,14 @@ export function BehaveTab({ c }: { c: BotCtx }) {
                         <span className="rm-c">
                           {pub?.model
                             ? <span className="mono bot-toolkey">{pub.model}</span>
-                            : <Tag line label="لم يُنشر بعد" />}
+                            : <Tag line label="لم ينشر بعد" />}
                         </span>
                       </div>
                       <div className="row-m">
                         <span className="rm-k">
-                          كم مرّةً يسأل نظامك في الردّ الواحد
+                          كم مرّة يسأل نظامك في الردّ الواحد
                           <span className="rm-note">
-                            وبعدها يجيب بما عنده ولا يسأل مرّةً أخرى — سقفٌ يمنع الدوران.
+                            وبعدها يجيب بما عنده ولا يسأل مرّة أخرى — سقف يمنع الدوران.
                           </span>
                         </span>
                         <span className="rm-v">
@@ -57,9 +57,9 @@ export function BehaveTab({ c }: { c: BotCtx }) {
                       </div>
                       <div className="row-m">
                         <span className="rm-k">
-                          كم رسالةً من المحادثة يتذكّر
+                          كم رسالة من المحادثة يتذكّر
                           <span className="rm-note">
-                            آخرُ الرسائل وحدها تُرسَل معه — فما قبلها لا يذكره.
+                            آخر الرسائل وحدها ترسل معه — فما قبلها لا يذكره.
                           </span>
                         </span>
                         <span className="rm-v">
@@ -70,16 +70,16 @@ export function BehaveTab({ c }: { c: BotCtx }) {
                     </div>
                   </div>
                   <p className="muted-p">
-                    هذه الثلاثة تُضبط معك عند التهيئة، ولو احتجت تغيير واحدةٍ منها فاطلبها من
-                    فريقنا — ولا تُعدَّل من هنا لأنّ لها أثراً على كلفة كلّ ردّ.
+                    هذه الثلاثة تضبط معك عند التهيئة، ولو احتجت تغيير واحدة منها فاطلبها من
+                    فريقنا — ولا تعدّل من هنا لأنّ لها أثرا على كلفة كلّ ردّ.
                   </p>
                 </div>
               </details>
             </Stack>
           ) : (
             <Empty
-              title="لا سلوكَ محفوظاً بعد"
-              hint="هذه الحدود تُنشأ مع أوّل نشرٍ لشخصيّة بوتك: مدّة سكوته بعد تدخّل موظّف، وكم مرّةً يسأل نظامك، وما يقوله حين يعجز. اكتب الشخصيّة وانشرها لتظهر."
+              title="لا سلوك محفوظا بعد"
+              hint="تظهر هذه الإعدادات بعد أوّل نشر لشخصيّة بوتك."
               action={<Button onClick={() => setTab('persona')}>اذهب إلى الشخصيّة</Button>}
             />
           )

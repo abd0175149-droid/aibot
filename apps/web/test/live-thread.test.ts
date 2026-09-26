@@ -17,7 +17,7 @@ const code = (rel: string) => read(rel)
   .replace(/\/\*[\s\S]*?\*\//g, ' ')
   .replace(/^\s*\/\/[^\n]*/gm, ' ');
 
-describe('بياناتُ مسارٍ لا تُعرض تحت عنوان مسارٍ آخر', () => {
+describe('بيانات مسار لا تعرض تحت عنوان مسار آخر', () => {
   const h = code('lib/useApi.tsx');
 
   it('★ الجلبُ يمسح بياناتِ المسار السابق قبل أن يبدأ', () => {
@@ -109,7 +109,7 @@ describe('«يحتاجك الآن» رقمٌ واحدٌ من القاعدة', ()
 
   it('وما سقط خارج المعروض يُقال ويُفتح', () => {
     expect(p).toMatch(/const attnHidden = Math\.max\(0, attnTotal - attnRows\.length\)/);
-    expect(read('app/app/inbox/page.tsx')).toContain('خارج المعروض — اعرِضهم');
+    expect(read('app/app/inbox/page.tsx')).toContain('خارج المعروض — اعرضهم');
   });
 });
 

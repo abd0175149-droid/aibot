@@ -17,9 +17,9 @@ import { useTheme, type ThemeChoice } from '@/lib/theme';
  */
 
 const OPTIONS: Array<{ id: ThemeChoice; label: string; mark: string; title: string }> = [
-  { id: 'light', label: 'فاتح', mark: '☀', title: 'فاتحٌ دائماً' },
+  { id: 'light', label: 'فاتح', mark: '☀', title: 'فاتح دائما' },
   { id: 'system', label: 'النظام', mark: '◐', title: 'يتبع إعداد جهازك ويتبدّل معه' },
-  { id: 'dark', label: 'داكن', mark: '☾', title: 'داكنٌ دائماً' },
+  { id: 'dark', label: 'داكن', mark: '☾', title: 'داكن دائما' },
 ];
 
 export function ThemeToggle({ compact }: { compact?: boolean }) {

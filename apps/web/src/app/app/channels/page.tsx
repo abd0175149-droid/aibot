@@ -91,13 +91,13 @@ const QUALITY: Record<string, { label: string; sev: Sev; why: ReactNode }> = {
   GREEN: {
     label: 'أخضر',
     sev: 'good',
-    why: 'لم تُشكَ رسائلك بما يُذكر. ولو صار أصفر: أوقف أيّ إرسالٍ جماعيٍّ في الحال. '
-      + 'ولو صار أحمر: تخفض ميتا سقف إرسالك اليوميّ، وهو أثرٌ يُحسّ في المبيعات لا في لوحةٍ.',
+    why: 'لم تشك رسائلك بما يذكر. ولو صار أصفر: أوقف أيّ إرسال جماعيّ في الحال. '
+      + 'ولو صار أحمر: تخفض ميتا سقف إرسالك اليوميّ، وهو أثر يحسّ في المبيعات لا في لوحة.',
   },
   YELLOW: {
     label: 'أصفر',
     sev: 'warn',
-    why: 'شكاوى زبائنك ارتفعت. أوقف أيّ إرسالٍ جماعيٍّ الآن — فإن صار أحمر خفضت ميتا '
+    why: 'شكاوى زبائنك ارتفعت. أوقف أيّ إرسال جماعيّ الآن — فإن صار أحمر خفضت ميتا '
       + 'سقف إرسالك اليوميّ، والعودة منه أبطأ من الهبوط إليه.',
   },
   RED: {
@@ -105,9 +105,9 @@ const QUALITY: Record<string, { label: string; sev: Sev; why: ReactNode }> = {
     sev: 'bad',
     why: (
       <>
-        ميتا خفضت سقف إرسالك اليوميّ فعلاً. لا ترسل شيئاً جماعيّاً حتّى يعود أصفر أو أخضر، و
-        <SupportLink subject="سمعةُ الرقم عند ميتا: أحمر">راسلنا</SupportLink>
-        {' '}لنراجع معك ما يُشكى منه.
+        ميتا خفضت سقف إرسالك اليوميّ فعلا. لا ترسل شيئا جماعيّا حتّى يعود أصفر أو أخضر، و
+        <SupportLink subject="سمعة الرقم عند ميتا: أحمر">راسلنا</SupportLink>
+        {' '}لنراجع معك ما يشكى منه.
       </>
     ),
   },
@@ -115,7 +115,7 @@ const QUALITY: Record<string, { label: string; sev: Sev; why: ReactNode }> = {
 
 const LEVEL: Record<TestReport['level'], { label: string; tone: Tone; sev: Sev }> = {
   ok: { label: 'سليمة', tone: 'ok', sev: 'good' },
-  degraded: { label: 'تعمل بجودةٍ أقلّ', tone: 'warn', sev: 'warn' },
+  degraded: { label: 'تعمل بجودة أقلّ', tone: 'warn', sev: 'warn' },
   blocked: { label: 'محجوبة', tone: 'crit', sev: 'bad' },
   unreachable: { label: 'لا تستجيب', tone: 'crit', sev: 'bad' },
 };
@@ -197,7 +197,7 @@ export default function ChannelsPage() {
         stitch(id, r);
         if (r.level !== 'ok') bad += 1;
       }
-      toast(bad ? 'الفحص انتهى — اقرأ التفاصيل' : 'كلُّ القنوات الموصولة سليمة');
+      toast(bad ? 'الفحص انتهى — اقرأ التفاصيل' : 'كلّ القنوات الموصولة سليمة');
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'تعذّر الفحص');
     } finally {
@@ -223,20 +223,20 @@ export default function ChannelsPage() {
   const band: { sev: Sev; head: ReactNode; sub: ReactNode } = !items.length
     ? {
       sev: 'warn',
-      head: 'لم تربط قناةً بعد',
-      sub: 'زبائنك لا يستطيعون مراسلتك حتّى تُربط قناةٌ واحدةٌ على الأقلّ.',
+      head: 'لم تربط قناة بعد',
+      sub: 'زبائنك لا يستطيعون مراسلتك حتّى تربط قناة واحدة على الأقلّ.',
     }
     : broken.length
       ? {
         sev: 'bad',
         head: `${broken.map((c) => KIND[c.kind].label).join(' و')} لا تصل منها رسائل زبائنك`,
         sub: broken[0]?.lastError
-          ?? 'اضغط «افحص القنوات الموصولة» في الرصيف أسفل — الفحص يسأل ميتا مباشرةً لا صفّاً عندنا.',
+          ?? 'اضغط «افحص القنوات الموصولة» في الرصيف أسفل — الفحص يسأل ميتا مباشرة لا صفّا عندنا.',
       }
       : {
         sev: 'good',
-        head: 'كلُّ قنواتك تستقبل وتردّ',
-        sub: <>آخر فحصٍ عند ميتا: {fmt.when(lastCheck)} — والفحصُ يسأل ميتا مباشرةً لا صفّاً عندنا.</>,
+        head: 'كلّ قنواتك تستقبل وتردّ',
+        sub: <>آخر فحص عند ميتا: {fmt.when(lastCheck)} — والفحص يسأل ميتا مباشرة لا صفّا عندنا.</>,
       };
 
   return (
@@ -244,7 +244,7 @@ export default function ChannelsPage() {
       {toastNode}
       <PageHead
         title="القنوات"
-        sub="من هنا تصل رسائل زبائنك — ومن هنا تنقطع. نفس البوت ونفس المعرفة على كلّ قناة، وما يختلف هو ما تسمح به القناة."
+        sub="القنوات التي يصلك منها زبائنك."
       />
 
       <Band sev={band.sev} head={band.head} sub={band.sub} />
@@ -257,12 +257,12 @@ export default function ChannelsPage() {
           sev={broken.length ? 'bad' : 'good'}
           value={fmt.num(broken.length)}
           label={broken.length
-            ? 'قناةً لا تصل منها رسائل زبائنك كما يجب'
-            : 'قناةً معطَّلة — كلُّ ما يكتبه زبائنك يصل'}
+            ? 'قناة لا تصل منها رسائل زبائنك كما يجب'
+            : 'قناة معطّلة — كلّ ما يكتبه زبائنك يصل'}
           ctx={(
             <>
-              من <span className="num">{fmt.num(items.length)}</span> قناةً مربوطة ·
-              {' '}<span className="num">{fmt.num(live.length)}</span> موصولةٌ الآن ·
+              من <span className="num">{fmt.num(items.length)}</span> قناة مربوطة ·
+              {' '}<span className="num">{fmt.num(live.length)}</span> موصولة الآن ·
               {' '}آخر فحص {fmt.when(lastCheck)}
             </>
           )}
@@ -271,8 +271,8 @@ export default function ChannelsPage() {
         <Hero
           sev="warn"
           value="0"
-          label="قناةً مربوطة — ولا رسالةَ تصل حتّى تُربط واحدة"
-          ctx="الربط يجري معك على مكالمة: واتساب 30 إلى 60 دقيقة أوّل مرّة، وإنستجرام ثلاث نقراتٍ بلا سرٍّ تلصقه."
+          label="قناة مربوطة. لا تصل رسالة قبل ربط قناة."
+          ctx="الربط يجري معك على مكالمة: واتساب 30 إلى 60 دقيقة أوّل مرّة، وإنستجرام ثلاث نقرات بلا سرّ تلصقه."
         />
       )}
 
@@ -300,17 +300,17 @@ export default function ChannelsPage() {
                 <Vital
                   sev={wa.qualityRating ? (QUALITY[wa.qualityRating]?.sev ?? 'plain') : 'plain'}
                   k={wa.qualityRating
-                    ? `سمعةُ رقمك عند ميتا: ${QUALITY[wa.qualityRating]?.label ?? wa.qualityRating}`
-                    : 'سمعةُ رقمك عند ميتا: لم تُقرأ بعد'}
+                    ? `سمعة رقمك عند ميتا: ${QUALITY[wa.qualityRating]?.label ?? wa.qualityRating}`
+                    : 'سمعة رقمك عند ميتا: لم تقرأ بعد'}
                   why={wa.qualityRating
                     ? (QUALITY[wa.qualityRating]?.why ?? (
                       <>
-                        قيمةٌ جديدةٌ من ميتا —{' '}
-                        <SupportLink subject="قيمةُ سمعةٍ جديدةٌ من ميتا">راسلنا</SupportLink>
+                        قيمة جديدة من ميتا —{' '}
+                        <SupportLink subject="قيمة سمعة جديدة من ميتا">راسلنا</SupportLink>
                         {' '}لنقرأها معك.
                       </>
                     ))
-                    : 'تُقرأ من ميتا عند أوّل فحصٍ للاتّصال. وهي التي تقرّر سقف إرسالك اليوميّ.'}
+                    : 'تقرأ من ميتا عند أوّل فحص للاتّصال. وهي التي تقرّر سقف إرسالك اليوميّ.'}
                 />
                 <WebhookVital report={reports[wa.id]} lastCheckedAt={wa.lastCheckedAt} />
               </>
@@ -320,7 +320,7 @@ export default function ChannelsPage() {
                   رقمك وحسابك عند ميتا — لا عندنا. فاتورة ميتا عليك، وتأخذ رقمك معك إن رحلت.
                 </p>
                 <p className="muted-p">
-                  الربط يحتاج أربع قيمٍ من لوحتك عند ميتا، ونقوم بها معك على مكالمة —
+                  الربط يحتاج أربع قيم من لوحتك عند ميتا، ونقوم بها معك على مكالمة —
                   <b> 30 إلى 60 دقيقة أوّل مرّة</b>.
                 </p>
               </Stack>
@@ -331,17 +331,17 @@ export default function ChannelsPage() {
             {wa && reports[wa.id] && <Report r={reports[wa.id]!} />}
 
             {wa?.status === 'connected' && (
-              <Fold summary="تفاصيلُ تقنيّة — لا يُتّخذ عليها قرار">
+              <Fold summary="تفاصيل تقنيّة — لا يتّخذ عليها قرار">
                 <KV>
                   <KVRow k="بصمة المفتاح"><span className="mono">{wa.tokenFingerprint ?? '—'}</span></KVRow>
                   <KVRow k="مستوى الإرسال"><span className="mono">{wa.messagingTier ?? '—'}</span></KVRow>
-                  <KVRow k="نافذة الردّ الحرّ">
-                    <span className="num">{wa.capabilities.windowHours}</span> ساعةً من آخر رسالةٍ للزبون
+                  <KVRow k="مهلة الردّ (24 ساعة)">
+                    <span className="num">{wa.capabilities.windowHours}</span> ساعة من آخر رسالة للزبون
                   </KVRow>
                   <KVRow k="الأزرار في الرسالة">
                     <Row gap="xs">
                       <Pill tone="ok" label="مدعومة" />
-                      <span><span className="num">{wa.capabilities.buttons}</span> كحدٍّ أقصى</span>
+                      <span><span className="num">{wa.capabilities.buttons}</span> كحدّ أقصى</span>
                     </Row>
                   </KVRow>
                   <KVRow k="إرسال الموقع"><Pill tone="ok" label="مدعوم" /></KVRow>
@@ -352,8 +352,8 @@ export default function ChannelsPage() {
                       إلى بابٍ غير موجود: لا زرَّ ربطٍ في ورقة العميل باللوحة، ولا
                       مستدعيَ لمسار الربط في الواجهة كلّها إلّا معالجُ عميلٍ جديد.
                       فكان تجديدُ توكنٍ منتهٍ يمرّ بمكالمةٍ ثمّ سكربتٍ على الخادم. */}
-                  التوكن مملوكٌ لحسابك عند ميتا، فتجديدُه بيدك من زرّ «جدّد الربط» أدناه.
-                  ولا سرَّ يُعرض هنا أبداً — بصمةٌ وتاريخٌ فقط.
+                  التوكن مملوك لحسابك عند ميتا، فتجديده بيدك من زرّ «جدّد الربط» أدناه.
+                  ولا سرّ يعرض هنا أبدا — بصمة وتاريخ فقط.
                 </p>
               </Fold>
             )}
@@ -366,13 +366,13 @@ export default function ChannelsPage() {
                   size="md"
                   busy={busy === wa.id}
                   disabled={can.readOnly || busy !== null}
-                  reason={can.readOnly ? 'حسابك للقراءة فقط' : busy !== null ? 'فحصٌ يجري الآن' : undefined}
+                  reason={can.readOnly ? 'حسابك للقراءة فقط' : busy !== null ? 'فحص يجري الآن' : undefined}
                   onClick={() => void runTest(wa.id)}
                 >
                   افحص الاتّصال
                 </Button>
               ) : (
-                <Button size="md" onClick={() => openSteps('wa')}>أرِني ما يحتاجه الربط</Button>
+                <Button size="md" onClick={() => openSteps('wa')}>أرني ما يحتاجه الربط</Button>
               )}
               {/* ★ «جدّد الربط» مرئيٌّ في الحالتين: القناة الموصولة توكنها ينتهي،
                   وغيرُ الموصولة تحتاج الربط نفسه. وهذا هو المسار الذي كان
@@ -410,11 +410,11 @@ export default function ChannelsPage() {
               <>
                 <Vital
                   sev="good"
-                  k="نافذةٌ مستقلّةٌ عن واتساب"
+                  k="محادثات مستقلّة عن واتساب"
                   why={(
                     <>
-                      <span className="num">{ig.capabilities.windowHours}</span> ساعةً من آخر رسالةٍ للزبون،
-                      وتُحتسب على حدة: زبونٌ يراسلك على القناتين يستهلك نافذتين — لأنّهما محادثتان
+                      <span className="num">{ig.capabilities.windowHours}</span> ساعة من آخر رسالة للزبون،
+                      وتحتسب على حدة: زبون يراسلك على القناتين يستهلك نافذتين — لأنّهما محادثتان
                       منفصلتان عند ميتا.
                     </>
                   )}
@@ -422,17 +422,17 @@ export default function ChannelsPage() {
                 <Vital
                   sev="plain"
                   k="لا شيء تلصقه هنا"
-                  why="الربط بموافقةٍ من داخل فيسبوك لا بمفتاحٍ تنسخه — فلا سرَّ يُسرَّب ولا ينتهي."
+                  why="الربط بموافقة من داخل فيسبوك لا بمفتاح تنسخه — فلا سرّ يسرّب ولا ينتهي."
                 />
               </>
             ) : (
               <Stack gap="sm">
                 <p className="muted-p">
-                  ثلاث ضغطات، ولا سرَّ تلصقه: تختار حسابك التجاريّ وتمنحنا قراءة الرسائل
-                  والردّ عليها. لا صلاحيّة نشرٍ ولا إعلانات.
+                  ثلاث ضغطات، ولا سرّ تلصقه: تختار حسابك التجاريّ وتمنحنا قراءة الرسائل
+                  والردّ عليها. لا صلاحيّة نشر ولا إعلانات.
                 </p>
                 <p className="muted-p">
-                  نفس البوت ونفس المعرفة — ونافذةٌ مستقلّة تُحتسب على حدة.
+                  نفس البوت ونفس المعرفة، وتُحسب محادثاتها على حدة.
                 </p>
               </Stack>
             )}
@@ -442,21 +442,21 @@ export default function ChannelsPage() {
             {ig && reports[ig.id] && <Report r={reports[ig.id]!} />}
 
             {ig?.status === 'connected' && (
-              <Fold summary="تفاصيلُ تقنيّة — لا يُتّخذ عليها قرار">
+              <Fold summary="تفاصيل تقنيّة — لا يتّخذ عليها قرار">
                 <KV>
-                  <KVRow k="ما لصقتَه"><b>لا شيء</b> — الربط بموافقةٍ لا بمفتاح</KVRow>
+                  <KVRow k="ما لصقته"><b>لا شيء</b> — الربط بموافقة لا بمفتاح</KVRow>
                   <KVRow k="الأزرار في الرسالة">
                     <Row gap="xs">
-                      <Pill tone="warn" label="تصير ردوداً سريعة" />
-                      <span><span className="num">{ig.capabilities.quickReplies}</span> كحدٍّ أقصى</span>
+                      <Pill tone="warn" label="تصير ردودا سريعة" />
+                      <span><span className="num">{ig.capabilities.quickReplies}</span> كحدّ أقصى</span>
                     </Row>
                   </KVRow>
                   <KVRow k="إرسال الموقع"><Pill tone="neutral" label="غير مدعوم — الأداة مخفيّة" /></KVRow>
                   <KVRow k="آخر فحص">{fmt.when(ig.lastCheckedAt)}</KVRow>
                 </KV>
                 <p className="muted-p">
-                  إعادةُ المنح وفصلُ الحساب يجريان معك على مكالمة حتّى نفتح تدفّق الموافقة —
-                  وفصلُ حسابٍ يُسكت بوتك عن كلّ زبائنك على هذه القناة، فلا يكون أضعفَ زرٍّ في الشاشة.
+                  إعادة المنح وفصل الحساب يجريان معك على مكالمة حتّى نفتح تدفّق الموافقة —
+                  وفصل حساب يسكت بوتك عن كلّ زبائنك على هذه القناة، فلا يكون أضعف زرّ في الشاشة.
                 </p>
               </Fold>
             )}
@@ -467,28 +467,28 @@ export default function ChannelsPage() {
                   size="md"
                   busy={busy === ig.id}
                   disabled={can.readOnly || busy !== null}
-                  reason={can.readOnly ? 'حسابك للقراءة فقط' : busy !== null ? 'فحصٌ يجري الآن' : undefined}
+                  reason={can.readOnly ? 'حسابك للقراءة فقط' : busy !== null ? 'فحص يجري الآن' : undefined}
                   onClick={() => void runTest(ig.id)}
                 >
                   افحص الاتّصال
                 </Button>
               ) : (
-                <Button size="md" onClick={() => openSteps('ig')}>أرِني خطوات الربط</Button>
+                <Button size="md" onClick={() => openSteps('ig')}>أرني خطوات الربط</Button>
               )}
             </Row>
           </Stack>
         </Card>
       </Grid>
 
-      <Fold summary="لماذا الربط مختلفٌ بين القناتين — ولماذا لا نعرض سرّاً أبداً">
+      <Fold summary="لماذا يختلف الربط بين القناتين؟">
         <Note>
           <b>لماذا الربط مختلف بين القناتين.</b> واتساب على حسابك أنت، فالمسؤوليّة والرقم لك —
-          والثمن تهيئةٌ أطول. وإنستجرام على تطبيقنا، فالربط بضغطة — والرسائل المباشرة بلا
+          والثمن تهيئة أطول. وإنستجرام على تطبيقنا، فالربط بضغطة — والرسائل المباشرة بلا
           قوالب ولا حملات، فسطح المخالفة أضيق بكثير.
         </Note>
         <Note tone="warn">
-          <b>لا سرَّ يُعرض هنا أبداً</b> — ولا حتّى لنا. بصمةٌ وتاريخٌ وزرّ استبدال. وسرٌّ يُعرض
-          مرّةً يُنسخ إلى مكانٍ لا نتحكّم فيه، ثمّ يبقى هناك بعد أن تنساه.
+          <b>لا سرّ يعرض هنا أبدا</b> — ولا حتّى لنا. بصمة وتاريخ وزرّ استبدال. وسرّ يعرض
+          مرّة ينسخ إلى مكان لا نتحكّم فيه، ثمّ يبقى هناك بعد أن تنساه.
         </Note>
       </Fold>
 
@@ -496,8 +496,8 @@ export default function ChannelsPage() {
           موصولةٍ **بمعرّفها** — فلا يُخمَّن أيَّها فحص الخادم. */}
       <ScreenDock
         hint={live.length
-          ? 'الفحص يسأل ميتا مباشرةً عن كلّ قناةٍ موصولة: صلاحيّةُ المفتاح واشتراكُ الإشعار وسمعةُ الرقم. ولا يُرسل شيئاً إلى زبائنك.'
-          : 'لا قناةَ موصولةٌ لتُفحص بعد — ابدأ بالربط من البطاقة أعلى.'}
+          ? 'الفحص يسأل ميتا مباشرة عن كلّ قناة موصولة: صلاحيّة المفتاح واشتراك الإشعار وسمعة الرقم. ولا يرسل شيئا إلى زبائنك.'
+          : 'لا قناة موصولة لتفحص بعد — ابدأ بالربط من البطاقة أعلى.'}
       >
         <Button
           variant="primary"
@@ -506,10 +506,10 @@ export default function ChannelsPage() {
           busy={busy === 'all'}
           disabled={can.readOnly || !live.length || busy !== null}
           reason={!live.length
-            ? 'لا قناةَ موصولة لتُفحص'
+            ? 'لا قناة موصولة لتفحص'
             : can.readOnly
               ? 'حسابك للقراءة فقط — الانتحال لا يكتب'
-              : busy !== null ? 'فحصٌ يجري الآن' : undefined}
+              : busy !== null ? 'فحص يجري الآن' : undefined}
           onClick={() => void runAll(live.map((c) => c.id))}
         >
           افحص القنوات الموصولة <span className="num">{`(${fmt.num(live.length)})`}</span>
@@ -523,14 +523,14 @@ export default function ChannelsPage() {
         open={connectOpen}
         title={wa?.status === 'connected' ? 'جدّد ربط واتساب' : 'اربط رقم واتساب'}
         onClose={() => setConnectOpen(false)}
-        hint="يُفحص التوكن عند ميتا قبل أن يُحفظ — فلا يُستبدل ربطٌ عاملٌ بآخر مكسور."
+        hint="نفحص التوكن عند ميتا قبل الحفظ."
       >
         <ChannelConnectForm
           endpoint="/channel/connect"
           submitLabel={wa?.status === 'connected' ? 'افحص واحفظ التوكن الجديد' : 'افحص واربط'}
           onDone={() => {
             setConnectOpen(false);
-            toast('فُحص التوكن عند ميتا وحُفظ — والقناة موصولة.');
+            toast('فحص التوكن عند ميتا وحفظ — والقناة موصولة.');
             void reload();
           }}
         />
@@ -539,34 +539,34 @@ export default function ChannelsPage() {
       <Sheet
         open={stepsOpen}
         onClose={() => setStepsOpen(false)}
-        title={steps === 'wa' ? 'ما يحتاجه ربط واتساب' : 'ثلاثُ خطواتٍ عند إنستجرام'}
+        title={steps === 'wa' ? 'ما يحتاجه ربط واتساب' : 'ثلاث خطوات عند إنستجرام'}
         hint={steps === 'wa'
-          ? 'نقوم بها معك على مكالمة — ولا تلصق شيئاً في هذه الشاشة.'
-          : 'ولا رقمَ تكتبه ولا سرَّ تنسخه — الموافقة تجري عند ميتا.'}
-        footer={<Button variant="quiet" onClick={() => setStepsOpen(false)}>أغلِق</Button>}
+          ? 'نقوم بها معك على مكالمة — ولا تلصق شيئا في هذه الشاشة.'
+          : 'ولا رقم تكتبه ولا سرّ تنسخه — الموافقة تجري عند ميتا.'}
+        footer={<Button variant="quiet" onClick={() => setStepsOpen(false)}>أغلق</Button>}
       >
         {steps === 'wa' ? (
           <>
             <p className="muted-p">
-              أربع قيمٍ من لوحتك عند ميتا — وكلُّها تبقى عندك، ولا يُعرض منها شيءٌ في هذه الشاشة بعد الربط.
+              أربع قيم من لوحتك عند ميتا — وكلّها تبقى عندك، ولا يعرض منها شيء في هذه الشاشة بعد الربط.
             </p>
             <ol className="sc-steps">
-              <li><span>حسابُ أعمالٍ على فيسبوك، وفيه حسابُ واتساب للأعمال ورقمٌ مُثبَت.</span></li>
-              <li><span>معرّفُ الرقم ومعرّفُ حساب واتساب للأعمال — من لوحة ميتا.</span></li>
-              <li><span>مفتاحُ «مستخدم نظام» بلا انتهاء، لا مفتاحاً مؤقّتاً عمرُه 24 ساعة.</span></li>
-              <li><span>نضبط معك اشتراكَ الإشعار عند ميتا — وهو السبب الأوّل لـ«البوت لا يردّ».</span></li>
+              <li><span>حساب أعمال على فيسبوك، وفيه حساب واتساب للأعمال ورقم مثبت.</span></li>
+              <li><span>معرّف الرقم ومعرّف حساب واتساب للأعمال — من لوحة ميتا.</span></li>
+              <li><span>مفتاح «مستخدم نظام» بلا انتهاء، لا مفتاحا مؤقّتا عمره 24 ساعة.</span></li>
+              <li><span>نضبط معك اشتراك الإشعار عند ميتا — وهو السبب الأوّل لـ«البوت لا يردّ».</span></li>
             </ol>
           </>
         ) : (
           <>
             <p className="muted-p">
-              إنستجرام يُربَط بموافقتك من داخل فيسبوك. ولا صلاحيّة نشرٍ ولا إعلانات — قراءةُ
-              الرسائل والردُّ عليها فقط.
+              إنستجرام يربط بموافقتك من داخل فيسبوك. ولا صلاحيّة نشر ولا إعلانات — قراءة
+              الرسائل والردّ عليها فقط.
             </p>
             <ol className="sc-steps">
-              <li><span>من تطبيق إنستجرام: الإعدادات ← نوعُ الحساب ← حوِّله إلى «حساب أعمال».</span></li>
-              <li><span>اربط الحساب بصفحة فيسبوك تملكها — وهذا أشيعُ ما يفشل في المحاولة الأولى.</span></li>
-              <li><span>راسِلنا لنفتح لك نافذة الموافقة — تدفّقُ المنح الذاتيّ قيد البناء.</span></li>
+              <li><span>من تطبيق إنستجرام: الإعدادات ← نوع الحساب ← حوّله إلى «حساب أعمال».</span></li>
+              <li><span>اربط الحساب بصفحة فيسبوك تملكها — وهذا أشيع ما يفشل في المحاولة الأولى.</span></li>
+              <li><span><SupportLink subject="ربط إنستجرام: صفحة الموافقة">راسلنا</SupportLink> لنفتح لك صفحة الموافقة.</span></li>
             </ol>
           </>
         )}
@@ -588,12 +588,12 @@ function WebhookVital({ report, lastCheckedAt }: {
     return (
       <Vital
         sev="plain"
-        k="وصولُ رسائل زبائنك إلى بوتك: لم يُفحص في هذه الجلسة"
+        k="وصول رسائل زبائنك إلى بوتك: لم يفحص في هذه الجلسة"
         why={(
           <>
-            آخر فحصٍ كامل: {fmt.when(lastCheckedAt)}. والفحص يسأل ميتا: هل ما زالت تُشعِرنا
-            برسائل زبائنك؟ فإن انقطع الإشعار لا يعلم بوتك أنّ أحداً كتب — وهو العطل الذي
-            يبدو «صمتاً» بلا سبب.
+            آخر فحص كامل: {fmt.when(lastCheckedAt)}. والفحص يسأل ميتا: هل ما زالت تشعرنا
+            برسائل زبائنك؟ فإن انقطع الإشعار لا يعلم بوتك أنّ أحدا كتب — وهو العطل الذي
+            يبدو «صمتا» بلا سبب.
           </>
         )}
       />
@@ -603,8 +603,8 @@ function WebhookVital({ report, lastCheckedAt }: {
     return (
       <Vital
         sev="good"
-        k="وصولُ رسائل زبائنك إلى بوتك: يعمل"
-        why="اشتراكُ الإشعار عند ميتا قائمٌ الآن، فما يكتبه زبونك يصل إلى بوتك. ولو انقطع لاحقاً فهذا الفحص هو من يكشفه."
+        k="وصول رسائل زبائنك إلى بوتك: يعمل"
+        why="اشتراك الإشعار عند ميتا قائم الآن، فما يكتبه زبونك يصل إلى بوتك. ولو انقطع لاحقا فهذا الفحص هو من يكشفه."
       />
     );
   }
@@ -612,16 +612,16 @@ function WebhookVital({ report, lastCheckedAt }: {
     return (
       <Vital
         sev="bad"
-        k="وصولُ رسائل زبائنك إلى بوتك: متوقّف"
-        why="ميتا لا تُشعِرنا برسائل زبائنك، فبوتك لا يعلم أنّ أحداً كتب — ولا يردّ ولا يظهر عطلٌ في أيّ شاشة. راسِلنا الآن لنُعيد الاشتراك."
+        k="وصول رسائل زبائنك إلى بوتك: متوقّف"
+        why={<>ميتا لا ترسل لنا رسائل زبائنك، فلا يردّ بوتك عليهم. <SupportLink subject="اشتراك الويبهوك متوقّف">راسلنا</SupportLink> لنعيد الاشتراك.</>}
       />
     );
   }
   return (
     <Vital
       sev="warn"
-      k="وصولُ رسائل زبائنك إلى بوتك: تعذّر التحقّق"
-      why="ميتا لم تُجب عن سؤال الاشتراك في هذا الفحص. أعِد الفحص بعد دقائق، وإن تكرّر فراسِلنا — فهذا السطر لا يُترك مجهولاً."
+      k="وصول رسائل زبائنك إلى بوتك: تعذّر التحقّق"
+      why={<>لم تجب ميتا هذه المرّة. أعد الفحص بعد دقائق، وإن تكرّر <SupportLink subject="تعذّر التحقّق من اشتراك الويبهوك">فراسلنا</SupportLink>.</>}
     />
   );
 }
@@ -632,19 +632,19 @@ function Report({ r }: { r: TestReport }) {
   return (
     <div className="sc-rep">
       <div className="sc-rep-h">
-        <b>نتيجةُ الفحص</b>
+        <b>نتيجة الفحص</b>
         <Tag tone={lv.tone} label={lv.label} />
         <span className="sc-rep-t">{fmt.when(r.checkedAt)}</span>
       </div>
       <Chk
         sev={r.tokenValid ? 'good' : 'bad'}
-        k={r.tokenValid ? 'مفتاح الاتّصال صالح' : 'مفتاح الاتّصال منتهٍ أو مسحوب'}
+        k={r.tokenValid ? 'مفتاح الاتّصال صالح' : 'مفتاح الاتّصال منته أو مسحوب'}
         why={r.tokenValid
-          ? 'ميتا قبلت المفتاح في هذه اللحظة — لا في آخر مرّةٍ حُفظ فيها.'
-          : 'الأشيع أنّه مفتاحٌ مؤقّتٌ عمرُه 24 ساعة. راسِلنا لنستبدله بمفتاح «مستخدم نظام» بلا انتهاء.'}
+          ? 'ميتا قبلت المفتاح في هذه اللحظة — لا في آخر مرّة حفظ فيها.'
+          : <>غالبا هو مفتاح مؤقّت عمره 24 ساعة. <SupportLink subject="مفتاح الاتّصال منته">راسلنا</SupportLink> لنستبدله بمفتاح دائم.</>}
       />
       {r.issues.map((x) => (
-        <Chk key={x} sev="warn" k="ملاحظةٌ من ميتا" why={x} />
+        <Chk key={x} sev="warn" k="ملاحظة من ميتا" why={x} />
       ))}
     </div>
   );

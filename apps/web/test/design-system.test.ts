@@ -557,7 +557,7 @@ describe('مصطلحٌ واحدٌ لكلّ معنى — لا مرادفَ في �
   });
 
   it('★★★ واسمٌ واحدٌ لكلّ وضع معرفة — وكانت أربعَ خرائط', () => {
-    for (const label of ['يقرأ نصَّك كاملاً', 'أساسيّات + استرجاع', 'استرجاعٌ كامل']) {
+    for (const label of ['يقرأ نصّك كاملا', 'أساسيّات + استرجاع', 'استرجاع كامل']) {
       const owners = files.filter((f) => stripComments(f.src).includes(label)).map((f) => f.rel);
       expect(owners, label).toEqual(['lib/terms.ts']);
     }

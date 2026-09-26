@@ -56,7 +56,7 @@ describe('قناةُ التواصل موضعٌ واحدٌ حقيقيّ', () => {
   });
 
   it('★★ والنصُّ يتبدّل بسياسة التجاوز — «لرفع سقفك» لمن لا يقف بوتُه وعدٌ خاطئ', () => {
-    expect(planTalkLabel('allow_bill')).toContain('يُفوتَر');
+    expect(planTalkLabel('allow_bill')).toContain('يفوتر');
     expect(planTalkLabel('allow_bill')).not.toContain('لرفع سقف');
     for (const p of ['block', 'handoff_only', undefined]) {
       expect(planTalkLabel(p as string | undefined), String(p)).toContain('لرفع سقف');
@@ -111,7 +111,7 @@ describe('السقفُ يعطي مخرجاً لا ملفّاً', () => {
 
   it('★★ التواصلُ قبل التنزيل في الرصيف — والموضعُ هو الأولويّة', () => {
     const link = usage.indexOf('btn primary lg wide sc-link');
-    const csv = usage.indexOf('نزِّل الجدول (CSV)');
+    const csv = usage.indexOf('نزّل الجدول (CSV)');
     expect(link).toBeGreaterThan(0);
     expect(csv).toBeGreaterThan(0);
     expect(link, 'التنزيلُ ما زال الفعلَ الأوّل عند السقف').toBeLessThan(csv);
@@ -160,8 +160,8 @@ describe('البابان الآخران في نفس السلسلة', () => {
        السبب — والموظّف يعيد ويظنّ العطلَ في الشبكة. */
     const inbox = jsx('app/app/inbox/page.tsx');
     expect(inbox).toContain('QUOTA_BLOCKED_MSG');
-    expect(inbox).toMatch(/!m\.errorMessage\?\.includes\(QUOTA_BLOCKED_MSG\)[\s\S]{0,600}أعِد المحاولة/);
-    expect(inbox, 'ومن لا يملك الفوترة يُقال له من يرفعه').toContain('السقف يرفعه صاحبُ الفوترة');
+    expect(inbox).toMatch(/!m\.errorMessage\?\.includes\(QUOTA_BLOCKED_MSG\)[\s\S]{0,600}أعد المحاولة/);
+    expect(inbox, 'ومن لا يملك الفوترة يُقال له من يرفعه').toContain('السقف يرفعه صاحب الفوترة');
   });
 
   it('★★ والنصُّ الذي تُفحَص عليه الرسالةُ مشتركٌ لا منسوخ', () => {

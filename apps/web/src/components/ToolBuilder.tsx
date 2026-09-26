@@ -88,15 +88,15 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
   const stepError = (): string | null => {
     if (step === 1) {
       if (!/^[a-z][a-z0-9_]{2,40}$/.test(d.key)) {
-        return 'الاسم البرمجيّ حروفٌ لاتينيّة صغيرة وشرطاتٌ سفليّة، يبدأ بحرف (مثل get_offers).';
+        return 'الاسم البرمجيّ حروف لاتينيّة صغيرة وشرطات سفليّة، يبدأ بحرف (مثل get_offers).';
       }
-      if (d.titleAr.trim().length < 2) return 'اكتب اسماً عربيّاً يفهمه فريقك.';
+      if (d.titleAr.trim().length < 2) return 'اكتب اسما عربيّا يفهمه فريقك.';
       if (d.description.trim().length < 10) {
-        return 'الوصف هو ما يقرأه النموذج ليعرف **متى** يناديها — فاكتبه بجملةٍ كاملة.';
+        return 'الوصف هو ما يقرأه النموذج ليعرف **متى** يناديها — فاكتبه بجملة كاملة.';
       }
     }
     if (step === 3) {
-      if (!/^https:\/\/.+/i.test(d.url)) return 'العنوان يجب أن يبدأ بـhttps — لا http ولا عنوانٌ داخليّ.';
+      if (!/^https:\/\/.+/i.test(d.url)) return 'العنوان يجب أن يبدأ بـhttps — لا http ولا عنوان داخليّ.';
     }
     return null;
   };
@@ -168,7 +168,7 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
       if (!id) return;
       let sampleParams: Record<string, unknown> = {};
       try { sampleParams = JSON.parse(sample || '{}') as Record<string, unknown>; } catch {
-        setErr('العيّنة ليست بصيغةٍ صالحة — راجِع الأقواس والفواصل.');
+        setErr('العيّنة ليست بصيغة صالحة — راجع الأقواس والفواصل.');
         return;
       }
       const r = await post<TestResult>(`/bot/tools/${id}/test`, { sampleParams });
@@ -190,7 +190,7 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
   return (
     <Modal
       wide
-      title={d.id ? `تعديل «${d.titleAr || d.key}»` : 'أداةٌ جديدة'}
+      title={d.id ? `تعديل «${d.titleAr || d.key}»` : 'أداة جديدة'}
       onClose={onClose}
       footer={(
         <>
@@ -203,7 +203,7 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
             <Button variant="primary" onClick={finish} busy={busy}>احفظ الأداة</Button>
           )}
           <Button onClick={runTest} busy={busy} disabled={Boolean(stepError()) || step < 3}
-            reason="أكمِل خطوة العنوان أوّلاً">
+            reason="أكمل خطوة العنوان أوّلا">
             جرّبها الآن
           </Button>
         </>
@@ -226,7 +226,7 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
             </Field>
             <Field
               id="t-key" label="اسمها البرمجيّ"
-              hint="ما يناديه البوت. لا يُعدَّل بعد الحفظ — تغييره يكسر ما بُنِي عليه."
+              hint="ما يناديه البوت. لا يعدّل بعد الحفظ — تغييره يكسر ما بني عليه."
               error={d.id ? undefined : undefined}
             >
               <Input id="t-key" value={d.key} dir="ltr" disabled={Boolean(d.id)}
@@ -235,13 +235,13 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
             </Field>
             <Field
               id="t-desc" label="متى يناديها البوت؟"
-              hint="هذا النصّ يقرأه النموذج ليقرّر. اكتبه كما تشرح لموظّفٍ جديد."
+              hint="هذا النصّ يقرأه النموذج ليقرّر. اكتبه كما تشرح لموظّف جديد."
             >
               <TextArea id="t-desc" rows={3} value={d.description} onChange={(v) => set('description', v)}
-                placeholder="تُستعمل حين يسأل الزبون عن العروض أو الباقات المتاحة. تُرجع قائمة العروض بأسعارها." />
+                placeholder="تستعمل حين يسأل الزبون عن العروض أو الباقات المتاحة. ترجع قائمة العروض بأسعارها." />
             </Field>
             <Note>
-              <b>الوصف هو نصف الأداة.</b> وصفٌ غامض يجعل البوت ينادي الأداة في غير موضعها،
+              <b>الوصف هو نصف الأداة.</b> وصف غامض يجعل البوت ينادي الأداة في غير موضعها،
               أو لا يناديها حين يجب. اذكر <b>متى</b> لا <b>ماذا</b>.
             </Note>
           </Stack>
@@ -250,8 +250,8 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
         {step === 2 && (
           <Stack gap="sm">
             <p className="muted-p">
-              المعلومات التي يستخرجها البوت من كلام الزبون ويمرّرها للأداة. اتركها فارغةً إن كانت
-              الأداة لا تحتاج شيئاً (مثل «كلّ العروض»).
+              المعلومات التي يستخرجها البوت من كلام الزبون ويمرّرها للأداة. اتركها فارغة إن كانت
+              الأداة لا تحتاج شيئا (مثل «كلّ العروض»).
             </p>
             {/* ★ **كلُّ مدخلٍ مجموعةٌ مسمّاة.** كان صفّاً عارياً — وعلى الهاتف يلتفّ
                 إلى أربعة أسطرٍ بلا حدٍّ ولا عنوان، فيستوي مدخلان في القراءة. رأيتُها في
@@ -266,7 +266,7 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
                     onChange={(v) => set('params', d.params.map((x, j) => (j === i ? { ...x, type: v as 'string' } : x)))}
                     options={[
                       { value: 'string', label: 'نصّ' }, { value: 'number', label: 'رقم' },
-                      { value: 'integer', label: 'عددٌ صحيح' }, { value: 'boolean', label: 'نعم/لا' },
+                      { value: 'integer', label: 'عدد صحيح' }, { value: 'boolean', label: 'نعم/لا' },
                     ]} />
                   <Input id={`p-d-${i}`} value={p.desc}
                     onChange={(v) => set('params', d.params.map((x, j) => (j === i ? { ...x, desc: v } : x)))} />
@@ -293,12 +293,12 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
                   options={[{ value: 'GET', label: 'قراءة (GET)' }, { value: 'POST', label: 'كتابة (POST)' }]} />
               </Field>
             </Row>
-            <Field id="t-url" label="العنوان" hint="https فقط. والعناوين الداخليّة مرفوضةٌ في الخادم لا في الشاشة.">
+            <Field id="t-url" label="العنوان" hint="https فقط. والعناوين الداخليّة مرفوضة في الخادم لا في الشاشة.">
               <Input id="t-url" value={d.url} dir="ltr" onChange={(v) => set('url', v)}
                 placeholder="https://example.com/api/offers?category={{category}}" />
             </Field>
             {d.method === 'POST' && (
-              <Field id="t-body" label="جسم الطلب" hint="استعمل {{اسم_المدخل}} ليُستبدل بما استخرجه البوت.">
+              <Field id="t-body" label="جسم الطلب" hint="استعمل {{اسم_المدخل}} ليستبدل بما استخرجه البوت.">
                 <TextArea id="t-body" rows={4} value={d.bodyTemplate} onChange={(v) => set('bodyTemplate', v)}
                   placeholder={'{"phone":"{{__contact_phone}}","details":"{{details}}"}'} />
               </Field>
@@ -306,7 +306,7 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
             <Field
               id="t-auth"
               label="ترويسة الصلاحيّة"
-              hint="اتركها فارغةً إن كان العنوان عامّاً. وإن كتبتَ التوكن هنا مباشرةً نُشفّره ونضع مرجعاً إليه."
+              hint="اتركها فارغة إن كان العنوان عامّا. وإن كتبت التوكن هنا مباشرة نشفّره ونضع مرجعا إليه."
             >
               <Input id="t-auth" value={d.authHeader} dir="ltr" onChange={(v) => set('authHeader', v)}
                 placeholder="Bearer {{secret.API_TOKEN}}" />
@@ -315,16 +315,16 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
               id="t-secret"
               label={d.hasSecrets ? 'استبدل السرّ' : 'السرّ'}
               hint={d.hasSecrets
-                ? 'محفوظٌ ومشفَّر. اتركه فارغاً ليبقى كما هو — ولا يُعاد عرضه أبداً.'
-                : 'يُشفَّر قبل الحفظ، ولا يُعاد إلى أيّ شاشةٍ بعد ذلك.'}
+                ? 'محفوظ ومشفّر. اتركه فارغا ليبقى كما هو — ولا يعاد عرضه أبدا.'
+                : 'يشفّر قبل الحفظ، ولا يعاد إلى أيّ شاشة بعد ذلك.'}
             >
               <Input id="t-secret" type="password" value={d.secretValue} dir="ltr"
                 onChange={(v) => set('secretValue', v)} placeholder={d.hasSecrets ? '•••• محفوظ' : ''} />
             </Field>
             <Note tone="warn">
-              <b>حدٌّ يفرضه الخادم لا الشاشة.</b> العنوان يُحلّ ويُفحص: العناوين الخاصّة والداخليّة
-              مرفوضة، وعند كلّ تحويلٍ يُعاد الفحص. والمهلة ثماني ثوان، والحجم 256 كيلوبايت،
-              وخمسة إخفاقاتٍ متتالية تُعطّل الأداة وتُشعرك.
+              <b>حدّ يفرضه الخادم لا الشاشة.</b> العنوان يحلّ ويفحص: العناوين الخاصّة والداخليّة
+              مرفوضة، وعند كلّ تحويل يعاد الفحص. والمهلة ثماني ثوان، والحجم 256 كيلوبايت،
+              وخمسة إخفاقات متتالية تعطّل الأداة وتشعرك.
             </Note>
           </Stack>
         )}
@@ -333,7 +333,7 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
           <Stack gap="sm">
             <p className="muted-p">
               الحقول التي يراها البوت من الجواب. ما لا تذكره هنا لا يراه — وهذا يقلّل {READ_UNIT_PL}
-              ويمنع تسريب حقولٍ لا تريدها.
+              ويمنع تسريب حقول لا تريدها.
             </p>
             {/* ونفسُ السبب هنا: مجموعةٌ مسمّاةٌ لكلّ حقل، فلا يُضغط حذفُ غيره */}
             {d.responseMap.map((r, i) => (
@@ -354,7 +354,7 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
               </Button>
             </Row>
 
-            <Toggle id="t-confirm" label="فعلٌ خطر — يحتاج تأكيد الزبون بزرّ" checked={d.confirmRequired}
+            <Toggle id="t-confirm" label="فعل خطر — يحتاج تأكيد الزبون بزرّ" checked={d.confirmRequired}
               onChange={(v) => set('confirmRequired', v)} />
             {d.confirmRequired && (
               <Field id="t-ctpl" label="نصّ التأكيد" hint="ما يقرأه الزبون قبل الأزرار.">
@@ -364,8 +364,8 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
             )}
             {d.confirmRequired && (
               <Note>
-                <b>ما يحدث عند التأكيد.</b> البوت يقترح ولا ينفّذ: الأداة تُرسل أزراراً، والتنفيذ
-                معالجٌ حتميّ عند الضغط يُعيد التحقّق — ولا يستطيع النموذج أن يقول «تمّ» قبل ذلك.
+                <b>ما يحدث عند التأكيد.</b> البوت يقترح ولا ينفّذ: الأداة ترسل أزرارا، والتنفيذ
+                معالج حتميّ عند الضغط يعيد التحقّق — ولا يستطيع النموذج أن يقول «تمّ» قبل ذلك.
               </Note>
             )}
 
@@ -377,15 +377,15 @@ export function ToolBuilder({ initial, onClose, onSaved }: {
               <Stack gap="sm">
                 <Row gap="sm">
                   <Pill tone={test.ok ? 'ok' : 'crit'} label={test.ok ? 'نجح النداء' : 'فشل النداء'} />
-                  {test.status !== undefined && <Pill tone="neutral" label={`رمزُ ردّ الخادم ${test.status}`} />}
+                  {test.status !== undefined && <Pill tone="neutral" label={`رمز ردّ الخادم ${test.status}`} />}
                   {test.ms !== undefined && <Pill tone="neutral" label={`ردّ في ${secs(test.ms)} ث`} />}
                 </Row>
                 {test.error && <Note tone="crit">{test.error}</Note>}
-                {test.debug?.url && <CodeBlock label="العنوان الذي نودي فعلاً" text={test.debug.url} />}
-                {test.debug?.requestBody && <CodeBlock label="الجسم الذي أُرسل" text={test.debug.requestBody} />}
+                {test.debug?.url && <CodeBlock label="العنوان الذي نودي فعلا" text={test.debug.url} />}
+                {test.debug?.requestBody && <CodeBlock label="الجسم الذي أرسل" text={test.debug.requestBody} />}
                 {test.debug?.responseSnippet && <CodeBlock label="أوّل ما ردّه" text={test.debug.responseSnippet} />}
                 <Note>
-                  الأسرارُ محجوبةٌ (<span dir="ltr">•••</span>) في هذه الكتل — يُحجبها الخادم قبل أن
+                  الأسرار محجوبة (<span dir="ltr">•••</span>) في هذه الكتل — يحجبها الخادم قبل أن
                   تصل الشاشة.
                 </Note>
                 <KV>

@@ -49,18 +49,18 @@ export function PushToggle() {
       <div className="push-hd">
         <span className="push-t">تنبيهات هذا الجهاز</span>
         <span className="push-s">
-          {state === 'on' ? 'مفعَّلة' : state === 'denied' ? 'محظورة في المتصفّح' : state === 'unsupported' ? 'غير مدعومة هنا' : 'متوقّفة'}
+          {state === 'on' ? 'مفعّلة' : state === 'denied' ? 'محظورة في المتصفّح' : state === 'unsupported' ? 'غير مدعومة هنا' : 'متوقّفة'}
         </span>
       </div>
 
       {state === 'unsupported' && (
         <p className="push-n">
-          لتصلك التنبيهات على الآيفون: أضِف التطبيق إلى الشاشة الرئيسيّة ثمّ افتحه من هناك.
+          لتصلك التنبيهات على الآيفون: أضف التطبيق إلى الشاشة الرئيسيّة ثمّ افتحه من هناك.
         </p>
       )}
       {state === 'denied' && (
         <p className="push-n">
-          الإشعارات محظورةٌ لهذا الموقع في إعدادات متصفّحك. اسمح بها من هناك ثمّ أعِد فتح الصفحة.
+          الإشعارات محظورة لهذا الموقع في إعدادات متصفّحك. اسمح بها من هناك ثمّ أعد فتح الصفحة.
         </p>
       )}
 
@@ -68,17 +68,17 @@ export function PushToggle() {
         <div className="push-a">
           {state === 'off' ? (
             <Button size="sm" variant="primary" busy={busy === 'on'}
-              onClick={() => void run('on', enablePush, 'فُعِّلت — وستصلك الحوادث الحرجة على هذا الجهاز.')}>
+              onClick={() => void run('on', enablePush, 'فعّلت — وستصلك الحوادث الحرجة على هذا الجهاز.')}>
               فعّل الإشعارات
             </Button>
           ) : (
             <>
               <Button size="sm" busy={busy === 'test'}
-                onClick={() => void run('test', testPush, 'أُرسل تنبيهٌ تجريبيّ — إن لم يصلك خلال ثوانٍ فالقناة مقطوعة.')}>
+                onClick={() => void run('test', testPush, 'أرسل تنبيه تجريبيّ — إن لم يصلك خلال ثوان فالقناة مقطوعة.')}>
                 جرّب الآن
               </Button>
               <Button size="sm" busy={busy === 'off'}
-                onClick={() => void run('off', disablePush, 'أُوقفت على هذا الجهاز.')}>
+                onClick={() => void run('off', disablePush, 'أوقفت على هذا الجهاز.')}>
                 أوقفها
               </Button>
             </>

@@ -92,7 +92,7 @@ describe('★★ الخصوصيّة — المساراتُ الثلاثة', () =
     expect(ret).toContain('LIMIT ${PURGE_TENANTS_PER_CYCLE}');
     expect(ret).toContain('const PURGE_TENANTS_PER_CYCLE = 3;');
     expect(ret).toContain('RETURNING id, slug, name, archived_at');
-    expect(privacy).toMatch(/ثمّ حذفٌ بعد\{' '\}\s*<span className="num">60<\/span> يوماً/);
+    expect(privacy).toMatch(/ثمّ حذف بعد\{' '\}\s*<span className="num">60<\/span> يوما/);
   });
 
   it('والحدثُ الجديد معلَنٌ في العقد ومسموعٌ في الإنبوكس', () => {
@@ -110,7 +110,7 @@ describe('★★ الخصوصيّة — المساراتُ الثلاثة', () =
     expect(contacts).toContain('download(`/contacts/${id}/export`');
     expect(contacts).toContain('del<{ message: string }>(`/contacts/${id}`)');
     expect(contacts).toContain('setConfirmDel(true)');
-    expect(contacts).toContain('نعم — احذف نهائيّاً');
+    expect(contacts).toContain('نعم — احذف نهائيّا');
     expect(team).toContain("download('/export', 'aibot-export.json')");
   });
 

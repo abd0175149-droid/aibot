@@ -243,7 +243,7 @@ export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () =
     <div className="errbox" role="alert">
       <b>تعذّر تحميل هذا الجزء.</b>
       <p>{message}</p>
-      {onRetry && <Button onClick={onRetry} size="sm">أعِد المحاولة</Button>}
+      {onRetry && <Button onClick={onRetry} size="sm">أعد المحاولة</Button>}
     </div>
   );
 }
@@ -335,7 +335,7 @@ export function DangerButton({ children, confirmWord, onConfirm, disabled }: {
       disabled={disabled}
       onClick={() => {
         // eslint-disable-next-line no-alert
-        const typed = window.prompt(`اكتب «${confirmWord}» للتأكيد. هذا الفعل لا يُسحب.`);
+        const typed = window.prompt(`اكتب «${confirmWord}» للتأكيد. هذا الفعل لا يسحب.`);
         if (typed?.trim() === confirmWord) onConfirm();
       }}
     >
@@ -425,7 +425,7 @@ export function TextArea({ id, value, onChange, rows, placeholder, count, dir }:
             </span>
             {' '}{count.unit}
           </span>
-          {pct >= 0.8 && <span>{pct >= 1 ? 'تجاوزتَ الحدّ' : 'قاربتَ الحدّ'}</span>}
+          {pct >= 0.8 && <span>{pct >= 1 ? 'تجاوزت الحدّ' : 'قاربت الحدّ'}</span>}
         </div>
       )}
     </>

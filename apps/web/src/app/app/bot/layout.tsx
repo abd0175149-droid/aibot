@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
  */
 export const metadata: Metadata = {
   title: 'البوت',
-  description: 'شخصيّةُ بوتك ومعرفتُه وما يقوله لزبائنك.',
+  description: 'شخصيّة بوتك ومعرفته وما يقوله لزبائنك.',
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

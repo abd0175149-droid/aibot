@@ -128,7 +128,7 @@ const chLabel = (kind: string) => CH[kind] ?? kind;
 
 const FILTERS = [
   { id: '', label: 'الكلّ' },
-  { id: 'attn', label: 'يحتاج تدخّلاً' },
+  { id: 'attn', label: 'يحتاج تدخّلا' },
   { id: 'whatsapp_cloud', label: 'واتساب' },
   { id: 'instagram', label: 'إنستجرام' },
 ] as const;
@@ -141,9 +141,9 @@ const FILTERS = [
  */
 const DELIVERY: Record<string, { mark: string; say: string }> = {
   queued: { mark: 'قيد الإرسال…', say: 'قيد الإرسال' },
-  sent: { mark: '✓', say: 'أُرسلت' },
-  delivered: { mark: '✓✓', say: 'وصلت جهازَه' },
-  read: { mark: '✓✓ قُرئت', say: 'قرأها' },
+  sent: { mark: '✓', say: 'أرسلت' },
+  delivered: { mark: '✓✓', say: 'وصلت جهازه' },
+  read: { mark: '✓✓ قرئت', say: 'قرأها' },
   failed: { mark: 'لم تصل', say: 'لم تصل' },
 };
 
@@ -158,9 +158,9 @@ const SOURCE: Record<string, { label: string; mark: string }> = {
  * و`note` **عاقبةٌ لا حالة**: ما يحدث بعد الضغط، مكتوباً قبله.
  */
 const PAUSES = [
-  { m: 30, label: 'نصف ساعة', note: 'يكفي لسؤالٍ وجوابه — وهي نفس مدّة ردِّك المباشر' },
-  { m: 180, label: 'ثلاث ساعات', note: 'لحالةٍ تحتاج مراجعةً مع زميلٍ أو مورّد' },
-  { m: 1440, label: 'حتّى الغد', note: 'يبقى صامتاً يوماً كاملاً على هذه المحادثة وحدها' },
+  { m: 30, label: 'نصف ساعة', note: 'يكفي لسؤال وجوابه — وهي نفس مدّة ردّك المباشر' },
+  { m: 180, label: 'ثلاث ساعات', note: 'لحالة تحتاج مراجعة مع زميل أو مورّد' },
+  { m: 1440, label: 'حتّى الغد', note: 'يبقى صامتا يوما كاملا على هذه المحادثة وحدها' },
 ] as const;
 
 /**
@@ -553,7 +553,7 @@ function InboxScreen() {
     const text = draft.trim();
     if (!text || !active || sending) return;
     if (text.length > maxLen) {
-      toast(`أطول من حدّ القناة (${maxLen} محرفاً) — والخادم يقصّ الزائد بصمت.`);
+      toast(`أطول من حدّ القناة (${maxLen} محرفا) — والخادم يقصّ الزائد بصمت.`);
       return;
     }
     setSending(true);
@@ -569,7 +569,7 @@ function InboxScreen() {
       /* ★ «وصل» كانت تُقال على 202 — أي على **قبولٍ في الطابور** لا على
          وصول. والرسالة الآن تظهر في الحوار بحالتها الحقيقيّة، فالتوستة
          تقول ما جرى فعلاً وتُحيل إلى الفقاعة. */
-      toast('أُرسل ردّك — تتبّع حالته في الحوار. وتوقّف البوت عن هذه المحادثة وحدها.');
+      toast('أرسل ردّك — تتبّع حالته في الحوار. وتوقّف البوت عن هذه المحادثة وحدها.');
       /* ★ ولا إعادةَ جلبٍ هنا: الـAPI يحجز الصفّ **ويبثّه** قبل أن يردّ،
          فالفقاعةُ تصل من `message:new` خلال أجزاءٍ من الثانية. وإعادةُ الجلب
          كانت تُلبس الحوارَ هيكلاً عظميّاً بعد كلّ إرسال ويختفي «رسائل أقدم»
@@ -593,7 +593,7 @@ function InboxScreen() {
     try {
       await post(`/conversations/${active}/assign`, { userId });
       patchConv(active, { assignedUserId: userId, assignedName: name });
-      toast(userId ? `صارت باسم ${name}` : 'رُفع التعيين — بلا صاحبٍ معلَن');
+      toast(userId ? `صارت باسم ${name}` : 'رفع التعيين — بلا صاحب معلن');
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'تعذّر التعيين');
     }
@@ -605,9 +605,9 @@ function InboxScreen() {
     try {
       await post(`/conversations/${active}/assign`, { userId: myId });
       patchConv(active, { assignedUserId: myId, assignedName: me?.user.name ?? null });
-      toast('صارت باسمك — ويراها زميلُك قد انتقلت');
+      toast('صارت باسمك — ويراها زميلك قد انتقلت');
     } catch (err) {
-      toast(err instanceof ApiError ? err.message : 'تعذّر أخذُ المحادثة');
+      toast(err instanceof ApiError ? err.message : 'تعذّر أخذ المحادثة');
     }
   }
 
@@ -633,7 +633,7 @@ function InboxScreen() {
         assignedName: me?.user.name ?? null,
       });
       await list.reload();
-      toast(`تولّيتَ المحادثة — ${said}`);
+      toast(`تولّيت المحادثة — ${said}`);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'تعذّر إيقاف البوت');
     }
@@ -673,8 +673,8 @@ function InboxScreen() {
       await post(`/conversations/${active}/tags`, on ? { add: [HANDOFF_TAG] } : { remove: [HANDOFF_TAG] });
       patchConv(active, { tags: next });
       toast(on
-        ? `وُسمت «${HANDOFF_TAG}» — يراها كلّ من يفتح الإنبوكس، ولا إخطارَ يُرسَل`
-        : `أُزيل وسم «${HANDOFF_TAG}»`);
+        ? `وسمت «${HANDOFF_TAG}» — يراها كلّ من يفتح الإنبوكس، ولا إخطار يرسل`
+        : `أزيل وسم «${HANDOFF_TAG}»`);
     } catch (err) {
       toast(err instanceof ApiError ? err.message : 'تعذّر تعديل الوسوم');
     }
@@ -721,7 +721,7 @@ function InboxScreen() {
                فيظهر مقلوبَ المحاذاة في شاشةٍ عربيّة. و`auto` تبقى بعد أوّل
                حرفٍ فيُكتب الرقمُ من اليسار والاسمُ من اليمين. */
             dir={search ? 'auto' : 'rtl'}
-            placeholder="ابحث باسمٍ أو رقمٍ أو نصّ رسالة…"
+            placeholder="ابحث باسم أو رقم أو نصّ رسالة…"
             aria-label="بحث في المحادثات"
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -731,7 +731,7 @@ function InboxScreen() {
           <div className="ibx-pad">
             <Note tone="warn">
               <b>الاتّصال اللحظيّ منقطع.</b>{' '}
-              القائمةُ تُحدَّث كلّ دقيقة حتّى يعود — وما فات يظهر لحظةَ عودته.
+              القائمة تحدّث كلّ دقيقة حتّى يعود — وما فات يظهر لحظة عودته.
             </Note>
           </div>
         )}
@@ -814,7 +814,7 @@ function InboxScreen() {
                                 <Meter pct={waited / WAIT_CAP_MIN} />
                               </span>
                               <span className="ibx-wtxt">
-                                انتظارٌ <span className="num">{waited}</span> د
+                                انتظار <span className="num">{waited}</span> د
                               </span>
                             </span>
                           )}
@@ -824,7 +824,7 @@ function InboxScreen() {
                           {rowPaused && (
                             <span className="ibx-tg">
                               {!c.assignedUserId || c.assignedUserId === myId
-                                ? 'تولّيتَها'
+                                ? 'تولّيتها'
                                 : `تولّاها ${c.assignedName ?? 'زميل'}`}
                             </span>
                           )}
@@ -832,7 +832,7 @@ function InboxScreen() {
                           {/* ★ وسمُ المسوّدة: بلا هذا لا يعرف الموظّف أنّه
                               ترك كلاماً غيرَ مُرسَلٍ في محادثةٍ أخرى. */}
                           {(drafts.current[c.id] ?? '').trim() && (
-                            <span className="ibx-tg">مسوّدة</span>
+                            <span className="ibx-tg">غير مرسلة</span>
                           )}
                           {tagList.map((t) => (
                             <span className="ibx-tg" key={t}>{t}</span>
@@ -848,36 +848,36 @@ function InboxScreen() {
 
           {list.data?.nextCursor && (
             <div className="ibx-pad">
-              <Button onClick={() => void loadMoreConvs()}>حمّل محادثاتٍ أقدم</Button>
+              <Button onClick={() => void loadMoreConvs()}>حمّل محادثات أقدم</Button>
             </div>
           )}
         </div>
 
         {/* ══════ رصيف القائمة: الرقمُ البطوليّ ثمّ المرشّحات — في مدى الإبهام ══════ */}
-        <Dock hint="المجموعات ثابتةُ الترتيب بالإلحاح لا بالوقت، و«يحتاجك الآن» أقدمُها أوّلاً.">
+        <Dock hint="الأكثر حاجة لردّك في الأعلى.">
           <div className="ibx-hero" data-state={attnTotal ? 'attn' : 'calm'}>
             <span className="ibx-hm" aria-hidden="true">{attnTotal ? '■' : '●'}</span>
             <span className="ibx-hv"><span className="num">{attnTotal}</span></span>
             <span className="ibx-hk">
-              بانتظار ردِّك الآن
+              بانتظار ردّك الآن
               <span className="ibx-hn">
                 {attnTotal
                   ? (
                     <>
-                      أطولُ انتظارٍ <span className="num">{oldestWait}</span> د
+                      أطول انتظار <span className="num">{oldestWait}</span> د
                       {attnHidden > 0 && (
                         <>
                           {' · '}
                           <button type="button" className="ibx-hlink" onClick={() => setFilter('attn')}>
-                            <span className="num">{attnHidden}</span> منها خارج المعروض — اعرِضهم
+                            <span className="num">{attnHidden}</span> منها خارج المعروض — اعرضهم
                           </button>
                         </>
                       )}
                     </>
                   )
                   : items.length
-                    ? <>وكلُّ ما في القائمة بوتُك يتولّاه — وأوّلُ ما يتعقّد يصعد إلى أعلى القائمة</>
-                    : <>لا محادثةَ في القائمة بعد — وأوّلُ رسالةٍ تصل تفتح صفَّها هنا</>}
+                    ? <>وكلّ ما في القائمة بوتك يتولّاه — وأوّل ما يتعقّد يصعد إلى أعلى القائمة</>
+                    : <>لا محادثة في القائمة بعد — وأوّل رسالة تصل تفتح صفّها هنا</>}
               </span>
             </span>
           </div>
@@ -919,13 +919,13 @@ function InboxScreen() {
                 {paused ? (
                   <Tag
                     tone="serious"
-                    label={`${mine ? 'تولّيتَها' : `تولّاها ${conv.assignedName ?? 'زميل'}`}`
+                    label={`${mine ? 'تولّيتها' : `تولّاها ${conv.assignedName ?? 'زميل'}`}`
                       + ` · يعود البوت بعد ${fmt.remaining(conv.botPausedUntil) ?? 'لحظات'}`}
                   />
                 ) : conv.botEnabled ? (
-                  <Tag tone="ok" label="البوت يردّ — ويتوقّف لحظةَ ما تردّ" />
+                  <Tag tone="ok" label="البوت يردّ — ويتوقّف لحظة ما تردّ" />
                 ) : (
-                  <Tag tone="neutral" label="البوت مطفأ — لا يردّ حتّى تُعيده" />
+                  <Tag tone="neutral" label="البوت مطفأ — لا يردّ حتّى تعيده" />
                 )}
                 {conv.tags?.map((t) => <Tag key={t} line mark={false} label={t} />)}
                 {win?.open ? (
@@ -933,10 +933,10 @@ function InboxScreen() {
                     <span className="ibx-wbar" aria-hidden="true">
                       <Meter pct={winPct} tone={winPct < 0.25 ? 'serious' : 'neutral'} />
                     </span>
-                    تبقّى {remaining ?? 'أقلّ من دقيقة'} من نافذة الردّ الحرّ
+                    تبقّى {remaining ?? 'أقلّ من دقيقة'} من مهلة الردّ
                   </span>
                 ) : (
-                  <Tag tone="crit" label="النافذة مغلقة" />
+                  <Tag tone="crit" label="انتهت مهلة الردّ" />
                 )}
               </div>
             </header>
@@ -950,8 +950,8 @@ function InboxScreen() {
               <div className="ibx-pad">
                 <Note tone="warn">
                   <b>يتولّاها {conv.assignedName} الآن.</b>{' '}
-                  ردُّك يصل الزبونَ بجانب ردّه. إن كنتَ ستتابعها فخُذها باسمك
-                  ليعرف زميلُك.{' '}
+                  ردّك يصل الزبون بجانب ردّه. إن كنت ستتابعها فخذها باسمك
+                  ليعرف زميلك.{' '}
                   <Button size="sm" disabled={can.readOnly}
                     reason={can.readOnly ? 'حسابك للقراءة فقط' : undefined}
                     onClick={() => void claim()}>أتابعها أنا</Button>
@@ -963,7 +963,7 @@ function InboxScreen() {
               <div className="ibx-pad">
                 <Note tone="crit">
                   <b>قناة {chLabel(conv.channelKind)} معطّلة الآن.</b>{' '}
-                  {caps?.lastError ?? 'راجع صفحة القنوات.'} وأيّ ردٍّ ترسله قد لا يصل.
+                  {caps?.lastError ?? 'راجع صفحة القنوات.'} وأيّ ردّ ترسله قد لا يصل.
                 </Note>
               </div>
             )}
@@ -986,7 +986,7 @@ function InboxScreen() {
               )}
               {olderDone && (
                 <div className="ibx-pad">
-                  <div className="ibx-start">بدايةُ المحادثة</div>
+                  <div className="ibx-start">بداية المحادثة</div>
                 </div>
               )}
 
@@ -1044,7 +1044,7 @@ function InboxScreen() {
                               >
                                 <span aria-hidden="true">📍</span>
                                 <span className="ibx-loc-t">
-                                  {loc.name || loc.address || 'موقعٌ مُرسَل'}
+                                  {loc.name || loc.address || 'موقع مرسل'}
                                   <span className="ibx-loc-c num">
                                     {loc.lat.toFixed(5)}, {loc.lng.toFixed(5)}
                                   </span>
@@ -1056,7 +1056,7 @@ function InboxScreen() {
                             {mediaHref && m.type === 'image' && (
                               <a className="ibx-shot" href={mediaHref} target="_blank" rel="noopener noreferrer">
                                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                                <img src={mediaHref} alt={m.body || 'صورةٌ أرسلها الزبون'} loading="lazy" />
+                                <img src={mediaHref} alt={m.body || 'صورة أرسلها الزبون'} loading="lazy" />
                               </a>
                             )}
                             {mediaHref && m.type === 'sticker' && (
@@ -1085,7 +1085,7 @@ function InboxScreen() {
                             {!!m.payload?.options?.length && (
                               <span className="chips">
                                 {m.payload.options.map((o) => <span className="c" key={o.id}>{o.title}</span>)}
-                                <span className="chips-n">أُرسلت كأزرار — والزبون يضغط ولا يكتب</span>
+                                <span className="chips-n">أرسلت كأزرار — والزبون يضغط ولا يكتب</span>
                               </span>
                             )}
                           </div>
@@ -1119,8 +1119,8 @@ function InboxScreen() {
                             && m.errorMessage?.includes(QUOTA_BLOCKED_MSG) && (
                             <span className="ibx-err">
                               {can.billing
-                                ? 'أعِد المحاولة بعد رفع السقف — الإرسال مرفوضٌ قبل أن يصل ميتا.'
-                                : 'السقف يرفعه صاحبُ الفوترة في حسابك — أبلِغه، فالإعادة لا تنجح قبل ذلك.'}
+                                ? 'أعد المحاولة بعد رفع السقف — الإرسال مرفوض قبل أن يصل ميتا.'
+                                : 'السقف يرفعه صاحب الفوترة في حسابك — أبلغه، فالإعادة لا تنجح قبل ذلك.'}
                             </span>
                           )}
                           {m.direction === 'out' && m.status === 'failed' && !can.readOnly
@@ -1129,7 +1129,7 @@ function InboxScreen() {
                               type="button" className="ibx-retry"
                               onClick={() => void retrySend(m.id)}
                             >
-                              أعِد المحاولة
+                              أعد المحاولة
                             </button>
                           )}
                         </div>
@@ -1143,14 +1143,14 @@ function InboxScreen() {
             {/* ══════ رصيف الحوار: التولّي · التالي المنتظر · التحويل · المُنشئ ══════ */}
             <Dock hint={win?.open === false
               ? undefined
-              : 'ردُّك يُسكت البوت عن هذه المحادثة وحدها — وسائرُ زبائنك يبقون على خدمته.'}>
+              : 'ردّك يسكت البوت عن هذه المحادثة وحدها — وسائر زبائنك يبقون على خدمته.'}>
               <div className="ibx-acts">
                 {paused || !conv.botEnabled ? (
                   <Button size="sm" disabled={can.readOnly} reason={can.readOnly ? 'حسابك للقراءة فقط' : undefined}
-                    onClick={() => void resumeBot()}>أعِد البوت الآن</Button>
+                    onClick={() => void resumeBot()}>أعد البوت الآن</Button>
                 ) : (
                   <Button size="sm" disabled={can.readOnly} reason={can.readOnly ? 'حسابك للقراءة فقط' : undefined}
-                    onClick={() => setTakeOpen(true)}>تولَّ المحادثة…</Button>
+                    onClick={() => setTakeOpen(true)}>تولّ المحادثة…</Button>
                 )}
                 {nextWaiting && (
                   <Button size="sm" onClick={() => open(nextWaiting.id)}>
@@ -1159,25 +1159,25 @@ function InboxScreen() {
                 )}
                 <Button size="sm" disabled={can.readOnly} reason={can.readOnly ? 'حسابك للقراءة فقط' : undefined}
                   onClick={() => setXferOpen(true)}>
-                  {tagged ? 'وسمُ التحويل قائم…' : 'حوِّلها لزميل…'}
+                  {tagged ? 'وسم التحويل قائم…' : 'حوّلها لزميل…'}
                 </Button>
               </div>
 
               {win?.open === false ? (
                 <div className="locked">
                   <strong>
-                    لا يمكن الإرسال — نافذة الـ{winHours} ساعة مغلقة.
+                    لا يمكن الإرسال — انتهت مهلة الـ{winHours} ساعة.
                   </strong>{' '}
-                  تُفتح من جديد حين يُرسل الزبون رسالة. عطّلنا حقل الكتابة <strong>قبل</strong> أن
-                  تكتب، فلا تُرفض رسالةٌ بعد كتابتها.
+                  تفتح من جديد حين يرسل الزبون رسالة. عطّلنا حقل الكتابة <strong>قبل</strong> أن
+                  تكتب، فلا ترفض رسالة بعد كتابتها.
                 </div>
               ) : (
                 <form className="ibx-comp" onSubmit={send}>
                   <textarea
                     id="ibx-draft" className="ibx-ta" value={draft} dir="auto" rows={2}
                     placeholder={threadReady
-                      ? 'اكتب ردّك… (Enter يُرسل · Shift+Enter سطرٌ جديد)'
-                      : 'يُفتح حين يصل الحوار…'}
+                      ? 'اكتب ردّك… (Enter يرسل · Shift+Enter سطر جديد)'
+                      : 'يفتح حين يصل الحوار…'}
                     aria-label="نصّ الردّ" disabled={sending || can.readOnly || !threadReady}
                     onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey}
                   />
@@ -1209,8 +1209,8 @@ function InboxScreen() {
                 حواراً — فاللوحُ اللمسيُّ العريضُ يأخذ ورقةً لا أهدافاً بعرض
                 إصبعٍ في قائمةٍ صغيرة. */}
             <Sheet
-              open={takeOpen} title="تولَّ المحادثة" onClose={() => setTakeOpen(false)}
-              hint="يسكت بوتك عن هذه المحادثة وحدها — وسائرُ زبائنك يبقون على خدمته."
+              open={takeOpen} title="تولّ المحادثة" onClose={() => setTakeOpen(false)}
+              hint="يتوقّف بوتك في هذه المحادثة وحدها."
             >
               <div className="opts">
                 {PAUSES.map((p) => (
@@ -1223,9 +1223,9 @@ function InboxScreen() {
                   </button>
                 ))}
                 <button type="button" className="opt"
-                  onClick={() => void takeOver(null, 'لن يعود حتّى تُعيده بيدك')}>
+                  onClick={() => void takeOver(null, 'لن يعود حتّى تعيده بيدك')}>
                   <span className="opt-t">
-                    حتّى أُعيده بيدي
+                    حتّى أعيده بيدي
                     <span className="opt-n">لا يعود وحده — ويظهر ذلك في صفّها وفي رأس الحوار</span>
                   </span>
                 </button>
@@ -1233,8 +1233,8 @@ function InboxScreen() {
             </Sheet>
 
             <Sheet
-              open={xferOpen} title="حوِّلها لزميل" onClose={() => setXferOpen(false)}
-              hint="الاسمُ يظهر في صفّها وفي رأس الحوار عند زميلك، ويمنع أن يردّ اثنان معاً. ولا إخطارَ يُرسَل بعد — يراه حين يفتح الإنبوكس."
+              open={xferOpen} title="حوّلها لزميل" onClose={() => setXferOpen(false)}
+              hint="يظهر اسمه على المحادثة حتى لا يردّ اثنان معا."
             >
               <div className="opts">
                 {/* ★ **التحويلُ باسمٍ — وكان وسماً نصّيّاً لا يقول لأيّ زميل.**
@@ -1251,7 +1251,7 @@ function InboxScreen() {
                         <span className="opt-n">
                           {u.id === myId
                             ? 'تصير باسمك — ويراها زملاؤك كذلك'
-                            : 'يصير صاحبَها ويراها باسمه في إنبوكسه'}
+                            : 'يصير صاحبها ويراها باسمه في إنبوكسه'}
                         </span>
                       </span>
                     </button>
@@ -1261,7 +1261,7 @@ function InboxScreen() {
                   <button type="button" className="opt" onClick={() => void assignTo(null, null)}>
                     <span className="opt-t">
                       ارفع التعيين
-                      <span className="opt-n">تعود بلا صاحبٍ معلَن — ويردّ عليها من يصلها أوّلاً</span>
+                      <span className="opt-n">تعود بلا صاحب معلن — ويردّ عليها من يصلها أوّلا</span>
                     </span>
                   </button>
                 )}
@@ -1269,16 +1269,16 @@ function InboxScreen() {
                 {!tagged && (
                   <button type="button" className="opt" onClick={() => void handoff(true)}>
                     <span className="opt-t">
-                      علِّمها «{HANDOFF_TAG}»
-                      <span className="opt-n">وسمٌ يظهر في صفّها وفي رأس الحوار، ويبقى حتّى يُزال</span>
+                      علّمها «{HANDOFF_TAG}»
+                      <span className="opt-n">وسم يظهر في صفّها وفي رأس الحوار، ويبقى حتّى يزال</span>
                     </span>
                   </button>
                 )}
                 {tagged && (
                   <button type="button" className="opt" onClick={() => void handoff(false)}>
                     <span className="opt-t">
-                      أزِل وسم «{HANDOFF_TAG}»
-                      <span className="opt-n">تُكملها بنفسك، ولا يبقى ما يستدعي زميلاً</span>
+                      أزل وسم «{HANDOFF_TAG}»
+                      <span className="opt-n">تكملها بنفسك، ولا يبقى ما يستدعي زميلا</span>
                     </span>
                   </button>
                 )}
@@ -1286,8 +1286,8 @@ function InboxScreen() {
                   <button type="button" className="opt"
                     onClick={() => { setXferOpen(false); setTakeOpen(true); }}>
                     <span className="opt-t">
-                      أسكِت البوت أوّلاً
-                      <span className="opt-n">حتّى لا يردّ البوت على زبونٍ ينتظر زميلَك</span>
+                      أسكت البوت أوّلا
+                      <span className="opt-n">حتّى لا يردّ البوت على زبون ينتظر زميلك</span>
                     </span>
                   </button>
                 )}

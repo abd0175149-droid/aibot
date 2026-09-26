@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
  */
 export const metadata: Metadata = {
   title: 'جهات الاتّصال',
-  description: 'الشخصُ الواحدُ عبر قنواته — ودمجُ من تكرّر.',
+  description: 'الشخص الواحد عبر قنواته — ودمج من تكرّر.',
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

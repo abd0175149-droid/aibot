@@ -82,7 +82,7 @@ describe('التنقّلُ خرج من مساعد الجلب', () => {
     expect(API).toMatch(/export function setToken[\s\S]{0,140}notifyResumed\(\)/);
   });
 
-  it('★★ و`/auth/logout` مستثنًى مع `/auth/login`', () => {
+  it('★★ و`/auth/logout` مستثنى مع `/auth/login`', () => {
     /* الخروجُ بتوكنٍ ميّتٍ كان سيرسم البوّابةَ إطاراً واحداً قبل أن يصل
        التحويل — ومَن ضغط «خروج» لا يُسأل كلمتَه. */
     expect(API).toMatch(/\/\^\\\/auth\\\/\(login\|logout\)\//);

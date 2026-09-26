@@ -109,19 +109,19 @@ const MARGIN_FLOOR = 0.5;
 const HEALTH: Record<string, { tone: Tone; label: string; rank: number; why: string }> = {
   error: {
     tone: 'crit', label: 'عطل', rank: 0,
-    why: 'الفحصُ الدوريُّ يفشل: بوتُ هذا العميل لا يُجيب زبائنه الآن. افتح حوادثه — نوعُ العطل مكتوبٌ فيها مع خطواته.',
+    why: 'الفحص الدوريّ يفشل: بوت هذا العميل لا يجيب زبائنه الآن. افتح حوادثه — نوع العطل مكتوب فيها مع خطواته.',
   },
   pending: {
     tone: 'warn', label: 'قيد الربط', rank: 1,
-    why: 'الربطُ بدأ ولم يكتمل، فلا رسالةَ تصل ولا زبونَ يُجاب. والخطوةُ الناقصة عند العميل في لوحة ميتا لا عندك.',
+    why: 'الربط بدأ ولم يكتمل، فلا رسالة تصل ولا زبون يجاب. والخطوة الناقصة عند العميل في لوحة ميتا لا عندك.',
   },
   none: {
     tone: 'neutral', label: 'بلا قناة', rank: 2,
-    why: 'لا قناةَ موصولةً بعد: البوتُ جاهزٌ ولا مدخلَ للرسائل إليه.',
+    why: 'لا قناة موصولة بعد: البوت جاهز ولا مدخل للرسائل إليه.',
   },
   connected: {
     tone: 'ok', label: 'سليم', rank: 3,
-    why: 'آخرُ فحصٍ دوريٍّ سليم: التوكن يعمل والاشتراكُ في الحقول قائم.',
+    why: 'آخر فحص دوريّ سليم: التوكن يعمل والاشتراك في الحقول قائم.',
   },
 };
 
@@ -131,7 +131,7 @@ const HEALTH: Record<string, { tone: Tone; label: string; rank: number; why: str
 const STATUS_PILL: Record<string, { tone: Tone; label: string }> = {
   trial: { tone: 'neutral', label: 'تجريبيّ' },
   active: { tone: 'ok', label: 'فعّال' },
-  archived: { tone: 'neutral', label: 'مؤرشَف' },
+  archived: { tone: 'neutral', label: 'مؤرشف' },
   past_due: { tone: 'warn', label: 'متأخّر السداد' },
   suspended: { tone: 'crit', label: 'موقوف' },
 };
@@ -219,13 +219,13 @@ export default function TenantsPage() {
     setBusy(true);
     try {
       await post(`/console/tenants/${r.id}/kill-bot`, { reason: killReason.trim() || undefined });
-      toast(`أُوقف بوت ${r.name} وقُفل — لا يعود بزرّ العميل، بل برفع القفل من ورقته ثمّ تشغيله هو.`);
+      toast(`أوقف بوت ${r.name} وقفل — لا يعود بزرّ العميل، بل برفع القفل من ورقته ثمّ تشغيله هو.`);
       closeSheet();
       await tenants.reload();
     } catch (e) {
       /* نداءٌ فاشلٌ يصمت يجعل من ضغط يظنّ أنّ البوت أُوقف — وهو أخطر ظنٍّ
          ممكنٍ في هذا الفعل بعينه. */
-      toast(e instanceof ApiError ? e.message : 'تعذّر إيقاف البوت. أعِد المحاولة.');
+      toast(e instanceof ApiError ? e.message : 'تعذّر إيقاف البوت. أعد المحاولة.');
     } finally {
       setBusy(false);
     }
@@ -242,11 +242,11 @@ export default function TenantsPage() {
         `/console/tenants/${r.id}/owner/reset-password`,
       );
       setOwnerTemp({ email: out.email, pass: out.tempPassword });
-      toast(`أُسقطت ${out.sessionsRevoked} جلسةً — انسخ الكلمة الآن، فلا تُعاد إلى أيّ شاشة.`);
+      toast(`أسقطت ${out.sessionsRevoked} جلسة — انسخ الكلمة الآن، فلا تعاد إلى أيّ شاشة.`);
       await tenants.reload();
     } catch (e) {
       /* نداءٌ فاشلٌ يصمت يجعل من ضغط يظنّ أنّ كلمةً وُلدت — فيقول للعميل سرّاً لا وجودَ له. */
-      toast(e instanceof ApiError ? e.message : 'تعذّر توليد كلمةٍ مؤقّتة. أعِد المحاولة.');
+      toast(e instanceof ApiError ? e.message : 'تعذّر توليد كلمة مؤقّتة. أعد المحاولة.');
     } finally { setResetting(false); }
   }
 
@@ -258,12 +258,12 @@ export default function TenantsPage() {
     setLifeBusy(action);
     try {
       const out = await post<{ message: string; sessionsRevoked: number }>(`/console/tenants/${r.id}/status/${action}`);
-      toast(out.sessionsRevoked ? `${out.message} — وأُسقطت ${out.sessionsRevoked} جلسة.` : out.message);
+      toast(out.sessionsRevoked ? `${out.message} — وأسقطت ${out.sessionsRevoked} جلسة.` : out.message);
       if (action === 'archive' && !showArchived) closeSheet();
       await tenants.reload();
       void margin.reload();
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'تعذّر تغييرُ حالة الحساب. أعِد المحاولة.');
+      toast(e instanceof ApiError ? e.message : 'تعذّر تغيير حالة الحساب. أعد المحاولة.');
     } finally {
       setLifeBusy(null);
     }
@@ -274,10 +274,10 @@ export default function TenantsPage() {
     setLifeBusy('unlock');
     try {
       await post(`/console/tenants/${r.id}/unlock-bot`);
-      toast(`رُفع القفل عن بوت ${r.name} — يشغّله صاحبُه من شاشته حين يشاء.`);
+      toast(`رفع القفل عن بوت ${r.name} — يشغّله صاحبه من شاشته حين يشاء.`);
       await tenants.reload();
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'تعذّر رفعُ القفل. أعِد المحاولة.');
+      toast(e instanceof ApiError ? e.message : 'تعذّر رفع القفل. أعد المحاولة.');
     } finally {
       setLifeBusy(null);
     }
@@ -306,7 +306,7 @@ export default function TenantsPage() {
       await reloadSession({ keepToken: true });
       router.replace('/app/inbox');
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'تعذّر بدءُ الانتحال. أعِد المحاولة.');
+      toast(e instanceof ApiError ? e.message : 'تعذّر بدء الانتحال. أعد المحاولة.');
       setImpBusy(false);
     }
   }
@@ -352,8 +352,8 @@ export default function TenantsPage() {
       onClick={() => setWizard(true)}
       disabled={(tenants.data?.items.length ?? 0) >= TENANT_CAP || can.readOnly}
       reason={can.readOnly
-        ? 'انتحالٌ نشط — قراءةٌ فقط. أنهِ الانتحال من اللافتة أعلى الشاشة لتعود إلى حسابك.'
-        : `بلغتَ سقف المنصّة الحاليّ: ${TENANT_CAP} عملاء. السقف تشغيليٌّ لا تقنيّ — ارفعه حين يصير كلّ عميلٍ من الثلاثة مخدوماً بلا تدخّل يدويّ.`}
+        ? 'انتحال نشط — قراءة فقط. أنه الانتحال من اللافتة أعلى الشاشة لتعود إلى حسابك.'
+        : `بلغت سقف المنصّة الحاليّ: ${TENANT_CAP} عملاء. السقف تشغيليّ لا تقنيّ — ارفعه حين يصير كلّ عميل من الثلاثة مخدوما بلا تدخّل يدويّ.`}
     >
       + عميل جديد
     </Button>
@@ -365,8 +365,8 @@ export default function TenantsPage() {
 
       {impExpired && (
         <Note tone="warn">
-          <b>انقضت مدّةُ الانتحال (٣٠ دقيقة) وعدتَ إلى حسابك.</b> إن احتجتَ إلى المتابعة فادخل
-          بهويّة العميل من ورقته من جديد — وكلُّ دخولٍ سطرٌ في سجلّ حسابه يراه.
+          <b>انقضت مدّة الانتحال (٣٠ دقيقة) وعدت إلى حسابك.</b> إن احتجت إلى المتابعة فادخل
+          بهويّة العميل من ورقته من جديد — وكلّ دخول سطر في سجلّ حسابه يراه.
         </Note>
       )}
 
@@ -383,7 +383,7 @@ export default function TenantsPage() {
 
       <PageHead
         title="العملاء"
-        sub="مرتَّبٌ بالمخاطرة لا بالاسم: الأسوأ صحّةً أوّلاً، ثمّ الأقرب إلى سقفه. هذا الترتيب هو الشاشة كلّها."
+        sub="مرتّب بالمخاطرة لا بالاسم: الأسوأ صحّة أوّلا، ثمّ الأقرب إلى سقفه. هذا الترتيب هو الشاشة كلّها."
         actions={(
           <Row gap="sm">
             <button
@@ -392,7 +392,7 @@ export default function TenantsPage() {
               aria-pressed={showArchived}
               onClick={() => setShowArchived((v) => !v)}
             >
-              {showArchived ? 'المؤرشَفون ظاهرون' : 'أظهر المؤرشَفين'}
+              {showArchived ? 'المؤرشفون ظاهرون' : 'أظهر المؤرشفين'}
             </button>
             {/* الشهر سلسلةُ آلةٍ لا نصّ: «2025-09» بلا عزلٍ اتجاهيٍّ تُقرأ «09-2025» */}
             {margin.data?.period
@@ -408,7 +408,7 @@ export default function TenantsPage() {
         empty={{
           when: (d) => !d.items.length,
           title: 'لا عملاء بعد',
-          hint: 'أنشئ أوّل مستأجر — وابدأ ببوتك أنت: بياناتك، ومخاطرتك، وأصدق اختبارٍ ممكن.',
+          hint: 'أنشئ أوّل مستأجر — وابدأ ببوتك أنت: بياناتك، ومخاطرتك، وأصدق اختبار ممكن.',
           action: createButton(false),
         }}
       >
@@ -473,7 +473,7 @@ export default function TenantsPage() {
                     {STATUS_PILL[r.status] && (
                       <Pill tone={STATUS_PILL[r.status]!.tone} label={STATUS_PILL[r.status]!.label} />
                     )}
-                    {r.botLocked && <Pill tone="crit" label="بوتُه مقفولٌ من المنصّة" />}
+                    {r.botLocked && <Pill tone="crit" label="بوته مقفول من المنصّة" />}
                     {/* ★ وضعُ المعرفة صار وسمَ حالةٍ لا عموداً كاملاً: «حقنٌ
                         كامل» بمعرفةٍ تكبر هو الإنذارُ المبكّر لانفجار الكلفة،
                         وبقيّةُ الأوضاع لا يُقرَّر عليها شيء — فلا تُنفق عموداً
@@ -482,7 +482,7 @@ export default function TenantsPage() {
                         الاستعلام يُقنّع الغياب بـ'full' — فيُقرأ «بوتُه يعمل» على
                         تهيئةٍ لم تبدأ. والحالةُ نفسُها تستحقّ شارةً لا إخفاءً. */}
                     {!r.botSeeded
-                      ? <Pill tone="warn" label="بلا بوتٍ منشور" />
+                      ? <Pill tone="warn" label="بلا بوت منشور" />
                       : r.knowledgeMode === 'full' && <Tag tone="violet" label={KB_MODE.full.label} mark={false} />}
                   </span>
                 </span>
@@ -512,7 +512,7 @@ export default function TenantsPage() {
                     <span className="num">{fmt.num(r.windowsUsed)} / {fmt.num(r.windowLimit)}</span>
                     {limit > 0
                       ? <Meter pct={capPct(r)} />
-                      : <span className="tn-dim">بلا باقةٍ فعّالة — لا سقف يُقاس</span>}
+                      : <span className="tn-dim">بلا باقة فعّالة — لا سقف يقاس</span>}
                   </span>
                 );
               },
@@ -528,8 +528,8 @@ export default function TenantsPage() {
               head: 'الهامش',
               num: true,
               cell: (r) => {
-                if (margin.loading) return <span className="tn-dim">جارٍ الحساب…</span>;
-                if (margin.error) return <Pill tone="warn" label="لم يُحمَّل" />;
+                if (margin.loading) return <span className="tn-dim">جار الحساب…</span>;
+                if (margin.error) return <Pill tone="warn" label="لم يحمّل" />;
                 const rev = revOf(r);
                 if (rev == null || rev <= 0) return <span className="tn-dim">لا اشتراك فعّال</span>;
 
@@ -568,8 +568,8 @@ export default function TenantsPage() {
               cell: (r) => {
                 const open = Number(r.openCritical ?? 0);
                 const last = lastIncident.get(r.id);
-                if (incidents.loading && !open) return <span className="tn-dim">جارٍ الجلب…</span>;
-                if (incidents.error && !open) return <Pill tone="warn" label="لم تُحمَّل" />;
+                if (incidents.loading && !open) return <span className="tn-dim">جار الجلب…</span>;
+                if (incidents.error && !open) return <Pill tone="warn" label="لم تحمّل" />;
                 if (!open && !last) return <span className="tn-dim">لا حوادث مفتوحة</span>;
                 return (
                   <span className="tn-inc">
@@ -606,14 +606,14 @@ export default function TenantsPage() {
                   sev="bad"
                   href="/console/incidents"
                   value={fmt.num(critical)}
-                  label="عملاءُ عندهم حادثةٌ حرجةٌ مفتوحة ←"
+                  label="عملاء عندهم حادثة حرجة مفتوحة ←"
                   ctx={(
                     <>
                       من <span className="num">{fmt.num(items.length)}</span>{' '}
-                      عملاءَ نشطين · مجموعُ الحرجة المفتوحة{' '}
+                      عملاء نشطين · مجموع الحرجة المفتوحة{' '}
                       <span className="num">{fmt.num(sumCritical)}</span>
-                      {worstCrit ? <> · وأثقلُها عند «<span dir="auto">{worstCrit.name}</span>»</> : null}
-                      {' · '}والحرجُ يسبق القناةَ والسقفَ في هذا الترتيب.
+                      {worstCrit ? <> · وأثقلها عند «<span dir="auto">{worstCrit.name}</span>»</> : null}
+                      {' · '}والحرج يسبق القناة والسقف في هذا الترتيب.
                     </>
                   )}
                 />
@@ -622,13 +622,13 @@ export default function TenantsPage() {
                   sev="bad"
                   href="/console/incidents"
                   value={fmt.num(broken)}
-                  label="عملاءُ قناتُهم معطوبة — بوتٌ صامتٌ الآن ←"
+                  label="عملاء قناتهم معطوبة — بوت صامت الآن ←"
                   ctx={(
                     <>
-                      من <span className="num">{fmt.num(items.length)}</span> عملاءَ نشطين
-                      {worstBroken ? <> · أوّلُهم «<span dir="auto">{worstBroken.name}</span>»</> : null}
-                      {' · '}ولا حادثةَ حرجةً مفتوحة: هذا العطلُ صامتٌ لا يُشتكى منه —
-                      زبائنُهم يكتبون ولا يُجابون.
+                      من <span className="num">{fmt.num(items.length)}</span> عملاء نشطين
+                      {worstBroken ? <> · أوّلهم «<span dir="auto">{worstBroken.name}</span>»</> : null}
+                      {' · '}ولا حادثة حرجة مفتوحة: هذا العطل صامت لا يشتكى منه —
+                      زبائنهم يكتبون ولا يجابون.
                     </>
                   )}
                 />
@@ -636,13 +636,13 @@ export default function TenantsPage() {
                 <Hero
                   sev="warn"
                   value={fmt.num(nearCap)}
-                  label="عملاءُ بلغوا 80٪ من سقفهم"
+                  label="عملاء بلغوا 80٪ من سقفهم"
                   ctx={(
                     <>
                       من <span className="num">{fmt.num(items.length)}</span>{' '}
-                      عملاءَ نشطين · أعلاهم عند{' '}
-                      <span className="num">{fmt.pct(worstCap)}</span> من سقفه · والباقةُ تُرقّى
-                      قبل أن يُبلَغ السقفُ لا بعده.
+                      عملاء نشطين · أعلاهم عند{' '}
+                      <span className="num">{fmt.pct(worstCap)}</span> من سقفه · والباقة ترقّى
+                      قبل أن يبلغ السقف لا بعده.
                     </>
                   )}
                 />
@@ -650,15 +650,15 @@ export default function TenantsPage() {
                 <Hero
                   value={fmt.num(items.length)}
                   unit={`/ ${fmt.num(TENANT_CAP)}`}
-                  label="عملاءُ نشطون — ولا شيء يحتاجك الآن"
+                  label="عملاء نشطون — ولا شيء يحتاجك الآن"
                   meter={{ pct: items.length / TENANT_CAP }}
                   ctx={(
                     <>
-                      لا حادثةَ حرجةً مفتوحة، ولا قناةً معطوبة، ولا مَن قارب سقفه ·{' '}
+                      لا حادثة حرجة مفتوحة، ولا قناة معطوبة، ولا من قارب سقفه ·{' '}
                       {grossMargin == null
-                        ? 'والهامشُ الإجماليُّ لم يُحسب بعد'
-                        : <>والهامشُ الإجماليّ <span className="num">{fmt.pct(grossMargin)}</span></>}
-                      {' · '}وكلفةُ النماذج <span className="num">{fmt.money(totalCost)}</span> هذا الشهر.
+                        ? 'والهامش الإجماليّ لم يحسب بعد'
+                        : <>والهامش الإجماليّ <span className="num">{fmt.pct(grossMargin)}</span></>}
+                      {' · '}وكلفة النماذج <span className="num">{fmt.money(totalCost)}</span> هذا الشهر.
                     </>
                   )}
                 />
@@ -668,13 +668,13 @@ export default function TenantsPage() {
                   الخليّة الفارغة «لا حوادث» — طمأنينةٌ كاذبة أسوأ من خطأٍ ظاهر. */}
               {margin.error && (
                 <ErrorBox
-                  message={`عمودا «الهامش» و«الهامش الإجماليّ» غير محسوبَين: ${margin.error}`}
+                  message={`عمودا «الهامش» و«الهامش الإجماليّ» غير محسوبين: ${margin.error}`}
                   onRetry={margin.reload}
                 />
               )}
               {incidents.error && (
                 <ErrorBox
-                  message={`عمود «آخر حادثة» غير محمَّل — عدّاد الحوادث الحرجة في الجدول من مصدرٍ آخر ويبقى صحيحاً: ${incidents.error}`}
+                  message={`عمود «آخر حادثة» غير محمّل — عدّاد الحوادث الحرجة في الجدول من مصدر آخر ويبقى صحيحا: ${incidents.error}`}
                   onRetry={incidents.reload}
                 />
               )}
@@ -684,19 +684,19 @@ export default function TenantsPage() {
                   يكن للبطاقة مكانٌ له. */}
               <Section
                 title="من أين تأتي هذه الأرقام"
-                sub="والصفُّ الذي له وِجهةٌ يفتحها حيث يُتَّخذ القرار"
+                sub="والصفّ الذي له وجهة يفتحها حيث يتّخذ القرار"
               >
                 <div className="rows cn-rows">
                   <MetricRow
-                    k="مقاعدُ المنصّة المشغولة"
-                    note={`سقفٌ تشغيليٌّ لا تقنيّ: ${TENANT_CAP} عملاءَ هو ما يُدار يدويّاً بالجودة الموعودة`}
+                    k="مقاعد المنصّة المشغولة"
+                    note={`سقف تشغيليّ لا تقنيّ: ${TENANT_CAP} عملاء هو ما يدار يدويّا بالجودة الموعودة`}
                     value={`${fmt.num(items.length)} / ${fmt.num(TENANT_CAP)}`}
                     mid={<Meter pct={items.length / TENANT_CAP} />}
                   />
 
                   <MetricRow
-                    k="كلفةُ النماذج هذا الشهر"
-                    note="بالدولار كما تُفوتَر — والتحويلُ إلى الدينار يجري قبل الطرح لا بعده"
+                    k="كلفة النماذج هذا الشهر"
+                    note="بالدولار كما تفوتر — والتحويل إلى الدينار يجري قبل الطرح لا بعده"
                     value={fmt.money(totalCost)}
                     href="/console/margin"
                     mid={margin.data && revenueSum > 0 ? (
@@ -707,10 +707,10 @@ export default function TenantsPage() {
                   />
 
                   <MetricRow
-                    k="الهامشُ الإجماليّ"
+                    k="الهامش الإجماليّ"
                     note={grossMargin == null
-                      ? 'لا يُحسب قبل وصول بيانات الاشتراكات — ورقمٌ على نصف بياناته يُقرأ انهياراً وهو نقصُ تحميل'
-                      : 'إيرادُ الاشتراكات الفعّالة ناقصَ كلفةِ النماذج، بالدينار'}
+                      ? 'لا يحسب قبل وصول بيانات الاشتراكات — ورقم على نصف بياناته يقرأ انهيارا وهو نقص تحميل'
+                      : 'إيراد الاشتراكات الفعّالة ناقص كلفة النماذج، بالدينار'}
                     value={grossMargin == null ? '—' : fmt.pct(grossMargin)}
                     href="/console/margin"
                     mid={grossMargin == null ? null : (
@@ -731,14 +731,14 @@ export default function TenantsPage() {
                   />
 
                   <MetricRow
-                    k="قنواتٌ لا تُجيب الآن"
-                    note="القناةُ المعطوبة تسبق السقفَ في الترتيب: السقفُ يُرقّى، والبوتُ الصامتُ لا يُجيب أحداً"
+                    k="قنوات لا تجيب الآن"
+                    note="القناة المعطوبة تسبق السقف في الترتيب: السقف يرقّى، والبوت الصامت لا يجيب أحدا"
                     value={fmt.num(broken + pending)}
                     mid={broken > 0
                       ? <Pill tone="crit" label={`${fmt.num(broken)} عطل · ${fmt.num(pending)} قيد الربط`} />
                       : pending > 0
                         ? <Pill tone="warn" label={`${fmt.num(pending)} قيد الربط`} />
-                        : <Tag tone="ok" label="كلُّ القنوات سليمة" />}
+                        : <Tag tone="ok" label="كلّ القنوات سليمة" />}
                   />
                 </div>
               </Section>
@@ -747,8 +747,8 @@ export default function TenantsPage() {
                 title="عملاؤك"
                 sub={(
                   <>
-                    <span className="num">{fmt.num(items.length)}</span> — الأسوأُ صحّةً أوّلاً،
-                    واضغط صفّاً لتفتح ورقته
+                    <span className="num">{fmt.num(items.length)}</span> — الأسوأ صحّة أوّلا،
+                    واضغط صفّا لتفتح ورقته
                   </>
                 )}
               >
@@ -761,25 +761,25 @@ export default function TenantsPage() {
               </Section>
 
               <Note>
-                <b>وسمُ «{KB_MODE.full.label}» بجانب الاسم ليس زينة.</b> عميلٌ على هذا الوضع
-                (<code>full</code>) بمعرفةٍ تكبر هو الإنذارُ المبكّر لانفجار الكلفة — تراه هنا
-                قبل أن تراه في الفاتورة. وبقيّةُ الأوضاع لا يُقرَّر عليها شيءٌ فلا تُنفق وسماً.
+                <b>وسم «{KB_MODE.full.label}» بجانب الاسم ليس زينة.</b> عميل على هذا الوضع
+                (<code>full</code>) بمعرفة تكبر هو الإنذار المبكّر لانفجار الكلفة — تراه هنا
+                قبل أن تراه في الفاتورة. وبقيّة الأوضاع لا يقرّر عليها شيء فلا تنفق وسما.
               </Note>
 
               <Note>
-                <b>والكلفة بالدولار والإيراد بالدينار.</b> الهامش محسوبٌ بعد تحويل الكلفة بسعر{' '}
+                <b>والكلفة بالدولار والإيراد بالدينار.</b> الهامش محسوب بعد تحويل الكلفة بسعر{' '}
                 <span className="num">{JOD_PER_USD}</span> — نفس حساب شاشة «الهامش»، فلا رقمان مختلفان
-                لعميلٍ واحد. وعميلٌ بلا اشتراكٍ فعّال لا هامش له: كلفته قائمة وإيراده صفر، وذاك ما
-                تقوله الخليّة لا ما تُخفيه.
+                لعميل واحد. وعميل بلا اشتراك فعّال لا هامش له: كلفته قائمة وإيراده صفر، وذاك ما
+                تقوله الخليّة لا ما تخفيه.
               </Note>
 
               {/* ══════ ورقةُ العميل: الوِجهةُ التي لم تكن ══════ */}
               <Sheet
                 open={Boolean(sel)}
-                title={sel ? sel.name : 'ورقةُ العميل'}
+                title={sel ? sel.name : 'ورقة العميل'}
                 onClose={closeSheet}
                 hint={sel
-                  ? 'الشريطان على مقياسٍ واحدٍ مشتركٍ بين كلّ الأوراق، فطولُ شريطٍ هنا يُقارَن بطولِ شريطٍ في ورقة غيره.'
+                  ? 'الشريطان على مقياس واحد مشترك بين كلّ الأوراق، فطول شريط هنا يقارن بطول شريط في ورقة غيره.'
                   : undefined}
                 footer={sel ? (
                   <Row gap="sm">
@@ -788,7 +788,7 @@ export default function TenantsPage() {
                         className="btn primary lg"
                         href={`/console/incidents?tenant=${sel.id}&name=${encodeURIComponent(sel.name)}`}
                       >
-                        حوادثُ هذا العميل ‹
+                        حوادث هذا العميل ‹
                       </a>
                     ) : null}
                     {/* ★ «اربط/جدّد القناة» — المسار الصريح `/console/tenants/:id/channel/connect`
@@ -797,18 +797,18 @@ export default function TenantsPage() {
                         عن قصد، فلا يصلح بديلاً. */}
                     {/* ★ الدخولُ بهويّته — قراءةٌ فقط، ثلاثون دقيقة، وسطرٌ في سجلّ حسابه يراه. */}
                     <Button size="lg" variant="primary" busy={impBusy} disabled={can.readOnly}
-                      reason="أنت في انتحالٍ نشطٍ أصلاً — أنهِه من اللافتة أوّلاً."
-                      onClick={() => void impersonate(sel)}>ادخل بهويّته — قراءةٌ فقط</Button>
+                      reason="أنت في انتحال نشط أصلا — أنهه من اللافتة أوّلا."
+                      onClick={() => void impersonate(sel)}>ادخل بهويّته — قراءة فقط</Button>
                     <Button size="lg" onClick={() => setConnectFor(sel.id)}>اربط/جدّد القناة…</Button>
                     {/* ★ بذرُ بوتٍ لعميلٍ لم يكتمل معالجُه — `…/bot/seed` كان مبنيّاً
                         ولا يناديه إلّا المعالجُ نفسُه. والشرطُ لا زينة: الخادم يردّ ٤٠٩
                         على عميلٍ له نسخةٌ منشورة، وزرٌّ يفشل دائماً يكسر الثقة. */}
                     {!sel.botSeeded && (
                       <Button size="lg" onClick={() => setSeedFor(sel.id)} disabled={can.readOnly}
-                        reason="انتحالٌ نشط — قراءةٌ فقط.">ابذر بوته…</Button>
+                        reason="انتحال نشط — قراءة فقط.">ابذر بوته…</Button>
                     )}
-                    <a className="btn lg" href="/console/margin">لوحةُ الهامش ‹</a>
-                    <Button size="lg" onClick={closeSheet}>أغلِق</Button>
+                    <a className="btn lg" href="/console/margin">لوحة الهامش ‹</a>
+                    <Button size="lg" onClick={closeSheet}>أغلق</Button>
                   </Row>
                 ) : undefined}
               >
@@ -821,7 +821,7 @@ export default function TenantsPage() {
                       )}
                       {sel.botSeeded
                         ? <Tag tone="violet" label={kbModeLabel(sel.knowledgeMode)} mark={false} />
-                        : <Pill tone="warn" label="بلا بوتٍ منشور" />}
+                        : <Pill tone="warn" label="بلا بوت منشور" />}
                       {Number(sel.openCritical ?? 0) > 0 && (
                         <Pill tone="crit" label={`${fmt.num(sel.openCritical)} حرجة مفتوحة`} />
                       )}
@@ -833,11 +833,11 @@ export default function TenantsPage() {
                         ناقصةٌ لا يُضغَط — والمعالجُ كان يُغلق بلا إنذارٍ ولا أثر. */}
                     {(!sel.botSeeded || sel.ownerPending) && (
                       <Note tone="warn">
-                        <b>تهيئةٌ لم تكتمل.</b>{' '}
-                        {!sel.botSeeded && 'لا نسخةَ بوتٍ منشورةً لهذا العميل — بوتُه لا يردّ ولو كانت قناتُه سليمة. '}
-                        {sel.ownerPending && 'ومالكُه لم يدخل قطّ وكلمتُه ما زالت مؤقّتة — وهي تُعرض مرّةً واحدةً في المعالج، فلو أُغلق قبل نسخها فُقدت. '}
-                        وما بقي يُكمَل من هذه الورقة: طيّةُ «أعِد كلمةَ مرور مالكه» تحت هذا السطر،
-                        {!sel.botSeeded && <> وزرُّ «ابذر بوته…» في أسفلها،</>} وزرُّ «اربط/جدّد القناة…».
+                        <b>تهيئة لم تكتمل.</b>{' '}
+                        {!sel.botSeeded && 'لا نسخة بوت منشورة لهذا العميل — بوته لا يردّ ولو كانت قناته سليمة. '}
+                        {sel.ownerPending && 'ومالكه لم يدخل قطّ وكلمته ما زالت مؤقّتة — وهي تعرض مرّة واحدة في المعالج، فلو أغلق قبل نسخها فقدت. '}
+                        وما بقي يكمل من هذه الورقة: طيّة «أعد كلمة مرور مالكه» تحت هذا السطر،
+                        {!sel.botSeeded && <> وزرّ «ابذر بوته…» في أسفلها،</>} وزرّ «اربط/جدّد القناة…».
                       </Note>
                     )}
 
@@ -845,10 +845,10 @@ export default function TenantsPage() {
                         يشغّل: التشغيلُ قرارُ العميل من شاشته. */}
                     {sel.botLocked && (
                       <Note tone="crit">
-                        <b>بوتُه موقوفٌ ومقفولٌ من المنصّة.</b> زرُّ «شغّل» عنده يردّ بالرفض ويقول له السبب.
-                        {' '}ارفع القفل حين يُحلّ ما أُوقف لأجله — ثمّ يشغّله هو.
+                        <b>بوته موقوف ومقفول من المنصّة.</b> زرّ «شغّل» عنده يردّ بالرفض ويقول له السبب.
+                        {' '}ارفع القفل حين يحلّ ما أوقف لأجله — ثمّ يشغّله هو.
                         <Button size="sm" busy={lifeBusy === 'unlock'} disabled={can.readOnly}
-                          reason="انتحالٌ نشط — قراءةٌ فقط."
+                          reason="انتحال نشط — قراءة فقط."
                           onClick={() => void unlockBot(sel)}>ارفع القفل عن بوته</Button>
                       </Note>
                     )}
@@ -863,14 +863,14 @@ export default function TenantsPage() {
                             : <span className="mono">{sel.status}</span>}
                           {sel.status !== 'active' && (
                             <Button size="sm" variant="primary" busy={lifeBusy === 'activate'} disabled={can.readOnly}
-                              reason="انتحالٌ نشط — قراءةٌ فقط."
+                              reason="انتحال نشط — قراءة فقط."
                               onClick={() => void setStatus(sel, 'activate')}>
-                              {sel.status === 'trial' ? 'فعّل الاشتراك' : sel.status === 'archived' ? 'استعِده فعّالاً' : 'أعِد تفعيله'}
+                              {sel.status === 'trial' ? 'فعّل الاشتراك' : sel.status === 'archived' ? 'استعده فعّالا' : 'أعد تفعيله'}
                             </Button>
                           )}
                           {(sel.status === 'trial' || sel.status === 'active') && (
                             <Button size="sm" busy={lifeBusy === 'suspend'} disabled={can.readOnly}
-                              reason="انتحالٌ نشط — قراءةٌ فقط."
+                              reason="انتحال نشط — قراءة فقط."
                               onClick={() => void setStatus(sel, 'suspend')}>أوقف الحساب — يطرد الجلسات</Button>
                           )}
                         </Row>
@@ -880,18 +880,18 @@ export default function TenantsPage() {
                     {/* ★ إعادةُ كلمةِ مالكه — البابُ الذي كان `ops/set-password.ts` وحده.
                         وكلُّ جلساته تسقط، فهو فعلٌ يُنطق أثرُه قبل الضغط لا بعده. */}
                     <details className="cn-gate">
-                      <summary>أعِد كلمةَ مرور مالكه — وتسقط كلُّ جلساته</summary>
+                      <summary>أعد كلمة مرور مالكه — وتسقط كلّ جلساته</summary>
                       <p className="cn-dim">
-                        تُولَّد كلمةٌ مؤقّتةٌ تُعرض <b>مرّةً واحدة</b> ولا تُخزَّن نصّاً، ويُطرَد المالكُ
-                        من كلّ أجهزته في الحال، ويُسجَّل الفعلُ باسمك في سجلّه فيراه.
+                        تولّد كلمة مؤقّتة تعرض <b>مرّة واحدة</b> ولا تخزّن نصّا، ويطرد المالك
+                        من كلّ أجهزته في الحال، ويسجّل الفعل باسمك في سجلّه فيراه.
                         {sel.ownerEmail && <> والبريد <span className="mono">{sel.ownerEmail}</span>.</>}
                       </p>
                       {ownerTemp
-                        ? <CodeBlock label={`كلمةٌ مؤقّتةٌ لـ${ownerTemp.email}`} text={ownerTemp.pass} />
+                        ? <CodeBlock label={`كلمة مؤقّتة لـ${ownerTemp.email}`} text={ownerTemp.pass} />
                         : (
                           <Button variant="danger" busy={resetting} disabled={can.readOnly}
-                            reason="انتحالٌ نشط — قراءةٌ فقط، وكلُّ فعلٍ كاتبٍ مرفوضٌ في الخادم أصلاً."
-                            onClick={() => void resetOwner(sel)}>ولّد كلمةً مؤقّتة</Button>
+                            reason="انتحال نشط — قراءة فقط، وكلّ فعل كاتب مرفوض في الخادم أصلا."
+                            onClick={() => void resetOwner(sel)}>ولّد كلمة مؤقّتة</Button>
                         )}
                     </details>
 
@@ -908,21 +908,21 @@ export default function TenantsPage() {
                             <CodeBlock label="Callback URL" text={webhook.url} />
                             {webhook.token
                               ? <CodeBlock label="Verify token" text={webhook.token} />
-                              : <p className="cn-dim">لا قناةَ محفوظةٌ لهذا العميل بعد.</p>}
+                              : <p className="cn-dim">لا قناة محفوظة لهذا العميل بعد.</p>}
                             <p className="cn-dim">
-                              يُلصقان في WhatsApp ← Configuration، ثمّ يُفعّل الحقل{' '}
-                              <span className="mono">messages</span> — وبلاه لا تصل رسالةٌ واحدة
-                              وكلُّ شيءٍ آخر يبدو سليماً.
+                              يلصقان في WhatsApp ← Configuration، ثمّ يفعّل الحقل{' '}
+                              <span className="mono">messages</span> — وبلاه لا تصل رسالة واحدة
+                              وكلّ شيء آخر يبدو سليما.
                             </p>
                           </Stack>
                         )
                         : (
-                          <Button onClick={() => void readWebhook(sel)}>اعرِضهما</Button>
+                          <Button onClick={() => void readWebhook(sel)}>اعرضهما</Button>
                         )}
                     </Fold>
 
                     <div className="mg-bars">
-                      <span className="mg-lbl">إيرادٌ شهريّ</span>
+                      <span className="mg-lbl">إيراد شهريّ</span>
                       <Bar value={selRev ?? 0} scale={scale} kind="rev" />
                       <span className="mg-val">
                         {selRev == null
@@ -930,7 +930,7 @@ export default function TenantsPage() {
                           : <><span className="num">{fmt.num(Math.round(selRev))}</span> د.أ</>}
                       </span>
 
-                      <span className="mg-lbl">كلفةُ نماذجه</span>
+                      <span className="mg-lbl">كلفة نماذجه</span>
                       <Bar
                         value={selCost}
                         scale={scale}
@@ -943,16 +943,16 @@ export default function TenantsPage() {
                     </div>
 
                     <p className="cn-legend">
-                      <span><i className="cn-sw rev" aria-hidden="true" />إيرادُ اشتراكه</span>
-                      <span><i className="cn-sw cst" aria-hidden="true" />كلفةُ نماذجه</span>
+                      <span><i className="cn-sw rev" aria-hidden="true" />إيراد اشتراكه</span>
+                      <span><i className="cn-sw cst" aria-hidden="true" />كلفة نماذجه</span>
                       <span>
                         <i className="cn-sw-goal" aria-hidden="true" />
-                        علامةُ هدف الهامش عند{' '}
+                        علامة هدف الهامش عند{' '}
                         <span className="num">{fmt.pct(MARGIN_FLOOR)}</span> — ما تجاوزها
-                        فهامشُه دون الهدف
+                        فهامشه دون الهدف
                       </span>
                       <span>
-                        والمقياسُ من صفرٍ إلى{' '}
+                        والمقياس من صفر إلى{' '}
                         <span className="num">{fmt.num(Math.round(scale))}</span> د.أ
                       </span>
                     </p>
@@ -960,9 +960,9 @@ export default function TenantsPage() {
                     <KV>
                       <KVRow k="الهامش">
                         {selUnmeasured
-                          ? 'غيرُ مقيس: استهلاكٌ حقيقيٌّ وكلفةٌ صفريّة — لا صفَّ سعرٍ مسجَّلاً للنموذج الذي يردّ به، فهامشُه أعلى من حقيقته. أضِف سعر النموذج ليعود الرقمُ صادقاً.'
+                          ? 'غير مقيس: استهلاك حقيقيّ وكلفة صفريّة — لا صفّ سعر مسجّلا للنموذج الذي يردّ به، فهامشه أعلى من حقيقته. أضف سعر النموذج ليعود الرقم صادقا.'
                           : selMargin == null
-                            ? 'لا اشتراكَ فعّالاً — كلفتُه قائمةٌ وإيرادُه صفر.'
+                            ? 'لا اشتراك فعّالا — كلفته قائمة وإيراده صفر.'
                             : <><span className="num">{fmt.pct(selMargin)}</span> من إيراده</>}
                       </KVRow>
                       <KVRow k="النوافذ / السقف">
@@ -972,21 +972,21 @@ export default function TenantsPage() {
                           </span>
                           {selLimit > 0
                             ? <Meter pct={capPct(sel)} />
-                            : <span className="tn-dim">بلا باقةٍ فعّالة — لا سقف يُقاس</span>}
+                            : <span className="tn-dim">بلا باقة فعّالة — لا سقف يقاس</span>}
                         </span>
                       </KVRow>
                       <KVRow k="الباقة"><span dir="auto">{sel.plan ?? 'بلا باقة'}</span></KVRow>
-                      <KVRow k="وسيطُ التوكنات لكلّ ردّ">
+                      <KVRow k="وسيط التوكنات لكلّ ردّ">
                         {selUsage
                           ? <span className="num">{fmt.num(selUsage.avgTokensPerReply)}</span>
-                          : <span className="tn-dim">غيرُ محمَّل — لوحةُ الهامش هي مصدرُه</span>}
+                          : <span className="tn-dim">غير محمّل — لوحة الهامش هي مصدره</span>}
                       </KVRow>
                       <KVRow k="آخر حادثة">
                         {selLast
                           ? <><span dir="auto">{selLast.title}</span>{' — '}{fmt.when(selLast.lastSeenAt)}</>
                           : incidents.error
-                            ? 'غيرُ محمَّلة — أعِد المحاولة من رسالة الخطأ في الشاشة'
-                            : 'لا حادثةَ مفتوحةً لهذا العميل'}
+                            ? 'غير محمّلة — أعد المحاولة من رسالة الخطأ في الشاشة'
+                            : 'لا حادثة مفتوحة لهذا العميل'}
                       </KVRow>
                     </KV>
 
@@ -995,19 +995,19 @@ export default function TenantsPage() {
                     <details className="cn-gate">
                       <summary>أوقف بوته — يصمت عن كلّ زبائنه</summary>
                       <p className="cn-dim">
-                        كلُّ رسالةٍ تصل بعد الإيقاف تنتظر موظّفاً من عند العميل، والأثرُ يُرى عند
-                        زبائنه في الحال. ولا يعود إلّا بتشغيلٍ يدويّ — فاكتب اسم العميل كما هو
-                        مكتوبٌ في رأس هذه الورقة لتفعيل الزرّ.
+                        كلّ رسالة تصل بعد الإيقاف تنتظر موظّفا من عند العميل، والأثر يرى عند
+                        زبائنه في الحال. ولا يعود إلّا بتشغيل يدويّ — فاكتب اسم العميل كما هو
+                        مكتوب في رأس هذه الورقة لتفعيل الزرّ.
                       </p>
                       <Field
-                        label="اسمُ العميل كما هو مكتوبٌ أعلاه"
+                        label="اسم العميل كما هو مكتوب أعلاه"
                         id="kill-name"
-                        hint="مطابقةٌ حرفاً حرفاً — وهذا هو التأكيد، فلا نقرةَ ثانيةٌ تُغني عنه."
+                        hint="مطابقة حرفا حرفا — وهذا هو التأكيد، فلا نقرة ثانية تغني عنه."
                       >
                         <Input id="kill-name" value={killWord} onChange={setKillWord} />
                       </Field>
-                      <Field label="سببُ الإيقاف — يراه العميل حرفاً حرفاً" id="kill-reason"
-                        hint="اختياريّ. يُعرض في شاشة بوته مع زرّ «شغّل» المعطَّل، ويُكتب في سجلّه.">
+                      <Field label="سبب الإيقاف — يراه العميل حرفا حرفا" id="kill-reason"
+                        hint="اختياريّ. يعرض في شاشة بوته مع زرّ «شغّل» المعطّل، ويكتب في سجلّه.">
                         <Input id="kill-reason" value={killReason} onChange={setKillReason} />
                       </Field>
                       <Button
@@ -1015,8 +1015,8 @@ export default function TenantsPage() {
                         busy={busy}
                         disabled={!armed || can.readOnly}
                         reason={can.readOnly
-                          ? 'انتحالٌ نشط — قراءةٌ فقط، وكلُّ فعلٍ كاتبٍ مرفوضٌ في الخادم أصلاً.'
-                          : 'اكتب اسم العميل مطابقاً لتفعيل الزرّ.'}
+                          ? 'انتحال نشط — قراءة فقط، وكلّ فعل كاتب مرفوض في الخادم أصلا.'
+                          : 'اكتب اسم العميل مطابقا لتفعيل الزرّ.'}
                         onClick={() => void killBot(sel)}
                       >
                         أوقف بوته الآن
@@ -1030,10 +1030,10 @@ export default function TenantsPage() {
                           disabled={!armed || can.readOnly}
                           /* السببُ يقوله زرُّ الإيقاف بجانبه — والتكرارُ كان يُلصَق به
                              بلا مسافة («…لتفعيل الزرّ.اكتب اسم…»، رُئي حيّاً). */
-                          reason={can.readOnly ? 'انتحالٌ نشط — قراءةٌ فقط.' : undefined}
+                          reason={can.readOnly ? 'انتحال نشط — قراءة فقط.' : undefined}
                           onClick={() => void setStatus(sel, 'archive')}
                         >
-                          أرشِف الحساب
+                          أرشف الحساب
                         </Button>
                       )}
                     </details>
@@ -1049,7 +1049,7 @@ export default function TenantsPage() {
                 open={Boolean(connectFor)}
                 title="اربط/جدّد قناة العميل"
                 onClose={() => { setConnectFor(null); setWebhook(null); }}
-                hint="يُفحص التوكن عند ميتا قبل أن يُحفظ، والفعل يُسجَّل باسمك في سجلّ العميل."
+                hint="يفحص التوكن عند ميتا قبل أن يحفظ، والفعل يسجّل باسمك في سجلّ العميل."
               >
                 {connectFor && (
                   <ChannelConnectForm
@@ -1057,7 +1057,7 @@ export default function TenantsPage() {
                     submitLabel="افحص واحفظ"
                     onDone={() => {
                       setConnectFor(null);
-                      toast('فُحص التوكن عند ميتا وحُفظ — والقناة موصولة.');
+                      toast('فحص التوكن عند ميتا وحفظ — والقناة موصولة.');
                       void tenants.reload();
                     }}
                   />
@@ -1067,16 +1067,16 @@ export default function TenantsPage() {
               {/* ورقةُ بذر البوت — نفسُ نموذج المعالج بنفس الحدود. */}
               <Sheet
                 open={Boolean(seedFor)}
-                title="ابذر أوّل نسخةِ بوتٍ لهذا العميل"
+                title="ابذر أوّل نسخة بوت لهذا العميل"
                 onClose={() => setSeedFor(null)}
-                hint="الخادم يرفض إن كان للعميل نسخةٌ منشورةٌ أصلاً — فلا يمحو فتحٌ بالخطأ شخصيّةَ عميلٍ يعمل."
+                hint="الخادم يرفض إن كان للعميل نسخة منشورة أصلا — فلا يمحو فتح بالخطأ شخصيّة عميل يعمل."
               >
                 {seedFor && (
                   <BotSeedForm
                     endpoint={`/console/tenants/${seedFor}/bot/seed`}
                     onDone={() => {
                       setSeedFor(null);
-                      toast('نُشرت أوّلُ نسخةِ بوتٍ لهذا العميل وشُغِّل.');
+                      toast('نشرت أوّل نسخة بوت لهذا العميل وشغّل.');
                       void tenants.reload();
                     }}
                   />
@@ -1087,7 +1087,7 @@ export default function TenantsPage() {
               {/* ★ الرصيف: فعلُ الشاشة الأوّل في مدى الإبهام، ومعه أثرُه مكتوباً
                   قبل الضغط لا بعده. */}
               <div className="cn-dock">
-                <Dock hint="إنشاءُ عميلٍ يفتح المُنشئ خطوةً خطوة: الاسمُ والباقة وحسابُ المالك، وكلمةُ مرورٍ مؤقّتةٍ تُعرض مرّةً واحدةً ولا تُخزَّن نصّاً.">
+                <Dock hint="إنشاء عميل يفتح المنشئ خطوة خطوة: الاسم والباقة وحساب المالك، وكلمة مرور مؤقّتة تعرض مرّة واحدة ولا تخزّن نصّا.">
                   {createButton(true)}
                 </Dock>
               </div>

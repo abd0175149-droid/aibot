@@ -65,24 +65,23 @@ export function BotSeedForm({ endpoint, onDone }: {
       </Field>
 
       <Note>
-        <b>أجِب عن هذه، ولا تكتب أكثر.</b> المعرفة المرتّبة تهزم المعرفة الكثيرة:
+        <b>أجب عن هذه، ولا تكتب أكثر.</b> المعرفة المرتّبة تهزم المعرفة الكثيرة:
         <ul>{template.knowledgePrompts.map((q) => <li key={q}>{q}</li>)}</ul>
       </Note>
 
-      <Field id="o-kb" label="معرفة البوت" hint="استعمل عناوين (سطرٌ يبدأ بـ# أو ينتهي بنقطتين) — تُحسّن الدقّة كثيراً.">
+      <Field id="o-kb" label="معرفة البوت" hint="استعمل عناوين (سطر يبدأ بـ# أو ينتهي بنقطتين) — تحسّن الدقّة كثيرا.">
         <TextArea id="o-kb" rows={10} value={knowledge} onChange={setKnowledge}
           count={{ used: Math.ceil(knowledge.length / 2.5), limit: 8000, unit: READ_UNIT }} />
       </Field>
 
       <p className="muted-p">
-        فوق ثمانية آلاف وحدةِ قراءة يتحوّل البوت تلقائيّاً إلى إرسال «الأساسيات والقيود وما يرتبط
-        بالسؤال» — فمعرفةٌ أكبر لا تعني فاتورةً أكبر. والملفّات تُرفع لاحقاً من شاشة البوت.
+        كلّما كبرت المعرفة يقرأ البوت منها ما يخصّ السؤال فقط، فلا ترتفع الكلفة. ويمكن رفع ملفّات لاحقا من شاشة البوت.
       </p>
 
       <Row gap="sm">
         <Button variant="primary" busy={busy} onClick={() => void submit()}
           disabled={knowledge.trim().length < 40}
-          reason="اكتب معرفةً أساسيّة أوّلاً — بوتٌ بلا معرفةٍ يقول «لا أعرف» فقط">
+          reason="اكتب معرفة أساسيّة أوّلا — بوت بلا معرفة يقول «لا أعرف» فقط">
           انشر وابدأ
         </Button>
       </Row>

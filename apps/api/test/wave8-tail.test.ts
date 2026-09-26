@@ -39,7 +39,7 @@ describe('★ المدى المخصَّص — قواعدُ خالصةٌ تُنف
   it('★ وشاشةُ التقارير تناديه، والشريحةُ بالعربيّة، والمالُ بـ`fmt.money`', () => {
     const page = bare('apps/web/src/app/app/reports/page.tsx');
     expect(page).toContain('const v = validateRange(draftFrom, draftTo);');
-    expect(page).toContain('`${preset} يوماً`');
+    expect(page).toContain('`${preset} يوما`');
     expect(page).not.toContain('`${preset}d`');
     expect(page).toContain('${fmt.money(cost.total)}');
     expect(page).not.toContain('cost.total.toFixed(4)');

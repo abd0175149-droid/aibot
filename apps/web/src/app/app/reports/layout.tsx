@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
  */
 export const metadata: Metadata = {
   title: 'التقارير',
-  description: 'ما جرى هذا الشهر: ردودٌ وكلفةٌ ونوافذُ وحوادث.',
+  description: 'ما جرى هذا الشهر: ردود وكلفة ومحادثات.',
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

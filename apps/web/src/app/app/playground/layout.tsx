@@ -10,8 +10,8 @@ import type { ReactNode } from 'react';
  *   `metadata` — وهذا الغلافُ يحملها عنها.
  */
 export const metadata: Metadata = {
-  title: 'الساحة',
-  description: 'جرّب بوتك قبل أن يردّ على زبونٍ حقيقيّ.',
+  title: 'جرّب بوتك',
+  description: 'جرّب بوتك قبل أن يردّ على زبون حقيقيّ.',
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

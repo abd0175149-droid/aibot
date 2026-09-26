@@ -134,7 +134,7 @@ export default function TeamPage() {
   const iAmOwner = me?.user.role === 'tenant_owner';
   const meId = me?.user.id ?? '';
   /** سببُ منعٍ واحدٌ يسبق كلَّ الأسباب — فلا يُكتب في كلّ زرٍّ بصيغةٍ أخرى. */
-  const impReason = 'الانتحال قراءةٌ فقط — مسجَّلٌ ويراه العميل في سجلّه.';
+  const impReason = 'الانتحال قراءة فقط — مسجّل ويراه العميل في سجلّه.';
 
   /* ─────────────── الأفعال ─────────────── */
 
@@ -164,16 +164,16 @@ export default function TeamPage() {
     const r = await post<{ sessionsRevoked: number }>(`/team/${m.id}/active`, { isActive: next });
     await reload();
     toast(next
-      ? `أُعيد تفعيل حساب ${m.name} — يستطيع الدخول بكلمته السابقة.`
-      : `عُطِّل حساب ${m.name} وأُبطلت ${r.sessionsRevoked} جلسة — لا يستطيع الدخول الآن.`);
+      ? `أعيد تفعيل حساب ${m.name} — يستطيع الدخول بكلمته السابقة.`
+      : `عطّل حساب ${m.name} وأبطلت ${r.sessionsRevoked} جلسة — لا يستطيع الدخول الآن.`);
   }
 
   async function runRole(m: Member, next: TeamRole) {
     const r = await patch<{ sessionsRevoked: number }>(`/team/${m.id}/role`, { role: next });
     await reload();
     toast(next === 'tenant_owner'
-      ? `${m.name} صار مالكاً — يضبط البوت والقنوات والفوترة ويدعو موظّفين.`
-      : `${m.name} صار موظّفاً وأُبطلت ${r.sessionsRevoked} جلسة — لن يرى الإعدادات بعد دخوله من جديد.`);
+      ? `${m.name} صار مالكا — يضبط البوت والقنوات والفوترة ويدعو موظّفين.`
+      : `${m.name} صار موظّفا وأبطلت ${r.sessionsRevoked} جلسة — لن يرى الإعدادات بعد دخوله من جديد.`);
   }
 
   async function runReset(m: Member) {
@@ -239,56 +239,56 @@ export default function TeamPage() {
     rusty: {
       sev: 'bad',
       head: <>
-        <span className="num">{fmt.num(t.rusty.length)}</span> حساباً نشطاً لم يُستعمل منذ أكثر من {stale} يوماً
+        <span className="num">{fmt.num(t.rusty.length)}</span> حسابا نشطا لم يستعمل منذ أكثر من {stale} يوما
       </>,
       sub: <>
-        من ترك العمل ولم يُعطَّل حسابه يبقى يقرأ محادثات زبائنك ويردّ عليهم باسمك.
-        {' '}وتعطيلُ الحساب يُبطل جلساته في نفس اللحظة — لا بعد ربع ساعة.
+        من ترك العمل ولم يعطّل حسابه يبقى يقرأ محادثات زبائنك ويردّ عليهم باسمك.
+        {' '}وتعطيل الحساب يبطل جلساته في نفس اللحظة — لا بعد ربع ساعة.
       </>,
     },
     never: {
       sev: 'warn',
       head: <>
-        <span className="num">{fmt.num(t.never.length)}</span> دعوةً لم تُستعمل بعد
+        <span className="num">{fmt.num(t.never.length)}</span> دعوة لم تستعمل بعد
       </>,
       sub: <>
-        كلمتُها المؤقّتة صالحةٌ لمن يعرفها — وهي لا تُخزَّن نصّاً عندنا.
-        {oldestInvite && <> وأقدمُها أُنشئت {fmt.when(oldestInvite)}.</>}
-        {' '}فإن ضاعت فأعِد تعيينها، وإن لم تعد لازمةً فعطّل الحساب.
+        كلمتها المؤقّتة صالحة لمن يعرفها — وهي لا تخزّن نصّا عندنا.
+        {oldestInvite && <> وأقدمها أنشئت {fmt.when(oldestInvite)}.</>}
+        {' '}فإن ضاعت فأعد تعيينها، وإن لم تعد لازمة فعطّل الحساب.
       </>,
     },
     onlyOwner: {
       sev: 'warn',
-      head: 'مالكٌ نشطٌ واحدٌ على هذا الحساب',
+      head: 'مالك نشط واحد على هذا الحساب',
       sub: <>
-        لو فُقد وصولُه لا يستطيع أحدٌ في الفريق دعوةَ موظّفٍ ولا تعطيلَ حسابٍ ولا ضبطَ البوت.
-        {' '}رقِّ من تثق به مالكاً — والترقيةُ تُسحب متى شئت.
+        لو فقد وصوله لا يستطيع أحد في الفريق دعوة موظّف ولا تعطيل حساب ولا ضبط البوت.
+        {' '}رقّ من تثق به مالكا — والترقية تسحب متى شئت.
       </>,
     },
     seatsFull: {
       sev: 'warn',
       head: <>
-        كلُّ مقاعد باقتك مشغولة: <span className="num">{fmt.num(t.active.length)}</span> من
+        كلّ مقاعد باقتك مشغولة: <span className="num">{fmt.num(t.active.length)}</span> من
         {' '}<span className="num">{fmt.num(data.seats)}</span>
       </>,
-      sub: 'لن تستطيع دعوةَ موظّفٍ جديدٍ حتّى تعطّل حساباً لم يعد يُستعمل، أو ترفع باقتك.',
+      sub: 'لن تستطيع دعوة موظّف جديد حتّى تعطّل حسابا لم يعد يستعمل، أو ترفع باقتك.',
     },
     solo: {
       sev: 'plain',
       head: 'أنت وحدك على هذا الحساب',
       sub: <>
-        كلُّ سطرٍ في سجلّ الأفعال باسمك، ولا خروجَ لأحدٍ إلّا بتغيير كلمتك.
-        {' '}وأوّلُ موظّفٍ تدعوه يصير له حسابُه وسجلُّه وزرُّ تعطيلٍ خاصٌّ به.
+        كلّ سطر في سجلّ الأفعال باسمك، ولا خروج لأحد إلّا بتغيير كلمتك.
+        {' '}وأوّل موظّف تدعوه يصير له حسابه وسجلّه وزرّ تعطيل خاصّ به.
       </>,
     },
     clear: {
       sev: 'good',
-      head: 'كلُّ حسابٍ في فريقك مستعمَلٌ وحديث',
+      head: 'كلّ حساب في فريقك مستعمل وحديث',
       sub: <>
-        <span className="num">{fmt.num(t.active.length)}</span> حساباً يستطيع الدخول ·
-        {' '}منهم <span className="num">{fmt.num(t.owners.length)}</span> مالكاً
-        {' '}و<span className="num">{fmt.num(t.agents.length)}</span> موظّفاً
-        {lastSeen && <> · وآخرُ دخولٍ {fmt.when(lastSeen)}</>}
+        <span className="num">{fmt.num(t.active.length)}</span> حسابا يستطيع الدخول ·
+        {' '}منهم <span className="num">{fmt.num(t.owners.length)}</span> مالكا
+        {' '}و<span className="num">{fmt.num(t.agents.length)}</span> موظّفا
+        {lastSeen && <> · وآخر دخول {fmt.when(lastSeen)}</>}
       </>,
     },
   };
@@ -321,7 +321,7 @@ export default function TeamPage() {
       head: 'الدور',
       /* ترميزٌ مزدوج: نصٌّ **ومعه** وجودُ العلامة أو غيابُها — لا لونٌ وحده. */
       cell: (m) => (m.role === 'tenant_owner'
-        ? <Tag tone="brand" label="مالكُ الحساب" />
+        ? <Tag tone="brand" label="مالك الحساب" />
         : <Tag line mark={false} label="موظّف" />),
     },
     {
@@ -333,7 +333,7 @@ export default function TeamPage() {
         return (
           <Row gap="xs">
             <span>{fmt.when(m.lastLoginAt)}</span>
-            {m.isActive && d >= stale && <Tag tone="serious" label={`راكدٌ منذ ${d} يوماً`} />}
+            {m.isActive && d >= stale && <Tag tone="serious" label={`راكد منذ ${d} يوما`} />}
           </Row>
         );
       },
@@ -342,15 +342,15 @@ export default function TeamPage() {
       key: 'state',
       head: 'الحالة',
       cell: (m) => {
-        if (!m.isActive) return <Pill tone="crit" label="معطَّل — لا يدخل" />;
-        if (m.mustChangePassword && !m.lastLoginAt) return <Pill tone="warn" label="دعوةٌ لم تُستعمل" />;
-        if (m.mustChangePassword) return <Pill tone="warn" label="على كلمةٍ مؤقّتة" />;
+        if (!m.isActive) return <Pill tone="crit" label="معطّل — لا يدخل" />;
+        if (m.mustChangePassword && !m.lastLoginAt) return <Pill tone="warn" label="دعوة لم تستعمل" />;
+        if (m.mustChangePassword) return <Pill tone="warn" label="على كلمة مؤقّتة" />;
         return <Pill tone="ok" label="نشط" />;
       },
     },
     {
       key: 'live',
-      head: 'جلساتٌ حيّة',
+      head: 'جلسات حيّة',
       num: true,
       cell: (m) => (m.isActive ? m.liveSessions : 0),
     },
@@ -363,7 +363,7 @@ export default function TeamPage() {
     ...(t.agents.length ? [{ f: 'agent' as Filt, label: 'موظّفون' }] : []),
     ...(t.never.length ? [{ f: 'never' as Filt, label: 'لم يدخل بعد' }] : []),
     ...(t.rusty.length ? [{ f: 'stale' as Filt, label: 'راكدة' }] : []),
-    ...(t.off.length ? [{ f: 'off' as Filt, label: 'معطَّلة' }] : []),
+    ...(t.off.length ? [{ f: 'off' as Filt, label: 'معطّلة' }] : []),
   ];
 
   /* ─────────────── حدودُ أزرار ورقة العضو ─────────────── */
@@ -376,7 +376,7 @@ export default function TeamPage() {
       {toastNode}
       <PageHead
         title="الفريق"
-        sub="حسابٌ لكلّ موظّف — فيُعرف من فعل ماذا، ويُقفل بابُ من ترك العمل."
+        sub="حساب لكلّ موظّف، وسجلّ لكلّ ما يفعل."
         actions={data.seats !== null
           ? <Pill tone="neutral" mark={false} label={`${fmt.num(t.active.length)} / ${fmt.num(data.seats)}`} />
           : undefined}
@@ -391,12 +391,12 @@ export default function TeamPage() {
         <Hero
           sev="bad"
           value={fmt.num(t.rusty.length)}
-          label={<>حساباً نشطاً لم يُستعمل منذ أكثر من {stale} يوماً</>}
+          label={<>حسابا نشطا لم يستعمل منذ أكثر من {stale} يوما</>}
           ctx={(
             <>
-              من <span className="num">{fmt.num(t.active.length)}</span> حساباً يستطيع الدخول ·
-              {' '}وعلى <span className="num">{fmt.num(t.liveOn)}</span> منها جلسةٌ حيّةٌ لا تسأل كلمةَ سرّ ·
-              {' '}والتعطيلُ يُبطل الجلسة في نفس اللحظة
+              من <span className="num">{fmt.num(t.active.length)}</span> حسابا يستطيع الدخول ·
+              {' '}وعلى <span className="num">{fmt.num(t.liveOn)}</span> منها جلسة حيّة لا تسأل كلمة سرّ ·
+              {' '}والتعطيل يبطل الجلسة في نفس اللحظة
             </>
           )}
         />
@@ -404,12 +404,12 @@ export default function TeamPage() {
         <Hero
           sev="warn"
           value={fmt.num(t.never.length)}
-          label="دعوةً أُنشئت ولم تُستعمل بعد"
+          label="دعوة أنشئت ولم تستعمل بعد"
           ctx={(
             <>
-              من <span className="num">{fmt.num(t.active.length)}</span> حساباً نشطاً
-              {oldestInvite && <> · وأقدمُها {fmt.when(oldestInvite)}</>} ·
-              {' '}وكلمتُها المؤقّتة لا تُخزَّن نصّاً عندنا فلا تُستعاد
+              من <span className="num">{fmt.num(t.active.length)}</span> حسابا نشطا
+              {oldestInvite && <> · وأقدمها {fmt.when(oldestInvite)}</>} ·
+              {' '}وكلمتها المؤقّتة لا تخزّن نصّا عندنا فلا تستعاد
             </>
           )}
         />
@@ -422,21 +422,21 @@ export default function TeamPage() {
           meter={data.seats !== null ? { pct: seatPct } : undefined}
           ctx={(
             <>
-              منهم <span className="num">{fmt.num(t.owners.length)}</span> مالكاً
-              {' '}و<span className="num">{fmt.num(t.agents.length)}</span> موظّفاً ·
-              {' '}و<span className="num">{fmt.num(t.live)}</span> جلسةً حيّةً على
-              {' '}<span className="num">{fmt.num(t.liveOn)}</span> حساباً
-              {lastSeen && <> · وآخرُ دخولٍ {fmt.when(lastSeen)}</>}
+              منهم <span className="num">{fmt.num(t.owners.length)}</span> مالكا
+              {' '}و<span className="num">{fmt.num(t.agents.length)}</span> موظّفا ·
+              {' '}و<span className="num">{fmt.num(t.live)}</span> جلسة حيّة على
+              {' '}<span className="num">{fmt.num(t.liveOn)}</span> حسابا
+              {lastSeen && <> · وآخر دخول {fmt.when(lastSeen)}</>}
             </>
           )}
         />
       )}
 
-      <Section title="بابُ حسابك" sub="كلُّ سطرٍ هنا طريقُ دخولٍ قائمٌ أو مقفول">
+      <Section title="باب حسابك" sub="كلّ سطر هنا طريق دخول قائم أو مقفول">
         <Rows>
           <MetricRow
-            k="مقاعدُ باقتك"
-            note="الحسابُ المعطَّل لا يشغل مقعداً — فعطِّل قبل أن ترفع الباقة"
+            k="مقاعد باقتك"
+            note="الحساب المعطّل لا يشغل مقعدا"
             value={fmt.num(t.active.length)}
             unit={data.seats !== null ? `/ ${fmt.num(data.seats)}` : undefined}
             mid={data.seats !== null
@@ -446,48 +446,48 @@ export default function TeamPage() {
                   <span className="sc-ctx"><span className="num">{fmt.pct(seatPct)}</span> من مقاعدك</span>
                 </>
               )
-              : <span className="sc-ctx">بلا سقفِ مقاعدَ في باقتك</span>}
+              : <span className="sc-ctx">بلا سقف مقاعد في باقتك</span>}
           />
 
           <MetricRow
-            k="جلساتٌ حيّةٌ الآن"
-            note="جهازٌ يدخل بلا أن يسأل كلمةَ سرّ — وتعطيلُ الحساب يُبطلها فوراً"
+            k="جلسات حيّة الآن"
+            note="أجهزة مسجّل دخولها الآن"
             value={fmt.num(t.live)}
             mid={t.live
               ? (
                 <span className="sc-ctx">
                   على <span className="num">{fmt.num(t.liveOn)}</span> من
-                  {' '}<span className="num">{fmt.num(t.active.length)}</span> حساباً نشطاً
+                  {' '}<span className="num">{fmt.num(t.active.length)}</span> حسابا نشطا
                 </span>
               )
-              : <span className="sc-ctx">لا أحدَ داخلٌ الآن — كلُّ دخولٍ سيسأل كلمةَ سرّ</span>}
+              : <span className="sc-ctx">لا أحد داخل الآن — كلّ دخول سيسأل كلمة سرّ</span>}
           />
 
           <MetricRow
-            k="حساباتٌ راكدة"
-            note={`نشطةٌ ولم تُستعمل منذ أكثر من ${stale} يوماً`}
+            k="حسابات راكدة"
+            note={`نشطة ولم تستعمل منذ أكثر من ${stale} يوما`}
             value={fmt.num(t.rusty.length)}
             mid={t.rusty.length
-              ? <Tag tone="serious" label={`${fmt.num(t.rusty.length)} بابٍ مفتوحٍ بلا مستعمِل`} />
-              : <span className="sc-ctx">كلُّ حسابٍ نشطٍ مستعمَلٌ حديثاً</span>}
+              ? <Tag tone="serious" label={`${fmt.num(t.rusty.length)} باب مفتوح بلا مستعمل`} />
+              : <span className="sc-ctx">كلّ حساب نشط مستعمل حديثا</span>}
           />
 
           <MetricRow
-            k="دعواتٌ لم تُستعمل"
-            note="حسابٌ أُنشئ وكلمتُه المؤقّتة لم تُستهلك بدخولٍ بعد"
+            k="دعوات لم تستعمل"
+            note="حسابات لم تدخل بعد"
             value={fmt.num(t.never.length)}
             mid={t.never.length
-              ? <Tag tone="warn" label="كلمةٌ مؤقّتةٌ سائبةٌ لمن يعرفها" />
-              : <span className="sc-ctx">كلُّ من دعوتَه دخل فعلاً</span>}
+              ? <Tag tone="warn" label="كلمة مؤقّتة سائبة لمن يعرفها" />
+              : <span className="sc-ctx">كلّ من دعوته دخل فعلا</span>}
           />
 
           <MetricRow
-            k="حساباتٌ معطَّلة"
-            note="لا تدخل ولا تشغل مقعداً — وسجلُّ أفعالها يبقى"
+            k="حسابات معطّلة"
+            note="لا تدخل ولا تشغل مقعدا"
             value={fmt.num(t.off.length)}
             mid={t.off.length
-              ? <Tag line mark={false} label="تُعاد بزرٍّ واحدٍ بكلمتها السابقة" />
-              : <span className="sc-ctx">لا حسابَ معطَّلاً</span>}
+              ? <Tag line mark={false} label="تعاد بزرّ واحد بكلمتها السابقة" />
+              : <span className="sc-ctx">لا حساب معطّلا</span>}
           />
         </Rows>
       </Section>
@@ -497,16 +497,16 @@ export default function TeamPage() {
         sub={(
           <>
             <span className="num">{fmt.num(view.length)}</span> من
-            {' '}<span className="num">{fmt.num(data.items.length)}</span> حساباً —
-            {' '}والأخطرُ أوّلاً: من لم يدخل قطّ، ثمّ الأقدمُ دخولاً
+            {' '}<span className="num">{fmt.num(data.items.length)}</span> حسابا —
+            {' '}والأخطر أوّلا: من لم يدخل قطّ، ثمّ الأقدم دخولا
           </>
         )}
       >
         {!view.length ? (
           <Empty
-            title="لا صفوفَ بهذا المرشِّح"
-            hint="المرشِّح الحاليّ لا يطابق أيّ حسابٍ في فريقك. أعِده إلى «الكلّ» من رصيف الشاشة أسفل."
-            action={<Button size="sm" onClick={() => setFilt('all')}>أعِده إلى الكلّ</Button>}
+            title="لا صفوف بهذا المرشّح"
+            hint="لا حسابات بهذا الاختيار. اختر «الكلّ»."
+            action={<Button size="sm" onClick={() => setFilt('all')}>أعده إلى الكلّ</Button>}
           />
         ) : (
           <>
@@ -517,11 +517,11 @@ export default function TeamPage() {
               <span className="sc-sum-i">يستطيعون الدخول <b className="num">{fmt.num(t.active.length)}</b></span>
               <span className="sc-sum-i">مالكون <b className="num">{fmt.num(t.owners.length)}</b></span>
               <span className="sc-sum-i">موظّفون <b className="num">{fmt.num(t.agents.length)}</b></span>
-              <span className="sc-sum-i">جلساتٌ حيّة <b className="num">{fmt.num(t.live)}</b></span>
-              <span className="sc-sum-i">معطَّلة <b className="num">{fmt.num(t.off.length)}</b></span>
+              <span className="sc-sum-i">جلسات حيّة <b className="num">{fmt.num(t.live)}</b></span>
+              <span className="sc-sum-i">معطّلة <b className="num">{fmt.num(t.off.length)}</b></span>
             </div>
             <p className="muted-p">
-              اضغط أيّ صفٍّ لتفتح حسابَ صاحبه — ومنه التعطيلُ وتغييرُ الدور وإعادةُ تعيين كلمةٍ مؤقّتة.
+              اضغط أيّ صفّ لتفتح حساب صاحبه — ومنه التعطيل وتغيير الدور وإعادة تعيين كلمة مؤقّتة.
             </p>
           </>
         )}
@@ -532,17 +532,17 @@ export default function TeamPage() {
           فيه: هل دخل أحدٌ من فريق المنصّة بهويّتنا ومتى — فتلك الصفوفُ موسومةٌ
           لا مدفونة. والفاعلُ من المنصّة يُسمّى بفعله لا باسمه: صفُّه لا يُرى هنا. */}
       <Section
-        title="سجلُّ الأفعال"
-        sub="آخرُ مئةِ فعلٍ على حسابكم بفاعله ووقته — ودخولُ فريق المنصّة بهويّتكم موسومٌ"
+        title="سجلّ الأفعال"
+        sub="آخر 100 عمليّة على حسابكم، ومن قام بها"
       >
         {audit.error ? (
-          <Note tone="crit">تعذّر جلبُ السجلّ — {audit.error}</Note>
+          <Note tone="crit">تعذّر جلب السجلّ — {audit.error}</Note>
         ) : !audit.data ? (
           <Skeleton rows={4} />
         ) : !audit.data.items.length ? (
           <Empty
-            title="لا أفعالَ مسجَّلةً بعد"
-            hint="كلُّ دعوةٍ وتغييرِ دورٍ وتعطيلٍ ونشرِ نسخةٍ — وكلُّ دخولٍ من فريق المنصّة — يظهر هنا لحظةَ وقوعه."
+            title="لا أفعال مسجّلة بعد"
+            hint="ستظهر هنا كلّ عمليّة على حسابكم."
           />
         ) : (
           <ul className="au-list">
@@ -552,7 +552,7 @@ export default function TeamPage() {
                 <span className="au-who" dir="auto">{auditActor(r)}</span>
                 <span className={`au-what${auditKnown(r.action) ? '' : ' mono'}`} dir="auto">{auditLabel(r.action)}</span>
                 {r.action === 'tenant.impersonate'
-                  ? <Pill tone="warn" label="فريق المنصّة — قراءةٌ فقط" />
+                  ? <Pill tone="warn" label="فريق المنصّة — قراءة فقط" />
                   : auditActor(r) === 'فريق المنصّة' && <Pill tone="neutral" label="فريق المنصّة" />}
               </li>
             ))}
@@ -564,45 +564,45 @@ export default function TeamPage() {
           بعد 60 يوماً». التصديرُ زرٌّ هنا في أيّ وقت، والمحوُ يفعله العامل بعد
           ستّين يوماً من الأرشفة — والرقمُ نفسُه في الصفحة المنشورة وفي الكود. */}
       <Section
-        title="بياناتُ الحساب"
-        sub="تصديرٌ كاملٌ متى شئت — ومحوٌ نهائيٌّ بعد ستّين يوماً من إنهاء العلاقة"
+        title="بيانات الحساب"
+        sub="نزّل نسخة من بياناتك متى شئت"
       >
         <Row gap="sm">
           <Button
             disabled={impersonating}
             reason={impersonating ? impReason : undefined}
-            onClick={() => { download('/export', 'aibot-export.json').catch(() => toast('تعذّر التصدير. أعِد المحاولة.')); }}
+            onClick={() => { download('/export', 'aibot-export.json').catch(() => toast('تعذّر التصدير. أعد المحاولة.')); }}
           >
-            صدّر كلَّ بيانات الحساب (JSON)
+            صدّر كلّ بيانات الحساب (JSON)
           </Button>
         </Row>
         <Note>
-          <b>عند إنهاء العلاقة</b> يؤرشف فريقُ المنصّة الحساب: يتوقّف الدخولُ والرسائلُ في الحال، وتبقى
-          البياناتُ <span className="num">60</span> يوماً يُطلب فيها التصديرُ أو التراجعُ — ثمّ تُمحى نهائيّاً
-          بلا رجعة. وتصديرُ الحساب وحذفُ أيّ جهةٍ يُسجَّلان في سجلّ الأفعال أعلاه.
+          <b>عند إنهاء العلاقة</b> يؤرشف فريق المنصّة الحساب: يتوقّف الدخول والرسائل في الحال، وتبقى
+          البيانات <span className="num">60</span> يوما يطلب فيها التصدير أو التراجع — ثمّ تمحى نهائيّا
+          بلا رجعة. وتصدير الحساب وحذف أيّ جهة يسجّلان في سجلّ الأفعال أعلاه.
         </Note>
       </Section>
 
-      <Fold summary="لماذا لا نرسل بريد الدعوة، وماذا يُسجَّل في سجلّ الأفعال">
+      <Fold summary="كيف تعمل الدعوة؟">
         <Note>
-          <b>الكلمةُ المؤقّتة تُملى ولا تُرسَل.</b> لا مُرسِلَ بريدٍ في المنصّة، وزرٌّ يقول
-          «أرسلنا دعوة» ولا يُرسِل أسوأ من غيابه: تنتظر موظّفتُك رسالةً لا تأتي وتظنّ العطل عندها.
-          فالكلمةُ تظهر لك مرّةً واحدةً، وتُمليها عليها، ويُجبرها النظام على تغييرها عند أوّل دخول.
+          <b>الكلمة المؤقّتة تملى ولا ترسل.</b> لا مرسل بريد في المنصّة، وزرّ يقول
+          «أرسلنا دعوة» ولا يرسل أسوأ من غيابه: تنتظر موظّفتك رسالة لا تأتي وتظنّ العطل عندها.
+          فالكلمة تظهر لك مرّة واحدة، وتمليها عليها، ويجبرها النظام على تغييرها عند أوّل دخول.
         </Note>
         <Note>
-          <b>وكلُّ فعلٍ هنا يُسجَّل باسم فاعله</b> في سجلّ الأفعال أعلاه: الدعوة وتغييرُ الدور والتعطيل
-          وإعادةُ التعيين. وهذا هو المكسبُ الحقيقيّ من الحسابات المنفصلة — حسابٌ واحدٌ مشترك
-          يجعل السجلَّ كلَّه باسمٍ واحدٍ فلا يُجيب عن سؤالٍ واحد.
+          <b>وكلّ فعل هنا يسجّل باسم فاعله</b> في سجلّ الأفعال أعلاه: الدعوة وتغيير الدور والتعطيل
+          وإعادة التعيين. وهذا هو المكسب الحقيقيّ من الحسابات المنفصلة — حساب واحد مشترك
+          يجعل السجلّ كلّه باسم واحد فلا يجيب عن سؤال واحد.
         </Note>
         <Note tone="warn">
-          <b>والتعطيل يطرد فعلاً.</b> توكنُ الدخول لا يُسأل عن الحساب في كلّ طلب، فبلا إبطال
-          الجلسات يبقى المعطَّلُ يقرأ ويردّ حتّى ينتهي توكنه. ولذلك التعطيلُ يُبطل كلّ جلساته
-          في نفس اللحظة — وكذلك تنزيلُ الدور، وإلّا بقي المالكُ المنزَّلُ مالكاً ربعَ ساعة.
+          <b>والتعطيل يطرد فعلا.</b> توكن الدخول لا يسأل عن الحساب في كلّ طلب، فبلا إبطال
+          الجلسات يبقى المعطّل يقرأ ويردّ حتّى ينتهي توكنه. ولذلك التعطيل يبطل كلّ جلساته
+          في نفس اللحظة — وكذلك تنزيل الدور، وإلّا بقي المالك المنزّل مالكا ربع ساعة.
         </Note>
       </Fold>
 
       {/* ★ الرصيف: فعلُ الشاشة الأوّل ومرشّحاتُها في مدى الإبهام. */}
-      <ScreenDock hint="الدعوةُ تُنشئ حساباً بكلمةٍ مؤقّتةٍ تظهر مرّةً واحدة — لا رسالةَ بريدٍ تُرسَل.">
+      <ScreenDock hint="تنشئ الدعوة حسابا بكلمة مرور مؤقّتة.">
         <ChipRow label="مرشّحات">
           {chips.map((c) => (
             <button
@@ -624,20 +624,20 @@ export default function TeamPage() {
           reason={impersonating
             ? impReason
             : t.seatsFull
-              ? `مقاعدُ باقتك ${data.seats} وكلُّها مشغولة — عطِّل حساباً أو ارفع باقتك.`
+              ? `مقاعد باقتك ${data.seats} وكلّها مشغولة — عطّل حسابا أو ارفع باقتك.`
               : undefined}
           onClick={() => { setInviteErr(null); setInviteOpen(true); }}
         >
-          ادعُ موظّفاً
+          ادع موظّفا
         </Button>
       </ScreenDock>
 
       {/* ═══════════ ورقةُ الدعوة ═══════════ */}
       <Sheet
         open={inviteOpen}
-        title="ادعُ موظّفاً"
+        title="ادع موظّفا"
         onClose={() => setInviteOpen(false)}
-        hint="يُنشأ الحساب فوراً بكلمةٍ مؤقّتةٍ تُعرض لك مرّةً واحدةً — تُمليها عليه، ويغيّرها عند أوّل دخول."
+        hint="ننشئ الحساب بكلمة مرور مؤقّتة تظهر لك مرّة واحدة. أعطها لموظّفك."
         footer={(
           <Row gap="xs">
             <Button
@@ -647,9 +647,9 @@ export default function TeamPage() {
               reason={impersonating ? impReason : undefined}
               onClick={() => void submitInvite()}
             >
-              أنشِئ الحساب
+              أنشئ الحساب
             </Button>
-            <Button variant="quiet" onClick={() => setInviteOpen(false)}>أغلِق</Button>
+            <Button variant="quiet" onClick={() => setInviteOpen(false)}>أغلق</Button>
           </Row>
         )}
       >
@@ -662,7 +662,7 @@ export default function TeamPage() {
               وبريدَه — فيُنشأ حسابٌ ثانٍ للمالك نفسِه باسم موظّفته، أو تُصرف
               الدعوةُ إلى بريدٍ لا يقرؤه أحد. والاسمان مقصودان كذلك: لا `email`
               ولا `username` مجرَّدين، فهما ما تبحث عنه أدواتُ الحشو. */}
-          <Field label="الاسم" hint="ما يظهر في سجلّ الأفعال وفي ردوده على الزبائن" id="tm-name">
+          <Field label="الاسم" hint="يظهر في سجلّ العمليّات" id="tm-name">
             <FormInput
               id="tm-name"
               name="invitee-name"
@@ -675,7 +675,7 @@ export default function TeamPage() {
             />
           </Field>
 
-          <Field label="البريد" hint="به يدخل — ولا تُرسَل إليه رسالة" id="tm-mail">
+          <Field label="البريد" hint="به يدخل — ولا ترسل إليه رسالة" id="tm-mail">
             <FormInput
               id="tm-mail"
               name="invitee-email"
@@ -695,7 +695,7 @@ export default function TeamPage() {
             label="الدور"
             hint={iAmOwner
               ? 'الموظّف يرى الإنبوكس وجهات الاتّصال وحدها'
-              : 'لا يُنشئ مالكاً إلّا مالكُ الحساب نفسُه'}
+              : 'لا ينشئ مالكا إلّا مالك الحساب نفسه'}
             id="tm-role"
           >
             <Select
@@ -703,7 +703,7 @@ export default function TeamPage() {
               value={role}
               onChange={(v) => setRole(v as TeamRole)}
               options={[
-                { value: 'tenant_agent', label: 'موظّف — يردّ على الزبائن ولا يضبط شيئاً' },
+                { value: 'tenant_agent', label: 'موظّف — يردّ على الزبائن ولا يضبط شيئا' },
                 ...(iAmOwner
                   ? [{ value: 'tenant_owner', label: 'مالك — يضبط البوت والقنوات والفوترة ويدعو غيره' }]
                   : []),
@@ -712,9 +712,9 @@ export default function TeamPage() {
           </Field>
 
           <Note tone="warn">
-            <b>الموظّف لا يرى هذه الشاشة أصلاً</b> ولا شاشاتِ الضبط والفوترة — والخادم يرفض
-            طلباتها منه ولو كتب مسارَها بيده. والمالكُ يرى كلَّ ما ترى، ويستطيع تعطيل حسابك
-            إن كان معك مالكٌ آخر. فلا تُرقِّ إلّا من تُسلّمه المفاتيح فعلاً.
+            <b>الموظّف لا يرى هذه الشاشة أصلا</b> ولا شاشات الضبط والفوترة — والخادم يرفض
+            طلباتها منه ولو كتب مسارها بيده. والمالك يرى كلّ ما ترى، ويستطيع تعطيل حسابك
+            إن كان معك مالك آخر. فلا ترقّ إلّا من تسلّمه المفاتيح فعلا.
           </Note>
         </Stack>
       </Sheet>
@@ -724,8 +724,8 @@ export default function TeamPage() {
         open={whoOpen}
         title={who ? who.name : 'عضو'}
         onClose={() => setWhoOpen(false)}
-        hint="التعطيلُ يُبطل جلساته فوراً · وتنزيلُ الدور كذلك · وإعادةُ التعيين تُظهر كلمةً مؤقّتةً مرّةً واحدة."
-        footer={<Button variant="quiet" onClick={() => setWhoOpen(false)}>أغلِق</Button>}
+        hint="التعطيل يخرجه من كلّ الأجهزة فورا."
+        footer={<Button variant="quiet" onClick={() => setWhoOpen(false)}>أغلق</Button>}
       >
         {who && (
           <Stack gap="md">
@@ -734,25 +734,25 @@ export default function TeamPage() {
               <KVRow k="البريد"><span className="tm-mail">{who.email}</span></KVRow>
               <KVRow k="الدور">
                 {who.role === 'tenant_owner'
-                  ? <Tag tone="brand" label="مالكُ الحساب" />
+                  ? <Tag tone="brand" label="مالك الحساب" />
                   : <Tag line mark={false} label="موظّف" />}
               </KVRow>
               <KVRow k="الحالة">
                 {who.isActive
                   ? <Pill tone="ok" label="نشط — يستطيع الدخول" />
-                  : <Pill tone="crit" label="معطَّل — لا يستطيع الدخول" />}
+                  : <Pill tone="crit" label="معطّل — لا يستطيع الدخول" />}
               </KVRow>
               <KVRow k="آخر دخول">
                 {who.lastLoginAt
                   ? <>{fmt.when(who.lastLoginAt)}</>
                   : <Pill tone="warn" label="لم يدخل قطّ" />}
               </KVRow>
-              <KVRow k="جلساتٌ حيّة"><span className="num">{fmt.num(who.liveSessions)}</span></KVRow>
-              <KVRow k="أُنشئ">{fmt.when(who.createdAt)}</KVRow>
-              <KVRow k="كلمةُ السرّ">
+              <KVRow k="جلسات حيّة"><span className="num">{fmt.num(who.liveSessions)}</span></KVRow>
+              <KVRow k="أنشئ">{fmt.when(who.createdAt)}</KVRow>
+              <KVRow k="كلمة السرّ">
                 {who.mustChangePassword
-                  ? <Pill tone="warn" label="مؤقّتة — يُجبَر على تغييرها" />
-                  : <Pill tone="ok" label="خاصّةٌ به" />}
+                  ? <Pill tone="warn" label="مؤقّتة — يجبر على تغييرها" />
+                  : <Pill tone="ok" label="خاصّة به" />}
               </KVRow>
             </KV>
 
@@ -763,23 +763,23 @@ export default function TeamPage() {
                   reason={impersonating
                     ? impReason
                     : !iAmOwner
-                      ? 'لا يُرقّي إلى مالكٍ إلّا مالكُ الحساب نفسُه.'
+                      ? 'لا يرقّي إلى مالك إلّا مالك الحساب نفسه.'
                       : !who.isActive
-                        ? 'الحسابُ معطَّل — أعِد تفعيله أوّلاً.'
+                        ? 'الحساب معطّل — أعد تفعيله أوّلا.'
                         : undefined}
                   onClick={() => confirm({
-                    title: 'ترقيةٌ إلى مالك',
+                    title: 'ترقية إلى مالك',
                     who: who.name,
                     why: <>
-                      سيرى الفوترة والقنوات وإعداداتِ البوت، ويستطيع دعوةَ موظّفين وتعطيلَ
-                      حساباتٍ — بما فيها حسابُك إن بقي معك مالكٌ آخر. والترقيةُ تُسحب متى شئت.
+                      سيرى الفوترة والقنوات وإعدادات البوت، ويستطيع دعوة موظّفين وتعطيل
+                      حسابات — بما فيها حسابك إن بقي معك مالك آخر. والترقية تسحب متى شئت.
                     </>,
-                    label: 'رقِّه مالكاً',
+                    label: 'رقّه مالكا',
                     danger: false,
                     run: () => runRole(who, 'tenant_owner'),
                   })}
                 >
-                  رقِّه مالكاً
+                  رقّه مالكا
                 </Button>
               ) : (
                 <Button
@@ -787,23 +787,23 @@ export default function TeamPage() {
                   reason={impersonating
                     ? impReason
                     : lastOwner
-                      ? 'هذا هو المالكُ النشطُ الوحيد — رقِّ غيرَه مالكاً أوّلاً، وإلّا بقي الحساب بلا من يُديره.'
+                      ? 'هذا هو المالك النشط الوحيد — رقّ غيره مالكا أوّلا، وإلّا بقي الحساب بلا من يديره.'
                       : undefined}
                   onClick={() => confirm({
-                    title: 'تنزيلٌ إلى موظّف',
+                    title: 'تنزيل إلى موظّف',
                     who: who.name,
                     why: <>
-                      لن يرى الفوترة ولا القنوات ولا إعداداتِ البوت ولا هذه الشاشة — يبقى له
-                      الإنبوكس وجهاتُ الاتّصال. و<b>كلُّ جلساته تُبطَل الآن</b>، وإلّا بقي
-                      مالكاً حتّى ينتهي توكنه بعد ربع ساعة.
-                      {isSelf && <> وأنت تُنزّل <b>نفسك</b> — ستُطرد من جلستك في نفس اللحظة.</>}
+                      لن يرى الفوترة ولا القنوات ولا إعدادات البوت ولا هذه الشاشة — يبقى له
+                      الإنبوكس وجهات الاتّصال. و<b>كلّ جلساته تبطل الآن</b>، وإلّا بقي
+                      مالكا حتّى ينتهي توكنه بعد ربع ساعة.
+                      {isSelf && <> وأنت تنزّل <b>نفسك</b> — ستطرد من جلستك في نفس اللحظة.</>}
                     </>,
-                    label: 'نزِّله موظّفاً',
+                    label: 'نزّله موظّفا',
                     danger: true,
                     run: () => runRole(who, 'tenant_agent'),
                   })}
                 >
-                  نزِّله موظّفاً
+                  نزّله موظّفا
                 </Button>
               )}
 
@@ -814,24 +814,24 @@ export default function TeamPage() {
                   reason={impersonating
                     ? impReason
                     : isSelf
-                      ? 'لا تُعطّل حسابك بنفسك — ستُطرد فوراً ولن تستطيع إعادةَ تفعيله.'
+                      ? 'لا تعطّل حسابك بنفسك — ستطرد فورا ولن تستطيع إعادة تفعيله.'
                       : lastOwner
-                        ? 'هذا هو المالكُ النشطُ الوحيد — لا يُعطَّل حسابه، وإلّا بقي الحساب بلا من يُديره.'
+                        ? 'هذا هو المالك النشط الوحيد — لا يعطّل حسابه، وإلّا بقي الحساب بلا من يديره.'
                         : undefined}
                   onClick={() => confirm({
-                    title: 'تعطيلُ الحساب',
+                    title: 'تعطيل الحساب',
                     who: who.name,
                     why: <>
-                      لن يستطيع الدخول، و<b>كلُّ جلساته تُبطَل الآن</b> فيُطرد من كلّ جهازٍ
-                      داخلٍ عليه. ولا يشغل مقعداً في باقتك بعد ذلك، وسجلُّ أفعاله يبقى كما هو.
-                      {who.liveSessions > 0 && <> وله الآن {who.liveSessions} جلسةً حيّة.</>}
+                      لن يستطيع الدخول، و<b>كلّ جلساته تبطل الآن</b> فيطرد من كلّ جهاز
+                      داخل عليه. ولا يشغل مقعدا في باقتك بعد ذلك، وسجلّ أفعاله يبقى كما هو.
+                      {who.liveSessions > 0 && <> وله الآن {who.liveSessions} جلسة حيّة.</>}
                     </>,
-                    label: 'عطِّل الحساب',
+                    label: 'عطّل الحساب',
                     danger: true,
                     run: () => runActive(who, false),
                   })}
                 >
-                  عطِّل الحساب
+                  عطّل الحساب
                 </Button>
               ) : (
                 <Button
@@ -839,21 +839,21 @@ export default function TeamPage() {
                   reason={impersonating
                     ? impReason
                     : t.seatsFull
-                      ? `مقاعدُ باقتك ${data.seats} وكلُّها مشغولة — عطِّل حساباً آخر أو ارفع باقتك.`
+                      ? `مقاعد باقتك ${data.seats} وكلّها مشغولة — عطّل حسابا آخر أو ارفع باقتك.`
                       : undefined}
                   onClick={() => confirm({
-                    title: 'إعادةُ تفعيل الحساب',
+                    title: 'إعادة تفعيل الحساب',
                     who: who.name,
                     why: <>
-                      سيستطيع الدخول <b>بكلمته السابقة</b> — فإن كنتَ لا تعرف من يعرفها،
-                      فأعِد تعيين كلمةٍ مؤقّتةٍ بعد التفعيل. ويشغل مقعداً في باقتك من جديد.
+                      سيستطيع الدخول <b>بكلمته السابقة</b> — فإن كنت لا تعرف من يعرفها،
+                      فأعد تعيين كلمة مؤقّتة بعد التفعيل. ويشغل مقعدا في باقتك من جديد.
                     </>,
-                    label: 'أعِد التفعيل',
+                    label: 'أعد التفعيل',
                     danger: false,
                     run: () => runActive(who, true),
                   })}
                 >
-                  أعِد التفعيل
+                  أعد التفعيل
                 </Button>
               )}
 
@@ -862,21 +862,21 @@ export default function TeamPage() {
                 reason={impersonating
                   ? impReason
                   : isSelf
-                    ? 'كلمتُك تُغيَّر من شاشة «كلمة السرّ» — فهي تطلب القديمة وتُبقي جلستك.'
+                    ? 'كلمتك تغيّر من شاشة «كلمة السرّ» — فهي تطلب القديمة وتبقي جلستك.'
                     : undefined}
                 onClick={() => confirm({
-                  title: 'إعادةُ تعيين كلمةٍ مؤقّتة',
+                  title: 'إعادة تعيين كلمة مؤقّتة',
                   who: who.name,
                   why: <>
-                    كلمتُه الحاليّة تتوقّف فوراً، و<b>كلُّ جلساته تُبطَل</b>، وتظهر لك كلمةٌ
-                    مؤقّتةٌ <b>مرّةً واحدةً</b> تُمليها عليه — ويُجبَر على تغييرها عند أوّل دخول.
+                    كلمته الحاليّة تتوقّف فورا، و<b>كلّ جلساته تبطل</b>، وتظهر لك كلمة
+                    مؤقّتة <b>مرّة واحدة</b> تمليها عليه — ويجبر على تغييرها عند أوّل دخول.
                   </>,
-                  label: 'أعِد التعيين',
+                  label: 'أعد التعيين',
                   danger: true,
                   run: () => runReset(who),
                 })}
               >
-                أعِد تعيين كلمةٍ مؤقّتة
+                أعد تعيين كلمة مؤقّتة
               </Button>
             </Stack>
           </Stack>
@@ -888,7 +888,7 @@ export default function TeamPage() {
         open={Boolean(ask)}
         title={ask?.title ?? 'تأكيد'}
         onClose={() => setAsk(null)}
-        hint="لا شيء يقع قبل أن تضغط زرَّ التأكيد."
+        hint="لا شيء يقع قبل أن تضغط زرّ التأكيد."
         footer={ask
           ? (
             <Row gap="xs">
@@ -899,7 +899,7 @@ export default function TeamPage() {
               >
                 {ask.label}
               </Button>
-              <Button variant="quiet" onClick={() => setAsk(null)}>تراجَع</Button>
+              <Button variant="quiet" onClick={() => setAsk(null)}>تراجع</Button>
             </Row>
           )
           : undefined}
@@ -918,36 +918,36 @@ export default function TeamPage() {
       {/* ═══════════ الكلمةُ المؤقّتة — مرّةٌ واحدةٌ فقط ═══════════ */}
       <Sheet
         open={Boolean(secret)}
-        title="كلمةٌ مؤقّتةٌ تُعرض مرّةً واحدة"
+        title="كلمة مؤقّتة تعرض مرّة واحدة"
         /* ★ الإغلاقُ معلَّقٌ على إقرار: الكلمةُ لا تُخزَّن نصّاً عندنا، فإغلاقٌ
            سهواً يُضيّعها فعلاً — ولا سبيل إليها إلّا إعادةُ تعيينٍ ثانية تُبطل
            جلسات صاحبها من جديد. والمخرجُ ليس مصيدةً: المفتاحُ أمام العين. */
         onClose={() => {
           if (ack) { setSecret(null); setAck(false); return; }
-          toast('انسخ الكلمةَ أوّلاً — لن تظهر ثانيةً، ولا تُخزَّن نصّاً عندنا.');
+          toast('انسخ الكلمة أوّلا — لن تظهر ثانية، ولا تخزّن نصّا عندنا.');
         }}
-        hint="لا تُخزَّن نصّاً في أيّ مكان عندنا — لا في سجلٍّ ولا في قاعدة. وإن ضاعت فأعِد تعيينها."
+        hint="لا نحتفظ بها. إن ضاعت فأعد تعيينها."
         footer={(
           <Button
             variant="primary"
             disabled={!ack}
-            reason={!ack ? 'أقرِّ أنّك نسختَها أو كتبتَها — فهي لن تظهر ثانيةً.' : undefined}
+            reason={!ack ? 'أقرّ أنّك نسختها أو كتبتها — فهي لن تظهر ثانية.' : undefined}
             onClick={() => { setSecret(null); setAck(false); }}
           >
-            نسختُها — أغلِق
+            نسختها — أغلق
           </Button>
         )}
       >
         {secret && (
           <Stack gap="md">
             <Alert>
-              <b>هذه آخرُ مرّةٍ تراها.</b> كلماتُ السرّ عندنا مخزَّنةٌ باتّجاهٍ واحد، فلا
-              موضعَ تُقرأ منه بعد إغلاق هذه الورقة — ولا نستطيع نحن قراءتها أيضاً.
+              <b>هذه آخر مرّة تراها.</b> كلمات السرّ عندنا مخزّنة باتّجاه واحد، فلا
+              موضع تقرأ منه بعد إغلاق هذه الورقة — ولا نستطيع نحن قراءتها أيضا.
             </Alert>
 
             <div className="tm-secret">
               <span className="tm-secret-l">
-                {secret.fresh ? 'كلمةُ الدخول المؤقّتة لحساب' : 'الكلمةُ المؤقّتة الجديدة لحساب'}
+                {secret.fresh ? 'كلمة الدخول المؤقّتة لحساب' : 'الكلمة المؤقّتة الجديدة لحساب'}
                 {' '}<span dir="auto">{secret.who}</span>
               </span>
               <CodeBlock text={secret.pass} />
@@ -957,16 +957,16 @@ export default function TeamPage() {
             </div>
 
             <Note>
-              <b>أملِها عليه ولا تُرسِلها في محادثة.</b> حروفُها مختارةٌ بلا ما يلتبس صوتاً
-              أو نظراً — لا صفر مع O ولا واحد مع L. وعند أوّل دخولٍ يطلب النظام منه
-              كلمةً خاصّةً به، فتتوقّف هذه عن العمل ولا تبقى سرّاً بينكما.
+              <b>أملها عليه ولا ترسلها في محادثة.</b> حروفها مختارة بلا ما يلتبس صوتا
+              أو نظرا — لا صفر مع O ولا واحد مع L. وعند أوّل دخول يطلب النظام منه
+              كلمة خاصّة به، فتتوقّف هذه عن العمل ولا تبقى سرّا بينكما.
             </Note>
 
             <Toggle
               id="tm-ack"
               checked={ack}
               onChange={setAck}
-              label="نسختُها أو كتبتُها — أعرف أنّها لن تظهر ثانيةً"
+              label="نسختها أو كتبتها — أعرف أنّها لن تظهر ثانية"
             />
           </Stack>
         )}

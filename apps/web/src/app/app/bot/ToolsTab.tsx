@@ -28,8 +28,8 @@ export function ToolsTab({ c }: { c: BotCtx }) {
               skeletonRows={3}
               empty={{
                 when: (list) => list.length === 0,
-                title: 'لا أدوات مخصَّصة بعد',
-                hint: 'بوتك يستعمل الأدوات الجاهزة (تحويل لموظّف، ملاحظات، خيارات سريعة). أضِف أداةً حين يكون عندك نظامٌ يستعلم منه — أسعارٌ، مخزونٌ، مواعيد، أو حساب زبون.',
+                title: 'لا أدوات مخصّصة بعد',
+                hint: 'بوتك يستعمل الأدوات الجاهزة (تحويل لموظّف، ملاحظات، خيارات سريعة). أضف أداة حين يكون عندك نظام يستعلم منه — أسعار، مخزون، مواعيد، أو حساب زبون.',
                 action: newToolBtn(false),
               }}
             >
@@ -44,20 +44,20 @@ export function ToolsTab({ c }: { c: BotCtx }) {
                     title={<span dir="auto">{t.titleAr}</span>}
                     actions={(
                       <>
-                        {t.disabledReason && <Pill tone="crit" label="معطَّلة آليّاً" />}
+                        {t.disabledReason && <Pill tone="crit" label="معطّلة آليّا" />}
                         {/* ★ **مسوّدةٌ لا يراها بوتك** — وكانت الأداةُ تُنشأ
                             مفعَّلةً عند أوّل «جرّبها»، فتصير في متناول البوت
                             أمام الزبائن وهي نصفُ مبنيّة. و«معطَّلةٌ بيدك»
                             غيرُ «معطَّلةٍ آليّاً»: الأولى قرارُك والثانية
                             قاطعُ دائرةٍ فُتح. */}
                         {!t.enabled && !t.disabledReason && (
-                          <Pill tone="warn" label="مسوّدة — لا يراها بوتك" />
+                          <Pill tone="warn" label="غير منشورة — لا يراها بوتك" />
                         )}
                         {/* ★ «مخصَّصة» ليست تحذيراً: كانت `warn` فكلّ أداةٍ بناها
                             العميل تبدو عطلاً دائماً. وسمٌ بصيغة الخطّ — بلا سطحٍ
                             فلا يُقرأ حالة. */}
-                        <Tag line label={t.kind === 'http' ? 'مخصَّصة' : 'جاهزة'} />
-                        {t.hasSecrets && <Tag tone="violet" label="لها سرٌّ محفوظ" />}
+                        <Tag line label={t.kind === 'http' ? 'مخصّصة' : 'جاهزة'} />
+                        {t.hasSecrets && <Tag tone="violet" label="لها سرّ محفوظ" />}
                       </>
                     )}
                   >
@@ -67,13 +67,13 @@ export function ToolsTab({ c }: { c: BotCtx }) {
                       {t.disabledReason && (
                         <Note tone="crit">
                           <span dir="auto">{t.disabledReason}</span>{' '}
-                          <b>وحتّى تُصلح ذلك، يجيب بوتك من نصّ معرفتك وحده.</b>
+                          <b>وحتّى تصلح ذلك، يجيب بوتك من نصّ معرفتك وحده.</b>
                         </Note>
                       )}
 
                       {!!t.requiresCapabilities.length && (
                         <p className="muted-p">
-                          تُخفى تلقائيّاً على قناةٍ لا تدعم ما تحتاجه — والقنوات التي تدعمه
+                          تخفى تلقائيّا على قناة لا تدعم ما تحتاجه — والقنوات التي تدعمه
                           تراها كما هي.
                         </p>
                       )}
@@ -81,7 +81,7 @@ export function ToolsTab({ c }: { c: BotCtx }) {
                       {/* ★ سلاسلُ الآلة مطويّة: المفتاح والمسار لا يُتّخذ عليهما
                           قرار، وصاحب المطعم لا يعرفهما — ومن يسأل الدعم يجدهما. */}
                       <details className="bot-more">
-                        <summary>تفاصيلُ تقنيّة — لا يُتّخذ عليها قرار</summary>
+                        <summary>تفاصيل تقنيّة — لا يتّخذ عليها قرار</summary>
                         <div className="bot-more-b">
                           <p className="muted-p">
                             الاسم الذي يناديها به بوتك:{' '}
@@ -127,7 +127,7 @@ export function ToolsTab({ c }: { c: BotCtx }) {
                             reason={lockReason ?? undefined}
                             onClick={() => void setToolEnabled(t.id, true)}
                           >
-                            أعِد تفعيلها
+                            أعد تفعيلها
                           </Button>
                         ) : (
                           <Button
@@ -138,7 +138,7 @@ export function ToolsTab({ c }: { c: BotCtx }) {
                             reason={lockReason ?? undefined}
                             onClick={() => void setToolEnabled(t.id, !t.enabled)}
                           >
-                            {t.enabled ? 'أوقفها مؤقّتاً' : 'شغّلها'}
+                            {t.enabled ? 'أوقفها مؤقّتا' : 'شغّلها'}
                           </Button>
                         )}
                         {/* ★ الحذف موجودٌ في الخادم ولم يكن له زرّ. وهو فعلٌ لا
@@ -169,7 +169,7 @@ export function ToolsTab({ c }: { c: BotCtx }) {
                     {broken.length > 0 && (
                       <div className="sect">
                         <div className="sect-h">
-                          <h2>عُطِّلت آليّاً — بوتك يجيب بلا نظامك</h2>
+                          <h2>عطّلت آليّا — بوتك يجيب بلا نظامك</h2>
                           <span className="sect-c">
                             <Amount n={broken.length} forms={TOOL_FORMS} />
                             {' '}من <span className="num">{fmt.num(list.length)}</span>
@@ -192,12 +192,12 @@ export function ToolsTab({ c }: { c: BotCtx }) {
                     )}
 
                     <details className="bot-more">
-                      <summary>حدودٌ مفروضةٌ بالكود لا بالشاشة</summary>
+                      <summary>حدود مفروضة بالكود لا بالشاشة</summary>
                       <div className="bot-more-b">
                         <p className="muted-p">
                           HTTPS فقط · رفض العناوين الداخليّة بعد حلّ الاسم وعند كلّ تحويل ·
-                          مهلة <span className="num">8</span> ثوانٍ · <span className="num">256</span>{' '}
-                          كيلوبايت للردّ · وتعطيلٌ آليّ بعد <span className="num">5</span> إخفاقاتٍ
+                          مهلة <span className="num">8</span> ثوان · <span className="num">256</span>{' '}
+                          كيلوبايت للردّ · وتعطيل آليّ بعد <span className="num">5</span> إخفاقات
                           متتالية مع إشعارك.
                         </p>
                       </div>

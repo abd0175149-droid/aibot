@@ -57,7 +57,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
     { href: '/app/bot', label: 'البوت', icon: '✦', needs: 'settings' },
     { href: '/app/channels', label: 'القنوات', icon: '⇄', needs: 'settings' },
     { href: '/app/usage', label: 'الاستهلاك', icon: '▤', needs: 'billing' },
-    { href: '/app/playground', label: 'الساحة', icon: '◐', needs: 'settings' },
+    { href: '/app/playground', label: 'جرّب بوتك', icon: '◐', needs: 'settings' },
     { href: '/app/contacts', label: 'جهات الاتّصال', icon: '☰' },
     { href: '/app/reports', label: 'التقارير', icon: '◫', needs: 'billing' },
     { href: '/app/team', label: 'الفريق', icon: '◇', needs: 'settings' },
@@ -82,8 +82,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   } else if (error) {
     capFooter = (
       <div className="cap-err">
-        <span>تعذّر جلب عدّاد النوافذ.</span>
-        <Button size="sm" onClick={reload}>أعِد المحاولة</Button>
+        <span>تعذّر جلب عدّاد المحادثات.</span>
+        <Button size="sm" onClick={reload}>أعد المحاولة</Button>
       </div>
     );
   } else if (data?.windowsLimit) {
@@ -93,13 +93,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           {/* عزلٌ اتجاهيّ على «12 / 1500»: بلاه ترتفع الشرطة المائلة إلى R
               فيُقلب الرقمان بصريّاً — رقمٌ مقلوبٌ لا قبيح. */}
           <span className="cap-n num">{fmt.num(data.windowsUsed)} / {fmt.num(data.windowsLimit)}</span>
-          <span className="cap-u">نافذة</span>
+          <span className="cap-u">محادثة</span>
           <span className="num">{fmt.pct(pct)}</span>
           {/* ولا معنى باللون وحده: العتبة تُقال نصّاً لا بلون الشريط فقط */}
           {pct >= 0.8 && (
             <Pill
               tone={pct >= 1 ? 'crit' : pct >= 0.95 ? 'serious' : 'warn'}
-              label={pct >= 1 ? 'بلغتَ السقف' : 'قاربتَ السقف'}
+              label={pct >= 1 ? 'بلغت السقف' : 'قاربت السقف'}
             />
           )}
           {can.billing && <span aria-hidden="true" className="cap-go">←</span>}

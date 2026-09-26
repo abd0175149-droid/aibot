@@ -106,7 +106,7 @@ export function BotBehavior({ cfg, readOnly, onSaved, onToast }: {
           ? { tz, days: Object.fromEntries(DAY_KEYS.map((d) => [d, ranges[d]])) }
           : null,
       });
-      onToast('حُفظ السلوك — ويسري من الآن على كلّ محادثة');
+      onToast('حفظ السلوك — ويسري من الآن على كلّ محادثة');
       onSaved();
     } catch (e) {
       onToast(e instanceof ApiError ? e.message : 'تعذّر الحفظ');
@@ -125,8 +125,8 @@ export function BotBehavior({ cfg, readOnly, onSaved, onToast }: {
         </div>
         <Field
           id="bh-pause" label="يسكت بوتك عن تلك المحادثة (بالدقائق)"
-          hint="أقصرُ من اللازم يقطع على موظّفك كلامه، وأطولُ منه يترك الزبون بلا ردّ. ثمّ يُستأنف من نفسه."
-          error={pauseBad ? 'رقمٌ صحيحٌ بين ١ و١٤٤٠ دقيقة' : undefined}
+          hint="أقصر من اللازم يقطع على موظّفك كلامه، وأطول منه يترك الزبون بلا ردّ. ثمّ يستأنف من نفسه."
+          error={pauseBad ? 'رقم صحيح بين ١ و١٤٤٠ دقيقة' : undefined}
         >
           <Input id="bh-pause" type="number" value={pause} onChange={setPause} disabled={readOnly} />
         </Field>
@@ -135,14 +135,14 @@ export function BotBehavior({ cfg, readOnly, onSaved, onToast }: {
       <div className="sect">
         <div className="sect-h">
           <h2>ما يقوله حين يعجز</h2>
-          <span className="sect-c">نصٌّ يقرؤه زبونك بحرفه</span>
+          <span className="sect-c">نصّ يقرؤه زبونك بحرفه</span>
         </div>
         <TextArea
           id="bh-fail" rows={3} value={fail} onChange={setFail} dir="auto" count={{ used: fail.length, limit: 300, unit: 'حرف' }}
-          placeholder="اتركه فارغاً ليعتذر برسالةٍ افتراضيّةٍ مهذّبة"
+          placeholder="اتركه فارغا ليعتذر برسالة افتراضيّة مهذّبة"
         />
         <p className="muted-p">
-          وبعدها تُحوَّل المحادثة إلى موظّف وتظهر في الإنبوكس بوسم «تحتاج تدخّلك».
+          وبعدها تحوّل المحادثة إلى موظّف وتظهر في الإنبوكس بوسم «تحتاج تدخّلك».
         </p>
       </div>
 
@@ -169,7 +169,7 @@ export function BotBehavior({ cfg, readOnly, onSaved, onToast }: {
 
         {!hoursOn ? (
           <p className="muted-p">
-            بوتك يردّ في كلّ وقت — ورسالةُ خارج الدوام أدناه لا تُستعمل.
+            بوتك يردّ في كلّ وقت — ورسالة خارج الدوام أدناه لا تستعمل.
           </p>
         ) : (
           <>
@@ -213,8 +213,8 @@ export function BotBehavior({ cfg, readOnly, onSaved, onToast }: {
 
             {badRange && (
               <Note tone="warn">
-                فترةٌ تبدأ وتنتهي في اللحظة نفسها. احذفها أو صحّحها — وإلّا قُرئت
-                «مفتوحٌ أربعاً وعشرين ساعة».
+                فترة تبدأ وتنتهي في اللحظة نفسها. احذفها أو صحّحها — وإلّا قرئت
+                «مفتوح أربعا وعشرين ساعة».
               </Note>
             )}
 
@@ -224,8 +224,8 @@ export function BotBehavior({ cfg, readOnly, onSaved, onToast }: {
                   بحسب لغة الجهاز، فمثالٌ بـ«٢٠:٠٠» يناقض ما تراه عينُ من
                   يقرؤه. والقاعدةُ تُقال بالمعنى — والقيمةُ المحفوظة واحدةٌ
                   في الحالين. */}
-              وإن كان دوامك يمتدّ بعد منتصف الليل فاجعل نهايةَ الفترة أبكرَ من
-              بدايتها — تُقرأ امتداداً لليوم نفسه.
+              وإن كان دوامك يمتدّ بعد منتصف الليل فاجعل نهاية الفترة أبكر من
+              بدايتها — تقرأ امتدادا لليوم نفسه.
             </p>
           </>
         )}
@@ -237,7 +237,7 @@ export function BotBehavior({ cfg, readOnly, onSaved, onToast }: {
         </div>
         <TextArea
           id="bh-out" rows={3} value={outside} onChange={setOutside} dir="auto" count={{ used: outside.length, limit: 300, unit: 'حرف' }}
-          placeholder="اتركه فارغاً ليصمت خارج الدوام وتنتظر الرسائل في الإنبوكس"
+          placeholder="اتركه فارغا ليصمت خارج الدوام وتنتظر الرسائل في الإنبوكس"
         />
       </div>
 

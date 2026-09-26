@@ -172,8 +172,8 @@ export const isTabId = (v: string | null): v is TabId =>
  *   نفسها مطويّةٌ لمن يسأل الدعم عنها.
  */
 export const MODEL: Record<string, string> = {
-  'gemini-2.5-flash': 'سريعٌ واقتصاديّ — يردّ في ثانيتَين تقريباً',
-  'gemini-2.5-pro': 'أدقُّ وأبطأ قليلاً — لمعرفةٍ طويلةٍ متشابكة',
+  'gemini-2.5-flash': 'سريع واقتصاديّ — يردّ في ثانيتين تقريبا',
+  'gemini-2.5-pro': 'أدقّ وأبطأ قليلا — لمعرفة طويلة متشابكة',
 };
 
 /**
@@ -248,10 +248,10 @@ export function amountText(n: number, forms: Forms): string {
   return `${fmt.num(n)} ${n === 0 || (n % 100 >= 3 && n % 100 <= 10) ? forms[2] : forms[3]}`;
 }
 
-export const TOOL_FORMS: Forms = ['أداةٌ واحدة', 'أداتان', 'أدواتٍ', 'أداةً'];
-export const LINE_ADD: Forms = ['سطرٌ أُضيف', 'سطران أُضيفا', 'أسطرٍ أُضيفت', 'سطراً أُضيف'];
-export const LINE_DEL: Forms = ['سطرٌ حُذف', 'سطران حُذفا', 'أسطرٍ حُذفت', 'سطراً حُذف'];
-export const HEAD_FORMS: Forms = ['قسمٌ واحدٌ بعنوان', 'قسمان بعنوان', 'أقسامٍ بعنوان', 'قسماً بعنوان'];
+export const TOOL_FORMS: Forms = ['أداة واحدة', 'أداتان', 'أدوات', 'أداة'];
+export const LINE_ADD: Forms = ['سطر أضيف', 'سطران أضيفا', 'أسطر أضيفت', 'سطرا أضيف'];
+export const LINE_DEL: Forms = ['سطر حذف', 'سطران حذفا', 'أسطر حذفت', 'سطرا حذف'];
+export const HEAD_FORMS: Forms = ['قسم واحد بعنوان', 'قسمان بعنوان', 'أقسام بعنوان', 'قسما بعنوان'];
 
 /**
  * ★ سلّمُ المعرفة — **عتبتان على محورٍ واحد**.

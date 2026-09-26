@@ -89,7 +89,7 @@ describe('«رسائل أقدم» تنتهي ولا تُكرّر', () => {
 
   it('★ وحين تنفد الرسائل يُقال ذلك ويختفي الزرّ', () => {
     expect(p).toMatch(/if \(more\.items\.length < 50\) setOlderDone\(true\)/);
-    expect(read('app/app/inbox/page.tsx')).toContain('بدايةُ المحادثة');
+    expect(read('app/app/inbox/page.tsx')).toContain('بداية المحادثة');
   });
 
   it('★ والتمريرُ يبقى في موضعه عند الإلحاق — سفاري بلا overflow-anchor', () => {

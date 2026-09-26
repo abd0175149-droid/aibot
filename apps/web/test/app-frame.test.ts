@@ -42,7 +42,7 @@ describe('لكلّ شاشةٍ عنوانُها', () => {
   const root = read('layout.tsx');
 
   it('★ القالبُ يُلحق العلامة، والشاشةُ تُعطي اسمَها', () => {
-    expect(root, 'كانت التبويباتُ كلُّها بعنوانٍ واحد').toMatch(/template: '%s · AiBot'/);
+    expect(root, 'كانت التبويبات كلّها بعنوان واحد').toMatch(/template: '%s · AiBot'/);
     expect(root).toMatch(/default: '/);
   });
 

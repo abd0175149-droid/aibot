@@ -11,7 +11,7 @@ import type { ReactNode } from 'react';
  */
 export const metadata: Metadata = {
   title: 'الفريق',
-  description: 'من يدخل حسابَك وبأيّ صلاحيّة.',
+  description: 'من يدخل حسابك وبأيّ صلاحيّة.',
 };
 
 export default function Layout({ children }: { children: ReactNode }) {

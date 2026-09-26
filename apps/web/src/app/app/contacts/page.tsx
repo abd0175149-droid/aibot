@@ -135,16 +135,16 @@ type Filt = 'all' | 'dup' | 'multi' | 'quiet' | 'whatsapp_cloud' | 'instagram';
 
 const FILTS: Array<{ f: Filt; label: string }> = [
   { f: 'all', label: 'الكلّ' },
-  { f: 'dup', label: 'مكرّرٌ محتمل' },
-  { f: 'multi', label: 'موحَّدٌ عبر قناتين' },
-  { f: 'quiet', label: 'لا يُراسَل' },
+  { f: 'dup', label: 'مكرّر محتمل' },
+  { f: 'multi', label: 'موحّد عبر قناتين' },
+  { f: 'quiet', label: 'لا يراسل' },
   { f: 'whatsapp_cloud', label: 'واتساب' },
   { f: 'instagram', label: 'إنستجرام' },
 ];
 
 /** اسمٌ يُقرأ: الاسمُ ثمّ الرقمُ ثمّ المقبض — ولا «بلا اسم» صامتة. */
 function nameOf(c: Summary): string {
-  return c.displayName?.trim() || c.phone?.trim() || 'جهةٌ بلا اسم';
+  return c.displayName?.trim() || c.phone?.trim() || 'جهة بلا اسم';
 }
 
 /**
@@ -161,8 +161,8 @@ function fieldValue(k: string, v: string | null): string {
 
 /** سببُ الاقتراح نصّاً — لأنّ «اقتُرح» بلا سببٍ لا يُبنى عليه قرار. */
 function whyText(why: string, score: number): string {
-  if (why === 'phone') return 'رقمٌ يطابق مقبضاً — تطابقٌ تامّ';
-  return `تشابهُ اسم — ${Math.round(score * 100)}%`;
+  if (why === 'phone') return 'رقم يطابق مقبضا — تطابق تامّ';
+  return `تشابه اسم — ${Math.round(score * 100)}%`;
 }
 
 /**
@@ -207,7 +207,7 @@ function PairRow({ p, block, onReview, onOpen }: {
       <div className="ct-sides">
         <PairSide c={keep} role="تبقى" keep />
         <span aria-hidden="true" className="ct-vs">＋</span>
-        <PairSide c={absorb} role="تُدمَج فيها" />
+        <PairSide c={absorb} role="تدمج فيها" />
       </div>
       <div className="ct-pair-a">
         <Button
@@ -217,7 +217,7 @@ function PairRow({ p, block, onReview, onOpen }: {
           reason={block ?? undefined}
           onClick={() => onReview(keep.id, absorb.id)}
         >
-          راجِع الدمج
+          راجع الدمج
         </Button>
         <Button size="sm" onClick={() => onOpen(keep.id)}>افتح الملفّ</Button>
       </div>
@@ -334,9 +334,9 @@ export default function ContactsPage() {
   const exportContact = useCallback(async (id: string) => {
     try {
       await download(`/contacts/${id}/export`, `contact-${id}.json`);
-      toast('نُزّل ملفُّ الجهة — JSON كاملٌ برسائلها ومحادثاتها.');
+      toast('نزّل ملفّ الجهة — JSON كامل برسائلها ومحادثاتها.');
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'تعذّر التصدير. أعِد المحاولة.');
+      toast(e instanceof ApiError ? e.message : 'تعذّر التصدير. أعد المحاولة.');
     }
   }, [toast]);
   const deleteContact = useCallback(async (id: string) => {
@@ -348,7 +348,7 @@ export default function ContactsPage() {
       setDetail(null);
       reloadAll();
     } catch (e) {
-      toast(e instanceof ApiError ? e.message : 'تعذّر الحذف. أعِد المحاولة.');
+      toast(e instanceof ApiError ? e.message : 'تعذّر الحذف. أعد المحاولة.');
     } finally {
       setFlagBusy(null);
     }
@@ -389,7 +389,7 @@ export default function ContactsPage() {
         auditId: r.auditId,
         label: `${nameOf(plan.absorb)} ← ${nameOf(plan.keep)}`,
       });
-      toast('دُمِجت البطاقتان — والتراجع متاحٌ من السطر أعلى الشاشة.');
+      toast('دمجت البطاقتان — والتراجع متاح من السطر أعلى الشاشة.');
       setReviewOpen(false);
       const keepId = plan.keep.id;
       setPlan(null);
@@ -402,7 +402,7 @@ export default function ContactsPage() {
       /* ★ 409 تعني «تغيّر الحال قبل ضغطتك» لا «مدخلٌ خاطئ»: بطاقةٌ دُمجت من
          نافذةٍ أخرى أو حُذفت. ونصُّ العميل يقول ما يفعل — لا كودَ حالة. */
       toast(e instanceof ApiError && e.status === 409
-        ? 'تغيّر الحال قبل الدمج — قد تكون إحدى البطاقتين دُمجت من مكانٍ آخر. حدّث الشاشة وراجِع من جديد.'
+        ? 'تغيّر الحال قبل الدمج — قد تكون إحدى البطاقتين دمجت من مكان آخر. حدّث الشاشة وراجع من جديد.'
         : e instanceof ApiError ? e.message : 'تعذّر الدمج');
     } finally {
       setMergeBusy(false);
@@ -413,13 +413,13 @@ export default function ContactsPage() {
     setUndoBusy(true);
     try {
       await post('/contacts/merge-undo', { auditId });
-      toast('رجعَت البطاقتان كما كانتا.');
+      toast('رجعت البطاقتان كما كانتا.');
       setLastMerge(null);
       reloadAll();
       if (openId) void loadDetail(openId);
     } catch (e) {
       toast(e instanceof ApiError && e.status === 409
-        ? 'تعذّر التراجع: قد يكون وقع سابقاً، أو تغيّرت البطاقة بعده. حدّث الشاشة لترى الحال.'
+        ? 'تعذّر التراجع: قد يكون وقع سابقا، أو تغيّرت البطاقة بعده. حدّث الشاشة لترى الحال.'
         : e instanceof ApiError ? e.message : 'تعذّر التراجع');
     } finally {
       setUndoBusy(false);
@@ -428,7 +428,7 @@ export default function ContactsPage() {
 
   /* سببُ تعطيل الدمج يُكتب لا يُترك للاستنتاج: زرٌّ معطَّلٌ بلا سببٍ يُقرأ عطلاً. */
   const mergeBlock = can.readOnly
-    ? 'الانتحال قراءةٌ فقط — لا دمجَ من جلسةٍ منتحَلة'
+    ? 'الانتحال قراءة فقط — لا دمج من جلسة منتحلة'
     : !can.settings
       ? 'الدمج لمالك الحساب — والموظّف يرى الملفّ ولا يدمج'
       : null;
@@ -455,20 +455,20 @@ export default function ContactsPage() {
      خبرٌ سارٌّ كاذبٌ يُقرأ في نصف الثانية ويُبنى عليه إغلاقُ الشاشة. */
   const BANDS: Record<typeof read.state, { head: ReactNode; sub: ReactNode }> = {
     scanning: {
-      head: 'نفحص قاعدتك بحثاً عن تكرار…',
-      sub: 'القائمة أمامك كاملة. والفحصُ يقارن ذيلَ الرقم ومقابضَ القنوات والأسماءَ بعد تسويتها.',
+      head: 'نفحص قاعدتك بحثا عن تكرار…',
+      sub: 'القائمة أمامك كاملة. والفحص يقارن ذيل الرقم ومقابض القنوات والأسماء بعد تسويتها.',
     },
     failed: {
-      head: 'تعذّر فحصُ التكرار',
-      sub: 'القائمة أمامك كاملة، والفحصُ وحده تعذّر — فلا يُقال إنّها نظيفة. أعِد المحاولة من قسم المرشَّحين.',
+      head: 'تعذّر فحص التكرار',
+      sub: 'القائمة أمامك كاملة، والفحص وحده تعذّر — فلا يقال إنّها نظيفة. أعد المحاولة من قسم المرشّحين.',
     },
     dirty: {
-      head: <>على الأرجح <span className="num">{fmt.num(read.records ?? 0)}</span> بطاقةً تكرارٌ لشخصٍ عندك</>,
-      sub: 'الزبون الواحد يصير زبونَين: تُجيبه مرّتين، وتُحسب نوافذه مرّتين، ولا يظهر أنّه عميلٌ متكرّر. راجِعها أسفل — والدمج يُراجَع قبل تنفيذه ويمكن التراجع عنه.',
+      head: <>على الأرجح <span className="num">{fmt.num(read.records ?? 0)}</span> بطاقة تكرار لشخص عندك</>,
+      sub: 'الزبون الواحد يصير زبونين: تجيبه مرّتين، وتُحسب محادثاته مرّتين، ولا يظهر أنّه عميل متكرّر. راجعها أسفل — والدمج يراجع قبل تنفيذه ويمكن التراجع عنه.',
     },
     clean: {
-      head: 'لا بطاقةَ مرشَّحةً للدمج',
-      sub: 'نقارن الأرقام والمقابض والأسماء بعد تسويتها (الهمزة · التاء المربوطة · الحركات)، ونُنبّه هنا أوّلَ ما يظهر تكرار.',
+      head: 'لا بطاقة مرشّحة للدمج',
+      sub: 'نقارن الأرقام والمقابض والأسماء بعد تسويتها (الهمزة · التاء المربوطة · الحركات)، وننبّه هنا أوّل ما يظهر تكرار.',
     },
   };
   const band: { sev: Sev; head: ReactNode; sub: ReactNode } = {
@@ -510,7 +510,7 @@ export default function ContactsPage() {
       cell: (c) => (
         <span className="ct-tags">
           {c.blockedAt && <Tag tone="crit" label="محجوب" />}
-          {!c.blockedAt && c.optedOutAt && <Tag tone="warn" label="عدلَ عن المراسلة" />}
+          {!c.blockedAt && c.optedOutAt && <Tag tone="warn" label="عدل عن المراسلة" />}
           {c.tags.slice(0, 3).map((t) => <Tag key={t} line mark={false} label={t} />)}
           {!c.blockedAt && !c.optedOutAt && !c.tags.length && <span className="ct-dim">—</span>}
         </span>
@@ -526,7 +526,7 @@ export default function ContactsPage() {
       {toastNode}
       <PageHead
         title="جهات الاتّصال"
-        sub="الشخص الواحد عبر قنواته — لا بطاقةً لكلّ قناة."
+        sub="كلّ زبون في بطاقة واحدة، مهما تعدّدت قنواته."
         actions={<Pill tone="neutral" label={fmt.num(total)} mark={false} />}
       />
 
@@ -537,7 +537,7 @@ export default function ContactsPage() {
       {lastMerge && (
         <Note tone="brand">
           <Row gap="xs">
-            <span>دُمِجت <b dir="auto">{lastMerge.label}</b>. والتراجع يُعيد المقابض والمحادثات إلى بطاقتها — والرسائل التي وصلت بعد الدمج تبقى مع محادثتها.</span>
+            <span>دمجت <b dir="auto">{lastMerge.label}</b>. والتراجع يعيد المقابض والمحادثات إلى بطاقتها — والرسائل التي وصلت بعد الدمج تبقى مع محادثتها.</span>
             <Button
               size="sm"
               busy={undoBusy}
@@ -545,7 +545,7 @@ export default function ContactsPage() {
               reason={mergeBlock ?? undefined}
               onClick={() => void doUndo(lastMerge.auditId)}
             >
-              تراجَع عن الدمج
+              تراجع عن الدمج
             </Button>
           </Row>
         </Note>
@@ -558,15 +558,15 @@ export default function ContactsPage() {
         sev={read.sev}
         value={read.records === null ? '—' : fmt.num(read.records)}
         unit={read.records !== null && total ? `/ ${fmt.num(total)}` : undefined}
-        label="بطاقةً على الأرجح تكرارٌ لشخصٍ عندك"
+        label="بطاقة على الأرجح تكرار لشخص عندك"
         href="#dups"
         ctx={(
           <>
             من أصل <span className="num">{fmt.num(total)}</span> جهة
-            {read.pairs > 0 && <> · <span className="num">{fmt.num(read.pairs)}</span> زوجاً مرشَّحاً</>}
-            {read.state === 'scanning' && <> · الفحص جارٍ</>}
-            {read.state === 'failed' && <> · تعذّر الفحص، والرقم غير معروفٍ الآن</>}
-            {' '}· والمقارنة بالرقم والمقبض والاسم بعد تسويته — اقتراحٌ يُراجَع لا دمجٌ آليّ
+            {read.pairs > 0 && <> · <span className="num">{fmt.num(read.pairs)}</span> زوجا مرشّحا</>}
+            {read.state === 'scanning' && <> · الفحص جار</>}
+            {read.state === 'failed' && <> · تعذّر الفحص، والرقم غير معروف الآن</>}
+            {' '}· والمقارنة بالرقم والمقبض والاسم بعد تسويته — اقتراح يراجع لا دمج آليّ
           </>
         )}
       />
@@ -574,17 +574,17 @@ export default function ContactsPage() {
       <Section
         id="dups"
         anchor
-        title="مرشَّحو الدمج"
+        title="مرشّحو الدمج"
         sub={pairs.length
-          ? <><span className="num">{fmt.num(pairs.length)}</span> زوجاً — الأقوى أوّلاً</>
-          : 'لا مرشَّح'}
+          ? <><span className="num">{fmt.num(pairs.length)}</span> زوجا — الأقوى أوّلا</>
+          : 'لا مرشّح'}
       >
         {dups.loading && !dups.data ? <Skeleton rows={3} /> : null}
         {dups.error && !dups.data ? <ErrorBox message={dups.error} onRetry={dups.reload} /> : null}
         {dups.data && !pairs.length && (
           <Empty
-            title="لا بطاقتين تشبهان شخصاً واحداً"
-            hint="نقارن ذيلَ الرقم (فـ07 هو نفسه 9627) ومقابضَ القنوات والأسماءَ بعد تسويتها. وحين يظهر تكرارٌ يُقترح هنا، ولا يُدمج شيءٌ بلا مراجعتك."
+            title="لا بطاقتين تشبهان شخصا واحدا"
+            hint="نقارن الأرقام والأسماء. أيّ تكرار يقترح هنا، ولا يدمج شيء دون موافقتك."
           />
         )}
         {topPairs.map((p) => (
@@ -598,7 +598,7 @@ export default function ContactsPage() {
         ))}
         {restPairs.length > 0 && (
           /* الطيُّ التدريجيّ: الأقوى مفتوحٌ، وما دونه يُفتح متى أراد صاحبُه. */
-          <Fold summary={`بقيّة المرشَّحين (${restPairs.length})`}>
+          <Fold summary={`بقيّة المرشّحين (${restPairs.length})`}>
             {restPairs.map((p) => (
               <PairRow
                 key={`${p.a.id}-${p.b.id}`}
@@ -624,12 +624,12 @@ export default function ContactsPage() {
       >
         {!rows.length ? (
           <Empty
-            title={qLive || filt !== 'all' ? 'لا جهةَ بهذا المرشِّح' : 'لا جهات بعد'}
+            title={qLive || filt !== 'all' ? 'لا جهة بهذا المرشّح' : 'لا جهات بعد'}
             hint={qLive || filt !== 'all'
-              ? 'جرّب بحثاً أقصر، أو أعِد المرشِّح إلى «الكلّ» من رصيف الشاشة أسفل. والبحث يشمل الاسم والرقم ومقبض القناة.'
-              : 'تُنشأ البطاقة وحدها أوّلَ ما يراسلك زبونٌ على قناةٍ موصولة — فلا إدخالَ يدويّاً هنا.'}
+              ? 'جرّب بحثا أقصر، أو أعد المرشّح إلى «الكلّ» من رصيف الشاشة أسفل. والبحث يشمل الاسم والرقم ومقبض القناة.'
+              : 'تنشأ البطاقة وحدها أوّل ما يراسلك زبون على قناة موصولة — فلا إدخال يدويّا هنا.'}
             action={(qLive || filt !== 'all')
-              ? <Button size="sm" onClick={() => { setQ(''); setFilt('all'); }}>أعِد إلى الكلّ</Button>
+              ? <Button size="sm" onClick={() => { setQ(''); setFilt('all'); }}>أعد إلى الكلّ</Button>
               : undefined}
           />
         ) : (
@@ -645,15 +645,15 @@ export default function ContactsPage() {
               </div>
             )}
             <p className="muted-p">
-              اضغط أيّ صفٍّ ليُفتح ملفُّه: مقابضُه ومحادثاتُه، ومنه إلى المحادثة في الإنبوكس،
-              ومنه يُقترح دمجُه إن شابه غيرَه.
+              اضغط أيّ صفّ ليفتح ملفّه: مقابضه ومحادثاته، ومنه إلى المحادثة في الإنبوكس،
+              ومنه يقترح دمجه إن شابه غيره.
             </p>
           </>
         )}
       </Section>
 
       {/* ★ الرصيف: بحثُ الشاشة ومرشّحاتُها وفعلُها الأوّل في مدى الإبهام. */}
-      <ScreenDock hint="البحث يشمل الاسم والرقم والمقبض — و«07…» يجد «+9627…».">
+      <ScreenDock hint="ابحث بالاسم أو الرقم.">
         <div className="ct-search">
           <Field label="ابحث في جهاتك" id="ct-q">
             <Input
@@ -661,7 +661,7 @@ export default function ContactsPage() {
               type="search"
               value={q}
               onChange={setQ}
-              placeholder="اسمٌ أو رقمٌ أو مقبض"
+              placeholder="اسم أو رقم أو مقبض"
             />
           </Field>
         </div>
@@ -683,7 +683,7 @@ export default function ContactsPage() {
           size="lg"
           wide
           disabled={!topPairs.length || Boolean(mergeBlock)}
-          reason={!topPairs.length ? 'لا مرشَّحَ لمراجعته' : mergeBlock ?? undefined}
+          reason={!topPairs.length ? 'لا مرشّح لمراجعته' : mergeBlock ?? undefined}
           onClick={() => {
             const p = topPairs[0];
             if (!p) return;
@@ -691,17 +691,17 @@ export default function ContactsPage() {
             void openReview(keep.id, absorb.id);
           }}
         >
-          راجِع أقوى مرشَّح
+          راجع أقوى مرشّح
         </Button>
       </ScreenDock>
 
       {/* ══════════════ ورقةُ ملفّ الجهة ══════════════ */}
       <Sheet
         open={Boolean(openId)}
-        title="ملفُّ جهة"
+        title="ملفّ جهة"
         onClose={() => { setOpenId(null); setDetail(null); }}
-        hint="محادثةٌ لكلّ قناة — والنافذة تتبع المحادثة، فالفوترة لكلّ قناة لا لكلّ إنسان."
-        footer={<Button variant="quiet" onClick={() => { setOpenId(null); setDetail(null); }}>أغلِق</Button>}
+        hint="لكلّ قناة محادثة مستقلّة."
+        footer={<Button variant="quiet" onClick={() => { setOpenId(null); setDetail(null); }}>أغلق</Button>}
       >
         {detailBusy && <Skeleton rows={4} />}
         {detailErr && <ErrorBox message={detailErr} onRetry={() => { if (openId) void loadDetail(openId); }} />}
@@ -715,21 +715,21 @@ export default function ContactsPage() {
               <KVRow k="المراسلة">
                 <Row gap="sm">
                   {detail.contact.blockedAt ? (
-                    <Pill tone="crit" label="محجوبٌ من حسابكم" />
+                    <Pill tone="crit" label="محجوب من حسابكم" />
                   ) : detail.contact.optedOutAt ? (
                     <Pill tone="warn" label="عدل عن المراسلة" />
                   ) : (
-                    <Pill tone="ok" label="يُراسَل" />
+                    <Pill tone="ok" label="يراسل" />
                   )}
                   {perms.write && !perms.readOnly && (
                     <>
                       {detail.contact.optedOutAt ? (
                         <Button size="sm" busy={flagBusy === 'optin'} onClick={() => void setFlag(detail.contact.id, 'optin')}>
-                          أعِد الاشتراك
+                          أعد الاشتراك
                         </Button>
                       ) : !detail.contact.blockedAt && (
                         <Button size="sm" busy={flagBusy === 'optout'} onClick={() => void setFlag(detail.contact.id, 'optout')}>
-                          سجّل عدولاً
+                          سجّل عدولا
                         </Button>
                       )}
                       {detail.contact.blockedAt ? (
@@ -749,14 +749,14 @@ export default function ContactsPage() {
               {perms.settings && !perms.readOnly && (
                 <KVRow k="البيانات">
                   <Row gap="sm">
-                    <Button size="sm" onClick={() => void exportContact(detail.contact.id)}>صدّر ملفَّها (JSON)</Button>
+                    <Button size="sm" onClick={() => void exportContact(detail.contact.id)}>صدّر ملفّها (JSON)</Button>
                     {!confirmDel ? (
-                      <Button size="sm" variant="danger" onClick={() => setConfirmDel(true)}>احذفها وكلَّ بياناتها…</Button>
+                      <Button size="sm" variant="danger" onClick={() => setConfirmDel(true)}>احذفها وكلّ بياناتها…</Button>
                     ) : (
                       <>
-                        <span className="sc-ctx">نهائيٌّ: الرسائلُ والمحادثاتُ والنوافذُ تُمحى ولا تُستعاد.</span>
+                        <span className="sc-ctx">نهائيّ: الرسائل والمحادثات تمحى ولا تستعاد.</span>
                         <Button size="sm" variant="danger" busy={flagBusy === 'delete'} onClick={() => void deleteContact(detail.contact.id)}>
-                          نعم — احذف نهائيّاً
+                          نعم — احذف نهائيّا
                         </Button>
                         <Button size="sm" variant="quiet" onClick={() => setConfirmDel(false)}>تراجع</Button>
                       </>
@@ -770,12 +770,12 @@ export default function ContactsPage() {
               <KVRow k="أوّل ظهور">{fmt.when(detail.contact.firstSeenAt)}</KVRow>
               <KVRow k="آخر نشاط">{fmt.when(detail.contact.lastMessageAt ?? detail.contact.lastSeenAt)}</KVRow>
               <KVRow k="المحادثات"><span className="num">{fmt.num(detail.conversations.length)}</span></KVRow>
-              <KVRow k="نوافذُ فُوتِرت">
+              <KVRow k="محادثات محسوبة">
                 <span className="num">{fmt.num(detail.windows.billed)}</span>
                 {' '}من <span className="num">{fmt.num(detail.windows.opened)}</span>
               </KVRow>
               {detail.windows.aiCostUsd !== null && (
-                <KVRow k="كلفةُ الذكاء">
+                <KVRow k="كلفة الذكاء">
                   <span className="num">{fmt.money(detail.windows.aiCostUsd)}</span>
                 </KVRow>
               )}
@@ -787,14 +787,14 @@ export default function ContactsPage() {
                 </KVRow>
               )}
               {detail.contact.optedOutAt && (
-                <KVRow k="المراسلة"><Tag tone="warn" label="عدلَ عن المراسلة" /></KVRow>
+                <KVRow k="المراسلة"><Tag tone="warn" label="عدل عن المراسلة" /></KVRow>
               )}
               {detail.contact.blockedAt && (
                 <KVRow k="الحجب"><Tag tone="crit" label="محجوب" /></KVRow>
               )}
             </KV>
 
-            <Section title="مقابضُه" sub={<span className="num">{fmt.num(detail.identities.length)}</span>}>
+            <Section title="مقابضه" sub={<span className="num">{fmt.num(detail.identities.length)}</span>}>
               <div className="ct-ids">
                 {detail.identities.map((i) => (
                   <div className="ct-id" key={i.id}>
@@ -804,17 +804,17 @@ export default function ContactsPage() {
                     </span>
                     <span className="ct-id-v mono">{i.externalId}</span>
                     {i.displayHandle && <span className="ct-dim" dir="auto">{i.displayHandle}</span>}
-                    <span className="ct-dim">وصل أوّلَ مرّة {fmt.when(i.firstSeenAt)}</span>
+                    <span className="ct-dim">وصل أوّل مرّة {fmt.when(i.firstSeenAt)}</span>
                   </div>
                 ))}
               </div>
             </Section>
 
-            <Section title="محادثاتُه" sub={<span className="num">{fmt.num(detail.conversations.length)}</span>}>
+            <Section title="محادثاته" sub={<span className="num">{fmt.num(detail.conversations.length)}</span>}>
               {!detail.conversations.length ? (
                 <Empty
-                  title="بطاقةٌ بلا محادثة"
-                  hint="مقبضٌ سُجِّل ولم تبدأ عليه محادثةٌ بعد — أو محادثتُه انتقلت إلى بطاقةٍ أخرى بدمج."
+                  title="بطاقة بلا محادثة"
+                  hint="لا محادثة لهذا الزبون بعد."
                 />
               ) : (
                 <div className="ct-convs">
@@ -823,7 +823,7 @@ export default function ContactsPage() {
                       <span className="ct-conv-h">
                         <Pill tone={chTone(v.channelKind)} label={chLabel(v.channelKind)} />
                         <span className="mono">{v.handle}</span>
-                        {v.needsAttention && <Tag tone="warn" label="تحتاج ردّاً" />}
+                        {v.needsAttention && <Tag tone="warn" label="تحتاج ردّا" />}
                         {v.status === 'closed' && <Tag line mark={false} label="مغلقة" />}
                       </span>
                       {v.preview && <span className="ct-conv-p" dir="auto">{v.preview}</span>}
@@ -867,7 +867,7 @@ export default function ContactsPage() {
                   ))}
                 </Rows>
                 <p className="muted-p">
-                  الضغط يفتح ورقةَ المراجعة لا الدمج — ترى ما سينتقل ثمّ تقرّر.
+                  الضغط يفتح ورقة المراجعة لا الدمج — ترى ما سينتقل ثمّ تقرّر.
                 </p>
               </Section>
             )}
@@ -878,7 +878,7 @@ export default function ContactsPage() {
                   {detail.history.map((h) => (
                     <div className="ct-hist-i" key={h.id}>
                       <span className="ct-hist-t">
-                        {h.action === 'contact.merge' ? 'دمجٌ' : h.action === 'contact.merge_undo' ? 'تراجعٌ عن دمج' : h.action}
+                        {h.action === 'contact.merge' ? 'دمج' : h.action === 'contact.merge_undo' ? 'تراجع عن دمج' : h.action}
                         {h.label && <> · <span dir="auto">{h.label}</span></>}
                       </span>
                       <span className="ct-dim">
@@ -893,7 +893,7 @@ export default function ContactsPage() {
                           reason={mergeBlock ?? undefined}
                           onClick={() => void doUndo(h.id)}
                         >
-                          تراجَع عنه
+                          تراجع عنه
                         </Button>
                       )}
                     </div>
@@ -908,11 +908,11 @@ export default function ContactsPage() {
       {/* ══════════════ ورقةُ مراجعة الدمج — القيد ① ══════════════ */}
       <Sheet
         open={reviewOpen}
-        title="مراجعةُ الدمج"
+        title="مراجعة الدمج"
         onClose={() => { setReviewOpen(false); setPlan(null); }}
         hint={plan?.reversible
-          ? 'المحادثتان تبقيان مرئيّتين منفصلتين تحت بطاقةٍ واحدة — ولا رسالةَ تُفقد. والدمج يُسجَّل، ويمكن التراجع عنه.'
-          : 'راجِع ما سينتقل قبل أن تدمج.'}
+          ? 'المحادثتان تبقيان مرئيّتين منفصلتين تحت بطاقة واحدة — ولا رسالة تفقد. والدمج يسجّل، ويمكن التراجع عنه.'
+          : 'راجع ما سينتقل قبل أن تدمج.'}
         footer={plan
           ? (
             <Row gap="xs">
@@ -924,14 +924,14 @@ export default function ContactsPage() {
                 reason={mergeBlock ?? undefined}
                 onClick={() => void doMerge()}
               >
-                ادمِجهما
+                ادمجهما
               </Button>
               <Button
                 onClick={() => void openReview(plan.absorb.id, plan.keep.id)}
               >
-                اقلِب: أبقِ «{nameOf(plan.absorb)}»
+                اقلب: أبق «{nameOf(plan.absorb)}»
               </Button>
-              <Button variant="quiet" onClick={() => { setReviewOpen(false); setPlan(null); }}>ألغِ</Button>
+              <Button variant="quiet" onClick={() => { setReviewOpen(false); setPlan(null); }}>ألغ</Button>
             </Row>
           )
           : undefined}
@@ -950,12 +950,12 @@ export default function ContactsPage() {
                 </span>
                 <span className="ct-side-m">
                   <span className="num">{fmt.num(plan.keep.conversations)}</span> محادثة ·
-                  {' '}<span className="num">{fmt.num(plan.keep.identities)}</span> مقبضاً
+                  {' '}<span className="num">{fmt.num(plan.keep.identities)}</span> مقبضا
                 </span>
               </div>
               <span aria-hidden="true" className="ct-vs">←</span>
               <div className="ct-side">
-                <span className="ct-side-r">تُدمَج فيها وتزول بطاقتُها</span>
+                <span className="ct-side-r">تدمج فيها وتزول بطاقتها</span>
                 <span className="ct-side-n" dir="auto">{nameOf(plan.absorb)}</span>
                 <span className="ct-side-m">
                   {plan.absorb.phone && <span className="mono">{plan.absorb.phone}</span>}
@@ -963,7 +963,7 @@ export default function ContactsPage() {
                 </span>
                 <span className="ct-side-m">
                   <span className="num">{fmt.num(plan.absorb.conversations)}</span> محادثة ·
-                  {' '}<span className="num">{fmt.num(plan.absorb.identities)}</span> مقبضاً
+                  {' '}<span className="num">{fmt.num(plan.absorb.identities)}</span> مقبضا
                 </span>
               </div>
             </div>
@@ -972,15 +972,15 @@ export default function ContactsPage() {
               title="ما ينتقل"
               sub={(
                 <>
-                  <span className="num">{fmt.num(plan.moves.messages)}</span> رسالةً في
+                  <span className="num">{fmt.num(plan.moves.messages)}</span> رسالة في
                   {' '}<span className="num">{fmt.num(plan.moves.conversations.length)}</span> محادثة
                 </>
               )}
             >
               {!plan.moves.identities.length && !plan.moves.conversations.length ? (
                 <Note tone="warn">
-                  لا مقبضَ ولا محادثةَ على البطاقة المُدمَجة — الدمجُ هنا يوحّد بطاقةً فارغةً
-                  ولا ينقل تاريخاً.
+                  لا مقبض ولا محادثة على البطاقة المدمجة — الدمج هنا يوحّد بطاقة فارغة
+                  ولا ينقل تاريخا.
                 </Note>
               ) : (
                 <div className="ct-mv">
@@ -988,7 +988,7 @@ export default function ContactsPage() {
                     <div className="ct-mv-i" key={i.id}>
                       <Pill tone={chTone(i.channelKind)} label={chLabel(i.channelKind)} />
                       <span className="mono">{i.externalId}</span>
-                      <span className="ct-dim">مقبضٌ ينتقل — الرسائل القادمة إليه تصل للبطاقة الموحَّدة</span>
+                      <span className="ct-dim">مقبض ينتقل — الرسائل القادمة إليه تصل للبطاقة الموحّدة</span>
                     </div>
                   ))}
                   {plan.moves.conversations.map((v) => (
@@ -996,7 +996,7 @@ export default function ContactsPage() {
                       <Pill tone={chTone(v.channelKind)} label={chLabel(v.channelKind)} />
                       <span className="mono">{v.handle}</span>
                       <span className="ct-dim">
-                        <span className="num">{fmt.num(v.messages)}</span> رسالةً تبقى في محادثتها ·
+                        <span className="num">{fmt.num(v.messages)}</span> رسالة تبقى في محادثتها ·
                         {' '}آخرها {fmt.when(v.lastMessageAt)}
                       </span>
                     </div>
@@ -1005,8 +1005,8 @@ export default function ContactsPage() {
                     <div className="ct-mv-i">
                       <Tag line mark={false} label="فوترة" />
                       <span className="ct-dim">
-                        <span className="num">{fmt.num(plan.moves.windows)}</span> نافذةَ فوترةٍ تنتقل
-                        معها — السجلُّ الماليّ لا يُمحى بدمج
+                        <span className="num">{fmt.num(plan.moves.windows)}</span> محادثة محسوبة تنتقل
+                        معها — السجلّ الماليّ لا يمحى بدمج
                       </span>
                     </div>
                   )}
@@ -1040,14 +1040,14 @@ export default function ContactsPage() {
 
             {plan.optout && (
               <Note tone="warn">
-                البطاقة المُدمَجة <b>عدلَت عن المراسلة</b>. والعدولُ يسري على الإنسان لا على
-                مقبضه، فيبقى سارياً على البطاقة الموحَّدة بعد الدمج.
+                البطاقة المدمجة <b>عدلت عن المراسلة</b>. والعدول يسري على الإنسان لا على
+                مقبضه، فيبقى ساريا على البطاقة الموحّدة بعد الدمج.
               </Note>
             )}
 
             <Note tone="brand">
-              الدمج <b>يُسجَّل</b> باسمك ووقته في سجلّ الحساب، و<b>يمكن التراجع عنه</b>: تعود
-              المقابضُ والمحادثاتُ ونوافذُ الفوترة إلى بطاقتها. والرسائل التي تصل بعد الدمج
+              الدمج <b>يسجّل</b> باسمك ووقته في سجلّ الحساب، و<b>يمكن التراجع عنه</b>: تعود
+              المقابض والمحادثات إلى بطاقتها. والرسائل التي تصل بعد الدمج
               تبقى مع محادثتها — وهي تعود معها.
             </Note>
           </Stack>

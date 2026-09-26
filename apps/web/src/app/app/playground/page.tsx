@@ -139,7 +139,7 @@ export default function PlaygroundPage() {
       setPick('draft');
       setText(t.ask);
       void sum.reload();
-      toast('أُضيفت إلى مسوّدة معرفتك. اضغط «جرّب» لترى الفرق، ثمّ انشر لتصل زبائنك.');
+      toast('أضيفت إلى معرفتك غير المنشورة. اضغط «جرّب» لترى الفرق، ثمّ انشر.');
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'تعذّرت الإضافة.');
     } finally {
@@ -174,9 +174,9 @@ export default function PlaygroundPage() {
     <Stack gap="lg">
       {toastNode}
       <PageHead
-        title="الساحة"
-        sub="جرّب بوتك كما يجرّبه زبون — وانظر لماذا ردّ هكذا قبل أن يكلّفك الخطأُ زبوناً."
-        actions={<Pill tone="neutral" mark={false} label={use === 'draft' ? 'المسوّدة' : `النسخة ${data.published?.version ?? 0}`} />}
+        title="جرّب بوتك"
+        sub="اسأل بوتك كما يسأله زبون، وشاهد لماذا ردّ هكذا."
+        actions={<Pill tone="neutral" mark={false} label={use === 'draft' ? 'غير المنشورة' : `النسخة ${data.published?.version ?? 0}`} />}
       />
 
       <Band sev={band.sev} head={band.head} sub={band.sub} />
@@ -192,15 +192,15 @@ export default function PlaygroundPage() {
       <Section
         title="الحوار التجريبيّ"
         sub={turns.length
-          ? <><span className="num">{fmt.num(turns.length)}</span> تجربةً في هذه الجلسة — ولا أثرَ لها في إنبوكسك</>
-          : 'لا شيء يُرسَل، ولا محادثةٌ تُخلَق'}
+          ? <><span className="num">{fmt.num(turns.length)}</span> تجربة في هذه الجلسة — ولا أثر لها في إنبوكسك</>
+          : 'لا شيء يرسل، ولا محادثة تخلق'}
       >
         {!turns.length ? (
           <Empty
-            title={hasAny ? 'اكتب سؤالاً كما يكتبه زبون' : 'لا بوتَ لتجرّبه بعد'}
+            title={hasAny ? 'اكتب سؤالا كما يكتبه زبون' : 'لا بوت لتجرّبه بعد'}
             hint={hasAny
-              ? 'أو اختر سؤالاً جاهزاً من الرصيف أسفل. ستظهر هنا ردودُ بوتك — وبجانب كلّ ردٍّ لوحٌ يقول لماذا ردّ هكذا: أيَّ معرفةٍ استعمل، وأيَّ أداةٍ نادى، وكم كلّف.'
-              : 'الساحة تجرّب ما هو مكتوبٌ فعلاً. اكتب شخصيّةَ بوتك ومعرفتَه في شاشة البوت، ثمّ عُد إلى هنا قبل أن تنشر.'}
+              ? 'أو اختر سؤالا جاهزا من الرصيف أسفل. ستظهر هنا ردود بوتك — وبجانب كلّ ردّ لوح يقول لماذا ردّ هكذا: أيّ معرفة استعمل، وأيّ أداة نادى، وكم كلّف.'
+              : 'نجرّب ما هو مكتوب فعلا. اكتب شخصيّة بوتك ومعرفته في شاشة البوت، ثمّ عد إلى هنا.'}
             action={hasAny
               ? <Button onClick={() => setPresetsOpen(true)}>افتح الأسئلة الجاهزة</Button>
               : <Link className="btn quiet sm sc-link" href="/app/bot">اذهب إلى شاشة البوت</Link>}
@@ -229,7 +229,7 @@ export default function PlaygroundPage() {
                 <div className="pg-why">
                   {t.trace
                     ? <Why trace={t.trace} onWrong={() => { setFixFor(t); setAnswer(''); }} />
-                    : <p className="muted-p">لوحُ «لماذا» يظهر مع الردّ: المعرفةُ المستعملة، والأدواتُ المناداة، والكلفة، والحرّاس.</p>}
+                    : <p className="muted-p">لوح «لماذا» يظهر مع الردّ: المعرفة المستعملة، والأدوات المناداة، والكلفة، والحرّاس.</p>}
                 </div>
               </div>
             ))}
@@ -237,71 +237,71 @@ export default function PlaygroundPage() {
         )}
       </Section>
 
-      <Section title="ما تُجرّبه الآن" sub="نفسُ ما سيُشغَّل على الزبون — بلا إرسال">
+      <Section title="ما تجرّبه الآن" sub="نفس ما سيشغّل على الزبون — بلا إرسال">
         <Rows>
           {/* ★ اسمُ النموذج في عمود السياق لا في عمود القيمة: القيمةُ رُتبةٌ
               طباعيّةٌ للأرقام (‏`--t-val`)، وسلسلةُ اسمٍ فيها تدفع الصفَّ. */}
           <MetricRow
-            k={use === 'draft' ? 'المسوّدة' : `النسخة ${data.published?.version ?? 0}`}
+            k={use === 'draft' ? 'غير المنشورة' : `النسخة ${data.published?.version ?? 0}`}
             note={use === 'draft'
-              ? 'لا يراها زبونٌ حتّى تنشرها — وهذه أكبرُ قيمةِ الساحة'
+              ? 'لا يراها زبون حتّى تنشرها'
               : 'هذه هي التي تردّ على زبائنك الآن'}
             mid={(
               <span className="sc-ctx">
                 النموذج <Iso text={use === 'draft' ? data.draft?.model ?? '—' : data.published?.model ?? '—'} /> ·
                 {use === 'draft'
-                  ? <> ستُنشَر بوضع <Tag line mark={false} label={KB_MODE[data.draft?.modeAfterPublish ?? 'full'].label} /></>
+                  ? <> ستنشر بوضع <Tag line mark={false} label={KB_MODE[data.draft?.modeAfterPublish ?? 'full'].label} /></>
                   : <> {KB_MODE_TERM} <Tag line mark={false} label={KB_MODE[data.published?.knowledgeMode ?? 'full'].label} /></>}
               </span>
             )}
           />
 
           <MetricRow
-            k="معرفتُها"
+            k="معرفتها"
             note={use === 'draft'
-              ? 'تُحقن كاملةً في الجرّب — فلا تُضمَّن مسوّدةٌ قبل نشرها'
-              : 'ما يقرأه البوت ليُجيب'}
+              ? 'تُقرأ كاملة في التجربة قبل النشر'
+              : 'ما يقرأه البوت ليجيب'}
             value={fmt.num(kbTokens)}
             unit={READ_UNIT}
             mid={(
               <span className="sc-ctx">
                 {data.knowledge.sources
-                  ? <><span className="num">{fmt.num(data.knowledge.sources)}</span> ملفَّ معرفةٍ مرفوعاً · </>
+                  ? <><span className="num">{fmt.num(data.knowledge.sources)}</span> ملفّ معرفة مرفوعا · </>
                   : null}
                 {data.knowledge.chunks
-                  ? <><span className="num">{fmt.num(data.knowledge.chunks)}</span> مقطعاً مُضمَّناً</>
-                  : 'بلا مقاطعَ مُضمَّنة — المعرفةُ تُحقن كاملةً'}
+                  ? <><span className="num">{fmt.num(data.knowledge.chunks)}</span> مقطعا مضمّنا</>
+                  : 'بلا مقاطع مضمّنة — المعرفة تحقن كاملة'}
               </span>
             )}
             href="/app/bot?tab=kb"
           />
 
           <MetricRow
-            k="أدواتٌ معروضةٌ على البوت"
-            note="ما لا يُعرَض لا يُنادى — والمعطَّلةُ لا تظهر له أصلاً"
+            k="أدوات معروضة على البوت"
+            note="الأدوات المعطّلة لا يراها بوتك"
             value={fmt.num(liveTools.length)}
             mid={(
               <span className="sc-ctx">
                 {data.tools.length > liveTools.length
-                  ? <><span className="num">{fmt.num(data.tools.length - liveTools.length)}</span> معطَّلةٌ لا يعرف بوجودها</>
+                  ? <><span className="num">{fmt.num(data.tools.length - liveTools.length)}</span> معطّلة لا يعرف بوجودها</>
                   : liveTools.length
                     ? liveTools.filter((t) => t.confirmRequired).length
-                      ? <><span className="num">{fmt.num(liveTools.filter((t) => t.confirmRequired).length)}</span> منها تطلب تأكيدَ الزبون قبل التنفيذ</>
-                      : 'كلُّها قراءةٌ بلا تأكيد'
-                    : 'لا أدواتَ — يُجيب من معرفته وحدها'}
+                      ? <><span className="num">{fmt.num(liveTools.filter((t) => t.confirmRequired).length)}</span> منها تطلب تأكيد الزبون قبل التنفيذ</>
+                      : 'كلّها قراءة بلا تأكيد'
+                    : 'لا أدوات — يجيب من معرفته وحدها'}
               </span>
             )}
             href="/app/bot?tab=tools"
           />
 
           <MetricRow
-            k="ما أنفقته الساحة — هذا الشهر"
-            note="نداءاتٌ حقيقيّةٌ تُحاسَب عليك، ولا تُفوتِر نافذةً من باقتك"
+            k="كلفة التجارب هذا الشهر"
+            note="التجربة تحسب كلفتها، ولا تحسب من محادثات باقتك"
             value={fmt.num(data.spend.tokens)}
             unit={READ_UNIT}
             mid={(
               <span className="sc-ctx">
-                <span className="num">{fmt.num(data.spend.runs)}</span> تجربةً ·
+                <span className="num">{fmt.num(data.spend.runs)}</span> تجربة ·
                 {' '}<span className="num">{fmt.money(data.spend.usd)}</span>
               </span>
             )}
@@ -310,32 +310,32 @@ export default function PlaygroundPage() {
         </Rows>
       </Section>
 
-      <Fold summary="ما لا تفعله الساحة — ولماذا تُحاسَب مع ذلك">
+      <Fold summary="هل تُحسب التجارب من باقتي؟">
         <Note>
-          <b>لا شيء يخرج إلى قناة.</b> لا رسالةَ واتساب ولا إنستجرام، ولا محادثةٌ تُنشأ في
-          إنبوكسك، ولا نافذةُ 24 ساعةٍ تُفتح — والنافذةُ هي وحدةُ فوترة باقتك، فالجرّب
-          لا يستهلك منها شيئاً.
+          <b>لا شيء يخرج إلى قناة.</b> لا رسالة واتساب ولا إنستجرام، ولا محادثة تنشأ في
+          إنبوكسك، ولا تُحسب محادثة من باقتك، فالجرّب
+          لا يستهلك منها شيئا.
         </Note>
         <Note tone="warn">
-          <b>ووحداتُ القراءة تُحاسَب.</b> النداءُ على النموذج حقيقيٌّ — وإلّا لم يكن جرّباً. وكلُّ
-          تجربةٍ تُسجَّل موسومةً بأنّها جرّب، فتراها في استهلاكك منفصلةً عن ردودِ زبائنك.
+          <b>ووحدات القراءة تحاسب.</b> النداء على النموذج حقيقيّ — وإلّا لم يكن جرّبا. وكلّ
+          تجربة تسجّل موسومة بأنّها جرّب، فتراها في استهلاكك منفصلة عن ردود زبائنك.
         </Note>
         {last?.notes.map((n) => <Note key={n}>{n}</Note>)}
       </Fold>
 
       {/* ★ الرصيف: ما تُجرّبه وفعلُ الشاشة الأوّل معاً في مدى الإبهام. */}
-      <ScreenDock hint={`جرّبٌ جافّ: لا يُرسَل شيءٌ لزبون. و${READ_UNIT_PL} تُحاسَب لأنّ النداء حقيقيّ.`}>
+      <ScreenDock hint={`جرّب جافّ: لا يرسل شيء لزبون. و${READ_UNIT_PL} تحاسب لأنّ النداء حقيقيّ.`}>
         {/* ★ غلافٌ واحدٌ للمرشِّح والمُنشئ: `.dock > *` يمنع النموَّ عن أبنائه
             المباشرين، فكان الرقاقاتُ والحقلُ يتنافسان على عرض الشريط الأفقيّ
             على الحاسوب — والحقلُ هو من ينهار (‏`min-width: 0`). */}
         <div className="pg-bar">
-          <ChipRow label="ما تُجرّبه">
+          <ChipRow label="ما تجرّبه">
             {data.draft && (
               <button
                 type="button" className="chipf" aria-pressed={use === 'draft'}
                 onClick={() => setPick('draft')}
               >
-                المسوّدة
+                غير المنشورة
               </button>
             )}
             {data.published && (
@@ -362,7 +362,7 @@ export default function PlaygroundPage() {
               value={text}
               dir="auto"
               rows={2}
-              placeholder="اكتب رسالةَ الزبون…"
+              placeholder="اكتب رسالة الزبون…"
               disabled={!hasAny}
               onChange={(e) => setText(e.target.value)}
             />
@@ -373,7 +373,7 @@ export default function PlaygroundPage() {
               wide
               busy={busy || pending}
               disabled={!hasAny || !text.trim()}
-              reason={!hasAny ? 'لا بوتَ لتجرّبه بعد' : !text.trim() ? 'اكتب رسالةً أوّلاً' : undefined}
+              reason={!hasAny ? 'لا بوت لتجرّبه بعد' : !text.trim() ? 'اكتب رسالة أوّلا' : undefined}
             >
               جرّب
             </Button>
@@ -387,8 +387,8 @@ export default function PlaygroundPage() {
         kind="menu"
         title="أسئلة جاهزة"
         onClose={() => setPresetsOpen(false)}
-        hint={`الضغطُ يُشغّل التجربة فوراً — وكلُّ تجربةٍ نداءٌ يُحاسَب بـ${READ_UNIT_PL}.`}
-        footer={<Button variant="quiet" onClick={() => setPresetsOpen(false)}>أغلِق</Button>}
+        hint={`الضغط يشغّل التجربة فورا — وكلّ تجربة نداء يحاسب بـ${READ_UNIT_PL}.`}
+        footer={<Button variant="quiet" onClick={() => setPresetsOpen(false)}>أغلق</Button>}
       >
         <div className="opts">
           {data.presets.map((p) => (
@@ -403,8 +403,8 @@ export default function PlaygroundPage() {
                 <span dir="auto">{p.text}</span>
                 <span className="opt-n">
                   {p.kind === 'real'
-                    ? 'سألها زبونٌ فعلاً — من رسائلك الواردة'
-                    : 'سؤالٌ شائعٌ في كلّ نشاط'}
+                    ? 'سألها زبون فعلا — من رسائلك الواردة'
+                    : 'سؤال شائع في كلّ نشاط'}
                 </span>
               </span>
               <span className="opt-ck" aria-hidden="true">←</span>
@@ -418,7 +418,7 @@ export default function PlaygroundPage() {
         open={Boolean(fixFor)}
         title="هذا الردّ خطأ"
         onClose={() => setFixFor(null)}
-        hint="تُضاف إلى مسوّدة معرفتك — ثمّ جرّبها هنا، وانشر لتصل زبائنك."
+        hint="تضاف إلى معرفتك غير المنشورة. جرّبها ثمّ انشر."
         footer={(
           <Row gap="sm">
             <Button
@@ -427,17 +427,17 @@ export default function PlaygroundPage() {
               wide
               busy={fixing}
               disabled={!answer.trim()}
-              reason={!answer.trim() ? 'اكتب الجواب الصحيح أوّلاً' : undefined}
+              reason={!answer.trim() ? 'اكتب الجواب الصحيح أوّلا' : undefined}
               onClick={() => void addKnowledge()}
             >
-              أضِفها إلى المسوّدة
+              أضفها إلى المعرفة
             </Button>
-            <Button variant="quiet" onClick={() => setFixFor(null)}>أغلِق</Button>
+            <Button variant="quiet" onClick={() => setFixFor(null)}>أغلق</Button>
           </Row>
         )}
       >
         <Stack gap="sm">
-          <Field id="pg-q" label="سؤال الزبون" hint="كما كتبتَه في التجربة" labelless>
+          <Field id="pg-q" label="سؤال الزبون" hint="كما كتبته في التجربة" labelless>
             <p className="pg-q" dir="auto">{fixFor?.ask ?? ''}</p>
           </Field>
           <Field id="pg-a" label="الجواب الصحيح" hint="بكلماتك — وبوتك يصوغه بشخصيّته">
@@ -447,13 +447,13 @@ export default function PlaygroundPage() {
               onChange={setAnswer}
               rows={6}
               dir="auto"
-              placeholder="مثال: التوصيل داخل عمّان بـ٢ دينار، ومجّاناً فوق ٢٠ ديناراً."
+              placeholder="مثال: التوصيل داخل عمّان بـ٢ دينار، ومجّانا فوق ٢٠ دينارا."
               count={{ used: answer.length, limit: 4000, unit: 'محرف' }}
             />
           </Field>
           <Note>
-            <b>تذهب حيث يقرأ بوتك فعلاً.</b> تُكتب في مسوّدة معرفتك تحت عنوانِ السؤال —
-            فلا تصل زبائنك حتّى تنشرها. وهذه هي الحلقة: أخطأ ⟵ أضِف ⟵ جرّب ⟵ انشر.
+            <b>تذهب حيث يقرأ بوتك فعلا.</b> تُضاف إلى معرفتك غير المنشورة تحت عنوان السؤال —
+            فلا تصل زبائنك حتّى تنشرها. وهذه هي الحلقة: أخطأ ⟵ أضف ⟵ جرّب ⟵ انشر.
           </Note>
         </Stack>
       </Sheet>
@@ -469,8 +469,8 @@ function bandOf({ data, use, last, hasAny }: {
   if (!hasAny) {
     return {
       sev: 'bad',
-      head: 'لا شخصيّةَ لبوتك بعد — فلا شيء يُجرَّب',
-      sub: 'الساحة تُشغّل ما هو مكتوبٌ فعلاً. اكتب شخصيّته ومعرفتَه في شاشة البوت أوّلاً.',
+      head: 'لا شخصيّة لبوتك بعد — فلا شيء يجرّب',
+      sub: 'اكتب شخصيّة بوتك ومعرفته في شاشة البوت أوّلا.',
     };
   }
 
@@ -484,41 +484,41 @@ function bandOf({ data, use, last, hasAny }: {
   if (!data.botEnabled) {
     return {
       sev: 'warn',
-      head: 'بوتك مطفأٌ على قنواتك',
-      sub: 'الساحة تعمل، والزبائن لا يرون شيئاً. شغّله من شاشة البوت حين ترضى عن ردوده.',
+      head: 'بوتك مطفأ على قنواتك',
+      sub: 'التجربة تعمل، والزبائن لا يرون شيئا. شغّل البوت حين ترضى عن ردوده.',
     };
   }
 
   if (data.published?.embedStatus === 'pending') {
     return {
       sev: 'warn',
-      head: 'معرفةُ نسختك المنشورة قيد التجهيز',
-      sub: 'الاسترجاع قد يرجع أقلَّ ممّا سيرجع بعد اكتماله — والنسخةُ السابقة تخدم زبائنك حتّى ذلك.',
+      head: 'معرفة نسختك المنشورة قيد التجهيز',
+      sub: 'الاسترجاع قد يرجع أقلّ ممّا سيرجع بعد اكتماله — والنسخة السابقة تخدم زبائنك حتّى ذلك.',
     };
   }
 
   if (use === 'draft' && data.draft?.differs) {
     return {
       sev: 'plain',
-      head: 'تجرّب المسوّدة — ولا يراها زبونٌ حتّى تنشرها',
+      head: 'تجرّب تعديلات لم تُنشر — لا يراها زبون',
       sub: data.published
         ? <>والذي يردّ على زبائنك الآن هو النسخة <span className="num">{data.published.version}</span>.</>
-        : 'ولا نسخةَ منشورةً بعد — فبوتك لا يردّ على أحدٍ حتّى تنشر.',
+        : 'ولا نسخة منشورة بعد — فبوتك لا يردّ على أحد حتّى تنشر.',
     };
   }
 
   if (last) {
     return {
       sev: 'good',
-      head: 'لا حارسَ تدخّل في آخر تجربة',
-      sub: 'الردُّ خرج كما كتبه البوت — بلا قصٍّ ولا حذفٍ ولا تحويلٍ لموظّف.',
+      head: 'لا حارس تدخّل في آخر تجربة',
+      sub: 'الردّ خرج كما كتبه البوت — بلا قصّ ولا حذف ولا تحويل لموظّف.',
     };
   }
 
   return {
     sev: 'good',
     head: 'لا شيء يمنع التجربة',
-    sub: 'اكتب سؤالاً كما يكتبه زبون — أو اختر سؤالاً سأله زبونٌ فعلاً من الرصيف أسفل.',
+    sub: 'اكتب سؤالا كما يكتبه زبون — أو اختر سؤالا سأله زبون فعلا من الرصيف أسفل.',
   };
 }
 
@@ -534,21 +534,21 @@ function heroOf({ data, use, last, kbTokens }: {
         sev: 'bad',
         value: '0',
         label: `${READ_UNIT_ACC} من المعرفة عند بوتك`,
-        ctx: <>بلا معرفةٍ يُجيب من شخصيّته وحدها — وهذا أوّلُ سببٍ لـ«لا أعرف» في وجه زبون.</>,
+        ctx: <>بلا معرفة يجيب من شخصيّته وحدها — وهذا أوّل سبب لـ«لا أعرف» في وجه زبون.</>,
       };
     }
     return {
       sev: 'plain',
       value: fmt.num(kbTokens),
       label: use === 'draft'
-        ? `${READ_UNIT_ACC} من معرفتك تُحقن مع كلّ ردّ`
+        ? `${READ_UNIT_ACC} من معرفتك تحقن مع كلّ ردّ`
         : `${READ_UNIT_ACC} في معرفة نسختك المنشورة`,
       ctx: (
         <>
-          الشخصيّةُ والأساسيّاتُ والقيودُ بادئةٌ ثابتةٌ تُخزَّن بخصم ·
+          الشخصيّة والأساسيّات والقيود بادئة ثابتة تخزّن بخصم ·
           {data.liveAvg
-            ? <> ووسطيُّ ردٍّ حقيقيٍّ عندك <span className="num">{fmt.num(data.liveAvg.tokens)}</span> {READ_UNIT_ACC} بـ<span className="num">{fmt.money(data.liveAvg.usd)}</span></>
-            : <> ولا ردَّ حقيقيّاً بعد لتُقاس عليه — جرّب سؤالاً لتعرف كلفتَه</>}
+            ? <> ووسطيّ ردّ حقيقيّ عندك <span className="num">{fmt.num(data.liveAvg.tokens)}</span> {READ_UNIT_ACC} بـ<span className="num">{fmt.money(data.liveAvg.usd)}</span></>
+            : <> ولا ردّ حقيقيّا بعد لتقاس عليه — جرّب سؤالا لتعرف كلفته</>}
         </>
       ),
     };
@@ -568,9 +568,9 @@ function heroOf({ data, use, last, kbTokens }: {
         label: `${READ_UNIT_ACC} من معرفتك كانت في السياق — وقال «لا أعرف»`,
         ctx: (
           <>
-            المعرفةُ كلُّها محقونةٌ في هذا الوضع، فالنقصُ في محتواها لا في استرجاعها ·
-            {' '}والكلفةُ دُفعت (<span className="num">{fmt.money(last.cost.usd)}</span>) والزبونُ لم يُجَب ·
-            {' '}أضِف الجواب من «هذا الردّ خطأ»
+            المعرفة كلّها محقونة في هذا الوضع، فالنقص في محتواها لا في استرجاعها ·
+            {' '}والكلفة دفعت (<span className="num">{fmt.money(last.cost.usd)}</span>) والزبون لم يجب ·
+            {' '}أضف الجواب من «هذا الردّ خطأ»
           </>
         ),
       };
@@ -579,15 +579,15 @@ function heroOf({ data, use, last, kbTokens }: {
       sev: 'bad',
       value: fmt.num(k.chunks.length),
       unit: k.chunksTotal ? `/ ${fmt.num(k.chunksTotal)}` : undefined,
-      label: 'مقطعاً من معرفتك دخل الردّ — وقال «لا أعرف»',
+      label: 'مقطعا من معرفتك دخل الردّ — وقال «لا أعرف»',
       ctx: (
         <>
           {k.skipped
-            ? 'تُخطّى الاسترجاعُ لقِصَر الرسالة — لا لفقدِ المعرفة'
+            ? 'تخطّى الاسترجاع لقصر الرسالة — لا لفقد المعرفة'
             : k.chunks.length
-              ? 'وجد ولم يُجب: راجع الشخصيّة أو تقطيعَ المعرفة'
-              : 'بحث ولم يجد: المعرفةُ ناقصةٌ لهذا السؤال'}
-          {' '}· والكلفةُ دُفعت (<span className="num">{fmt.money(last.cost.usd)}</span>)
+              ? 'وجد ولم يجب: راجع الشخصيّة أو تقطيع المعرفة'
+              : 'بحث ولم يجد: المعرفة ناقصة لهذا السؤال'}
+          {' '}· والكلفة دفعت (<span className="num">{fmt.money(last.cost.usd)}</span>)
         </>
       ),
     };
@@ -602,13 +602,13 @@ function heroOf({ data, use, last, kbTokens }: {
     ctx: (
       <>
         {last.cost.priced
-          ? <><span className="num">{fmt.money(last.cost.usd)}</span> لهذا الردّ · وألفُ ردٍّ مثلِه <span className="num">{fmt.money(last.cost.usd * 1000)}</span></>
-          : <>لا سعرَ مسجَّلٌ لهذا النموذج — فالكلفةُ تُحسب صفراً</>}
+          ? <><span className="num">{fmt.money(last.cost.usd)}</span> لهذا الردّ · وألف ردّ مثله <span className="num">{fmt.money(last.cost.usd * 1000)}</span></>
+          : <>لا سعر مسجّل لهذا النموذج — فالكلفة تحسب صفرا</>}
         {vs
-          ? <> · ووسطيُّ ردٍّ حقيقيٍّ عندك <span className="num">{fmt.num(vs)}</span> {READ_UNIT_ACC}</>
+          ? <> · ووسطيّ ردّ حقيقيّ عندك <span className="num">{fmt.num(vs)}</span> {READ_UNIT_ACC}</>
           : null}
         {last.cost.cachedTokens
-          ? <> · منها <span className="num">{fmt.num(last.cost.cachedTokens)}</span> مخزَّنةٌ من قبل بخصم</>
+          ? <> · منها <span className="num">{fmt.num(last.cost.cachedTokens)}</span> مخزّنة من قبل بخصم</>
           : null}
       </>
     ),
@@ -632,7 +632,7 @@ function Reply({ trace }: { trace: PlaygroundTrace }) {
       <div className="ibx-msg bot" key="t">
         <div className="bub bot" dir="auto">{trace.reply.text}</div>
         <div className="mt">
-          <span className="src">بوتك — لم يُرسَل</span>
+          <span className="src">بوتك — لم يرسل</span>
           <span className="num">{(trace.cost.latencyMs / 1000).toFixed(1)}</span>
           <span>ث</span>
         </div>
@@ -642,7 +642,7 @@ function Reply({ trace }: { trace: PlaygroundTrace }) {
   if (!parts.length) {
     parts.push(
       <div className="ibx-msg sys" key="n">
-        <div className="bub sys">لم يُنتج البوت ردّاً — وفي الحيّ لا يصل الزبونَ شيء.</div>
+        <div className="bub sys">لم ينتج البوت ردّا — وفي الحيّ لا يصل الزبون شيء.</div>
       </div>,
     );
   }
@@ -657,18 +657,18 @@ function Out({ m }: { m: OutboundMessage }) {
           {m.body}
           <span className="chips">
             {m.options.map((o) => <span className="c" key={o.id}>{o.title}</span>)}
-            <span className="chips-n">كانت ستصل الزبونَ أزراراً — يضغط ولا يكتب</span>
+            <span className="chips-n">كانت ستصل الزبون أزرارا — يضغط ولا يكتب</span>
           </span>
         </div>
-        <div className="mt"><span className="src">أداةٌ أنتجتها — لم تُرسَل</span></div>
+        <div className="mt"><span className="src">أداة أنتجتها — لم ترسل</span></div>
       </div>
     );
   }
   if (m.kind === 'location') {
     return (
       <div className="ibx-msg bot">
-        <div className="bub bot" dir="auto">{m.name ?? 'موقعٌ على الخريطة'}{m.address ? ` — ${m.address}` : ''}</div>
-        <div className="mt"><span className="src">موقعٌ — لم يُرسَل</span></div>
+        <div className="bub bot" dir="auto">{m.name ?? 'موقع على الخريطة'}{m.address ? ` — ${m.address}` : ''}</div>
+        <div className="mt"><span className="src">موقع — لم يرسل</span></div>
       </div>
     );
   }
@@ -676,14 +676,14 @@ function Out({ m }: { m: OutboundMessage }) {
     return (
       <div className="ibx-msg bot">
         <div className="bub bot" dir="auto">{m.caption ?? 'صورة'}</div>
-        <div className="mt"><span className="src">صورةٌ — لم تُرسَل</span></div>
+        <div className="mt"><span className="src">صورة — لم ترسل</span></div>
       </div>
     );
   }
   return (
     <div className="ibx-msg bot">
       <div className="bub bot" dir="auto">{m.body}</div>
-      <div className="mt"><span className="src">أداةٌ أنتجتها — لم تُرسَل</span></div>
+      <div className="mt"><span className="src">أداة أنتجتها — لم ترسل</span></div>
     </div>
   );
 }
@@ -707,7 +707,7 @@ function Why({ trace, onWrong }: { trace: PlaygroundTrace; onWrong: () => void }
       {/* ① الحرّاس أوّلاً: ما تدخّل على النصّ قبل أن يراه الزبون — بعاقبته */}
       {trace.guards.length > 0 && (
         <div className="pg-blk">
-          <h3 className="pg-blk-t">حارسٌ تدخّل</h3>
+          <h3 className="pg-blk-t">حارس تدخّل</h3>
           {trace.guards.map((g) => (
             <Vital key={g.key} sev={g.key === 'handoff' ? 'warn' : 'bad'} k={g.label} why={g.consequence} />
           ))}
@@ -717,35 +717,35 @@ function Why({ trace, onWrong }: { trace: PlaygroundTrace; onWrong: () => void }
       {/* ② المعرفة: أيُّ مقاطعَ استُرجعت وبأيّ درجة */}
       <div className="pg-blk">
         <h3 className="pg-blk-t">
-          المعرفةُ التي أسندت الردّ
+          المعرفة التي أسندت الردّ
           <span className="pg-blk-c">
             {k.mode === 'full'
               ? KB_MODE.full.label
-              : <><span className="num">{fmt.num(k.chunks.length)}</span> من <span className="num">{fmt.num(k.chunksTotal)}</span> مقطعاً</>}
+              : <><span className="num">{fmt.num(k.chunks.length)}</span> من <span className="num">{fmt.num(k.chunksTotal)}</span> مقطعا</>}
           </span>
         </h3>
 
         {trimmed.length > 0 && (
           <Note tone="crit">
-            <b>اقتُطعت طبقةٌ من السياق:</b> {trimmed.map((t) => LAYER[t] ?? t).join(' · ')}.
-            {' '}بوتك لم يرَ معرفتَك كلَّها — ارفع ميزانيّةَ هذه الطبقة أو قصّر ما فيها.
+            <b>اقتطعت طبقة من السياق:</b> {trimmed.map((t) => LAYER[t] ?? t).join(' · ')}.
+            {' '}بوتك لم ير معرفتك كلّها — ارفع ميزانيّة هذه الطبقة أو قصّر ما فيها.
           </Note>
         )}
 
         {k.mode === 'full' ? (
           <p className="muted-p">
-            المعرفةُ كلُّها في السياق (<span className="num">{fmt.num(k.layers.core)}</span> {READ_UNIT_ACC}) —
-            فلا استرجاعَ ولا بحثَ ولا درجات. وحين تكبر معرفتك يتحوّل بوتك إلى الاسترجاع،
-            فتظهر هنا المقاطعُ ودرجاتُها.
+            المعرفة كلّها في السياق (<span className="num">{fmt.num(k.layers.core)}</span> {READ_UNIT_ACC}) —
+            فلا استرجاع ولا بحث ولا درجات. وحين تكبر معرفتك يتحوّل بوتك إلى الاسترجاع،
+            فتظهر هنا المقاطع ودرجاتها.
           </p>
         ) : k.skipped ? (
           <p className="muted-p">
-            تُخطّي الاسترجاع مقصود: رسالةٌ قصيرةٌ أو تحيّةٌ لا تحتاج معرفةً، فلا نداءَ تضمينٍ
-            ولا كلفةَ استرجاع. وهذا ليس نقصاً في معرفتك.
+            تخطّي الاسترجاع مقصود: رسالة قصيرة أو تحيّة لا تحتاج معرفة، فلا نداء تضمين
+            ولا كلفة استرجاع. وهذا ليس نقصا في معرفتك.
           </p>
         ) : !k.chunks.length ? (
           <Note tone="crit">
-            <b>بحث ولم يجد.</b> لا مقطعَ في معرفتك يطابق هذا السؤال — وهذا يُحلّ بإضافة
+            <b>بحث ولم يجد.</b> لا مقطع في معرفتك يطابق هذا السؤال — وهذا يحلّ بإضافة
             المحتوى الناقص لا بتعديل الشخصيّة.
           </Note>
         ) : (
@@ -756,15 +756,15 @@ function Why({ trace, onWrong }: { trace: PlaygroundTrace; onWrong: () => void }
 
         {k.query && !k.skipped && k.mode !== 'full' && (
           <p className="muted-p">
-            بُحث بهذا النصّ: <span dir="auto">«{k.query}»</span> — وهو سؤالُ الزبون مطبَّعاً
-            ومدموجاً بآخر دورَين، فسؤالٌ قصيرٌ («وهاي؟») يحمل موضوعَه.
+            بحث بهذا النصّ: <span dir="auto">«{k.query}»</span> — وهو سؤال الزبون مطبّعا
+            ومدموجا بآخر دورين، فسؤال قصير («وهاي؟») يحمل موضوعه.
           </p>
         )}
 
         {k.pinned.length > 0 && (
           <p className="muted-p">
             ومعها <span className="num">{fmt.num(k.pinned.length)}</span> من الأساسيّات —
-            تُحقن دائماً ولا تنافس على مقاعد الاسترجاع.
+            تحقن دائما ولا تنافس على مقاعد الاسترجاع.
           </p>
         )}
       </div>
@@ -772,7 +772,7 @@ function Why({ trace, onWrong }: { trace: PlaygroundTrace; onWrong: () => void }
       {/* ③ الأدوات: بوسائطها وما أعادت */}
       <div className="pg-blk">
         <h3 className="pg-blk-t">
-          الأدواتُ التي نوديت
+          الأدوات التي نوديت
           <span className="pg-blk-c">
             <span className="num">{fmt.num(trace.tools.length)}</span> من
             {' '}<span className="num">{fmt.num(trace.toolsOffered.length)}</span> معروضة
@@ -783,8 +783,8 @@ function Why({ trace, onWrong }: { trace: PlaygroundTrace; onWrong: () => void }
           : (
             <p className="muted-p">
               {trace.toolsOffered.length
-                ? 'لم يحتج أداةً: أجاب من معرفته وشخصيّته. وإن توقّعتَ أداةً فراجع وصفَها — الوصفُ هو ما يقرأه البوت ليقرّر.'
-                : 'لا أدواتَ معروضةً على بوتك أصلاً، فلا يستطيع أن يحجز ولا يتحقّق ولا يحوّل.'}
+                ? 'لم يحتج أداة: أجاب من معرفته وشخصيّته. وإن توقّعت أداة فراجع وصفها — الوصف هو ما يقرأه البوت ليقرّر.'
+                : 'لا أدوات معروضة على بوتك أصلا، فلا يستطيع أن يحجز ولا يتحقّق ولا يحوّل.'}
             </p>
           )}
       </div>
@@ -794,23 +794,23 @@ function Why({ trace, onWrong }: { trace: PlaygroundTrace; onWrong: () => void }
         <h3 className="pg-blk-t">
           الكلفة
           <span className="pg-blk-c">
-            <span className="num">{fmt.num(c.calls)}</span> نداءً للنموذج
+            <span className="num">{fmt.num(c.calls)}</span> نداء للنموذج
           </span>
         </h3>
         <KV>
-          <KVRow k="سياقٌ ثابت (يُخزَّن بخصم)">
+          <KVRow k="سياق ثابت (يخزّن بخصم)">
             <span className="num">{fmt.num(k.stablePrefixTokens)}</span> {READ_UNIT}
           </KVRow>
-          <KVRow k="سياقٌ متغيّر (يُفوتَر كاملاً)">
+          <KVRow k="سياق متغيّر (يفوتر كاملا)">
             <span className="num">{fmt.num(k.variableTokens)}</span> {READ_UNIT}
           </KVRow>
           <KVRow k="إدخال">
             <span className="num">{fmt.num(c.promptTokens)}</span> {READ_UNIT}
-            {c.cachedTokens ? <> · منها <span className="num">{fmt.num(c.cachedTokens)}</span> مخزَّنةٌ من قبل</> : null}
+            {c.cachedTokens ? <> · منها <span className="num">{fmt.num(c.cachedTokens)}</span> مخزّنة من قبل</> : null}
           </KVRow>
           <KVRow k="إخراج">
             <span className="num">{fmt.num(c.outputTokens)}</span> {READ_UNIT}
-            {c.thoughtsTokens ? <> · وتفكيرٌ <span className="num">{fmt.num(c.thoughtsTokens)}</span></> : null}
+            {c.thoughtsTokens ? <> · وتفكير <span className="num">{fmt.num(c.thoughtsTokens)}</span></> : null}
           </KVRow>
           <KVRow k="المجموع">
             <span className="num">{fmt.num(c.totalTokens)}</span> {READ_UNIT}
@@ -818,7 +818,7 @@ function Why({ trace, onWrong }: { trace: PlaygroundTrace; onWrong: () => void }
           <KVRow k="بكم">
             {c.priced
               ? <span className="num">{fmt.money(c.usd)}</span>
-              : <span className="pg-bad">لا سعرَ مسجَّلٌ لهذا النموذج</span>}
+              : <span className="pg-bad">لا سعر مسجّل لهذا النموذج</span>}
           </KVRow>
           <KVRow k="الزمن">
             <span className="num">{(c.latencyMs / 1000).toFixed(1)}</span> ث
@@ -828,7 +828,7 @@ function Why({ trace, onWrong }: { trace: PlaygroundTrace; onWrong: () => void }
 
       <div className="pg-panel-f">
         <Button size="sm" onClick={onWrong}>هذا الردّ خطأ</Button>
-        <span className="pg-foot">يفتح طريقاً لإضافة المعرفة الناقصة إلى مسوّدتك</span>
+        <span className="pg-foot">يفتح طريقا لإضافة المعرفة الناقصة إلى مسوّدتك</span>
       </div>
     </div>
   );
@@ -838,10 +838,10 @@ const LAYER: Record<string, string> = {
   persona: 'الشخصيّة',
   core: 'الأساسيّات (معرفتك)',
   rules: 'القيود',
-  tools: 'وصفُ الأدوات',
-  retrieved: 'المعرفةُ المسترجَعة',
-  live: 'الوقتُ وبطاقةُ الزبون',
-  history: 'سجلُّ الحوار',
+  tools: 'وصف الأدوات',
+  retrieved: 'المعرفة المسترجعة',
+  live: 'الوقت وبطاقة الزبون',
+  history: 'سجلّ الحوار',
 };
 
 function Chunk({ c }: { c: PlaygroundChunk }) {
@@ -849,7 +849,7 @@ function Chunk({ c }: { c: PlaygroundChunk }) {
     <div className="pg-chunk">
       <div className="pg-chunk-h">
         <span className="pg-rank num">{c.rank}</span>
-        <span className="pg-chunk-k" dir="auto">{c.heading ?? 'مقطعٌ بلا عنوان'}</span>
+        <span className="pg-chunk-k" dir="auto">{c.heading ?? 'مقطع بلا عنوان'}</span>
         {c.score !== null && (
           <span className="pg-chunk-s">
             درجة <span className="num">{c.score.toFixed(3)}</span>
@@ -871,7 +871,7 @@ function ToolCall({ t }: { t: PlaygroundToolCall }) {
         <span className="pg-tool-m">
           <span className="num">{secs(t.ms)}</span> ث
         </span>
-        {!t.ran && <Tag line mark={false} label="مُثِّلت ولم تُنفَّذ" />}
+        {!t.ran && <Tag line mark={false} label="مثّلت ولم تنفّذ" />}
       </div>
       <div className="pg-tool-b">
         <span className="pg-tool-k">بوسائط</span>

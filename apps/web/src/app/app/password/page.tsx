@@ -50,7 +50,7 @@ function charUnit(n: number): string {
   if (n === 1) return 'محرف';
   if (n === 2) return 'محرفان';
   if (n <= 10) return 'محارف';
-  return 'محرفاً';
+  return 'محرفا';
 }
 
 interface Grade {
@@ -85,7 +85,7 @@ function strength(pw: string): Grade {
       pct,
       tone: 'crit',
       badge: 'أقصر من الحدّ',
-      said: 'يرفضها الخادم — وتُخمَّن آليّاً في دقائق لو قبلها.',
+      said: 'يرفضها الخادم — وتخمّن آليّا في دقائق لو قبلها.',
     };
   }
   if (len < EASY) {
@@ -93,14 +93,14 @@ function strength(pw: string): Grade {
       pct,
       tone: 'warn',
       badge: 'مقبولة',
-      said: 'تصمد أمام التخمين الآليّ — وكلّ محرفٍ تزيده يضاعف زمنه.',
+      said: 'تصمد أمام التخمين الآليّ — وكلّ محرف تزيده يضاعف زمنه.',
     };
   }
   return {
     pct,
     tone: 'ok',
     badge: 'قويّة',
-    said: 'خارج مدى التخمين الآليّ عمليّاً — ولا تحتاج رموزاً ولا أرقاماً.',
+    said: 'خارج مدى التخمين الآليّ عمليّا — ولا تحتاج رموزا ولا أرقاما.',
   };
 }
 
@@ -160,7 +160,7 @@ function PasswordForm() {
         {first && (
           <header className="auth-top">
             <b className="auth-mark">AiBot</b>
-            <span className="auth-org">خطوةٌ واحدةٌ قبل أن تبدأ</span>
+            <span className="auth-org">خطوة واحدة قبل أن تبدأ</span>
           </header>
         )}
 
@@ -171,8 +171,8 @@ function PasswordForm() {
             </h1>
             <p>
               {first
-                ? 'دخلتَ بكلمةٍ مؤقّتة أنشأها لك غيرك — وهي معروفةٌ له. اختر كلمتك الآن.'
-                : 'الكلمة القديمة مطلوبةٌ دائماً، وكلّ جلساتك الأخرى تُبطَل بعد التغيير.'}
+                ? 'دخلت بكلمة مؤقّتة أنشأها لك غيرك — وهي معروفة له. اختر كلمتك الآن.'
+                : 'الكلمة القديمة مطلوبة دائما، وكلّ جلساتك الأخرى تبطل بعد التغيير.'}
             </p>
           </div>
 
@@ -180,16 +180,16 @@ function PasswordForm() {
 
           {first && (
             <Note tone="warn">
-              <b>لماذا الآن ولا نُؤجّل.</b> الكلمة المؤقّتة عبرت شاشةً وربّما رسالة، ويعرفها
-              من أنشأ حسابك. حسابك يفتح محادثات زبائنك — فهذه الخطوة ليست إجراءً شكليّاً،
-              ولا تُخطّى.
+              <b>لماذا الآن ولا نؤجّل.</b> الكلمة المؤقّتة عبرت شاشة وربّما رسالة، ويعرفها
+              من أنشأ حسابك. حسابك يفتح محادثات زبائنك — فهذه الخطوة ليست إجراء شكليّا،
+              ولا تخطّى.
             </Note>
           )}
 
           <Field
             id="pw-cur"
             label={first ? 'الكلمة المؤقّتة' : 'كلمة السرّ الحاليّة'}
-            hint="مطلوبةٌ دائماً — فتوكنٌ مسروقٌ وحده لا يكفي لخطف حسابك."
+            hint="نطلبها لحماية حسابك."
           >
             <div className="auth-secret">
               <FormInput
@@ -211,7 +211,7 @@ function PasswordForm() {
                 aria-controls="pw-cur"
                 onClick={() => setShowCur((v) => !v)}
               >
-                {showCur ? 'أخفِ' : 'أظهِر'}
+                {showCur ? 'أخف' : 'أظهر'}
               </button>
             </div>
           </Field>
@@ -219,7 +219,7 @@ function PasswordForm() {
           <Field
             id="pw-new"
             label="كلمة السرّ الجديدة"
-            hint={`${MIN} محارف على الأقلّ. ولا نفرض رموزاً: التعقيد المفروض يُنتج كلماتٍ تُكتب على ورقة. الطول هو ما يُقاوم.`}
+            hint={`${MIN} محارف على الأقلّ. ولا نفرض رموزا: التعقيد المفروض ينتج كلمات تكتب على ورقة. الطول هو ما يقاوم.`}
             error={same ? 'هذه هي كلمتك الحاليّة.' : undefined}
           >
             <div className="auth-secret">
@@ -243,7 +243,7 @@ function PasswordForm() {
                 aria-controls="pw-new pw-again"
                 onClick={() => setShowNew((v) => !v)}
               >
-                {showNew ? 'أخفِ' : 'أظهِر'}
+                {showNew ? 'أخف' : 'أظهر'}
               </button>
             </div>
           </Field>
@@ -267,7 +267,7 @@ function PasswordForm() {
                 <Tag tone={s.tone} label={s.badge} />
                 <span>
                   الحدّ الأدنى <span className="num">{MIN}</span>، والمريح{' '}
-                  <span className="num">{EASY}</span>. والطولُ وحده هو ما يُقاوم.
+                  <span className="num">{EASY}</span>. والطول وحده هو ما يقاوم.
                 </span>
               </p>
             </div>
@@ -275,8 +275,8 @@ function PasswordForm() {
 
           <Field
             id="pw-again"
-            label="أعِد كتابتها"
-            hint="تظهر وتُخفى مع الكلمة الجديدة — فالمقارنة بالعين هي غرضُ هذا الحقل."
+            label="أعد كتابتها"
+            hint="اكتبها مرّة ثانية للتأكيد."
             error={mismatch ? 'الكلمتان غير متطابقتين.' : undefined}
           >
             <FormInput
@@ -296,15 +296,15 @@ function PasswordForm() {
           <details className="auth-fold">
             <summary>ماذا يحدث بعد الحفظ؟</summary>
             <p>
-              كلّ جلساتك الأخرى تُبطَل فوراً — على أيّ جهازٍ أو متصفّح. وجلستك هنا
-              تبقى، فلا تُطرَد من فعلك أنت. وهذا هو المقصود: تغييرُ كلمةِ سرٍّ لا
-              يُخرج المتسلّل تغييرٌ شكليّ.
+              كلّ جلساتك الأخرى تبطل فورا — على أيّ جهاز أو متصفّح. وجلستك هنا
+              تبقى، فلا تطرد من فعلك أنت. وهذا هو المقصود: تغيير كلمة سرّ لا
+              يخرج المتسلّل تغيير شكليّ.
             </p>
           </details>
         </div>
 
         {/* الرصيف: الفعلُ الأوّل تحت الإبهام، وعاقبتُه مكتوبةٌ قبل الضغط */}
-        <Dock hint="بعد الحفظ تُبطَل كلّ جلساتك الأخرى — وجلستك هنا تبقى.">
+        <Dock hint="بعد الحفظ نخرجك من الأجهزة الأخرى.">
           <Button
             type="submit"
             variant="primary"
@@ -312,7 +312,7 @@ function PasswordForm() {
             wide
             busy={busy}
             disabled={!ready}
-            reason="أكمِل الحقول الثلاثة — والجديدة تختلف عن القديمة وتطابق تأكيدها"
+            reason="أكمل الحقول الثلاثة، والجديدة تطابق تأكيدها."
           >
             احفظ كلمة السرّ
           </Button>

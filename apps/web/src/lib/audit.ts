@@ -27,39 +27,39 @@ const PLATFORM_ACTIONS = new Set([
 ]);
 
 const LABELS: Record<string, string> = {
-  'tenant.impersonate': 'دخل فريقُ المنصّة بهويّة حسابكم — قراءةٌ فقط، ٣٠ دقيقة',
-  'tenant.create': 'أُنشئ الحساب',
-  'tenant.status': 'غيّر فريقُ المنصّة حالةَ الحساب',
-  'tenant.kill_bot': 'أوقف فريقُ المنصّة البوتَ وقفله',
-  'tenant.unlock_bot': 'رفع فريقُ المنصّة القفلَ عن البوت',
-  'bot.publish': 'نُشرت نسخةٌ جديدةٌ من البوت',
-  'bot.toggle': 'شُغّل البوت أو أُوقف',
-  'bot.tool_create': 'أُنشئت أداةُ HTTP',
-  'bot.tool_update': 'عُدّلت أداةُ HTTP',
-  'bot.tool_delete': 'حُذفت أداةُ HTTP',
-  'tenant.owner_password_reset': 'أعاد فريقُ المنصّة كلمةَ مرور المالك وأسقط جلساته',
-  'tenant.channel_secrets_read': 'قرأ فريقُ المنصّة بيانات الويبهوك',
-  'channel.connect': 'رُبطت القناة أو جُدّد توكنُها',
-  'bot.seed': 'بذر فريقُ المنصّة أوّلَ نسخةِ بوت',
-  'bot.config': 'غُيّرت إعداداتُ البوت',
-  'bot.rollback': 'أُعيدت نسخةٌ سابقةٌ من البوت',
-  'bot.knowledge_gap_filled': 'سُدّت فجوةٌ في معرفة البوت',
-  'team.invite': 'دُعي عضوٌ جديد',
-  'team.role_change': 'غُيّر دورُ عضو',
-  'team.password_reset': 'أُعيد تعيينُ كلمةٍ مؤقّتةٍ لعضو',
-  'user.password_change': 'غُيّرت كلمةُ مرور',
-  'auth.mfa_enroll': 'فُعّل العاملُ الثاني',
-  'auth.mfa_verify': 'اجتيز العاملُ الثاني',
-  'contact.block': 'حُجب رقم',
-  'contact.unblock': 'رُفع حجبُ رقم',
-  'contact.optout': 'سُجّل عدولُ زبونٍ عن المراسلة',
-  'contact.optin': 'أُعيد اشتراكُ زبون',
-  'contact.merge': 'دُمجت جهتا اتّصال',
-  'contact.merge_undo': 'أُلغي دمجُ جهتَي اتّصال',
-  'platform.reprice': 'أعاد فريقُ المنصّة تسعيرَ أشواطٍ سابقة بسعرٍ مصحَّح',
-  'contact.export': 'صُدّر ملفُّ جهة اتّصال',
-  'contact.delete': 'حُذفت جهةُ اتّصال وكلُّ بياناتها نهائيّاً',
-  'tenant.export': 'صُدّرت بياناتُ الحساب كاملةً',
+  'tenant.impersonate': 'دخل فريق المنصّة بهويّة حسابكم — قراءة فقط، ٣٠ دقيقة',
+  'tenant.create': 'أنشئ الحساب',
+  'tenant.status': 'غيّر فريق المنصّة حالة الحساب',
+  'tenant.kill_bot': 'أوقف فريق المنصّة البوت وقفله',
+  'tenant.unlock_bot': 'رفع فريق المنصّة القفل عن البوت',
+  'bot.publish': 'نشرت نسخة جديدة من البوت',
+  'bot.toggle': 'شغّل البوت أو أوقف',
+  'bot.tool_create': 'أنشئت أداة HTTP',
+  'bot.tool_update': 'عدّلت أداة HTTP',
+  'bot.tool_delete': 'حذفت أداة HTTP',
+  'tenant.owner_password_reset': 'أعاد فريق المنصّة كلمة مرور المالك وأسقط جلساته',
+  'tenant.channel_secrets_read': 'قرأ فريق المنصّة بيانات الويبهوك',
+  'channel.connect': 'ربطت القناة أو جدّد توكنها',
+  'bot.seed': 'بذر فريق المنصّة أوّل نسخة بوت',
+  'bot.config': 'غيّرت إعدادات البوت',
+  'bot.rollback': 'أعيدت نسخة سابقة من البوت',
+  'bot.knowledge_gap_filled': 'سدّت فجوة في معرفة البوت',
+  'team.invite': 'دعي عضو جديد',
+  'team.role_change': 'غيّر دور عضو',
+  'team.password_reset': 'أعيد تعيين كلمة مؤقّتة لعضو',
+  'user.password_change': 'غيّرت كلمة مرور',
+  'auth.mfa_enroll': 'فعّل العامل الثاني',
+  'auth.mfa_verify': 'اجتيز العامل الثاني',
+  'contact.block': 'حجب رقم',
+  'contact.unblock': 'رفع حجب رقم',
+  'contact.optout': 'سجّل عدول زبون عن المراسلة',
+  'contact.optin': 'أعيد اشتراك زبون',
+  'contact.merge': 'دمجت جهتا اتّصال',
+  'contact.merge_undo': 'ألغي دمج جهتي اتّصال',
+  'platform.reprice': 'أعاد فريق المنصّة تسعير أشواط سابقة بسعر مصحّح',
+  'contact.export': 'صدّر ملفّ جهة اتّصال',
+  'contact.delete': 'حذفت جهة اتّصال وكلّ بياناتها نهائيّا',
+  'tenant.export': 'صدّرت بيانات الحساب كاملة',
 };
 
 export function auditLabel(action: string): string {
@@ -84,7 +84,7 @@ export function auditActor(row: Pick<AuditRow, 'action' | 'actorName' | 'actorEm
      «نُشرت نسخة» بذرها فريقُ المنصّة. */
   if (row.hasActor === true) return 'فريق المنصّة';
   /* بلا فاعل: سكربتُ منصّةٍ (`platform.reprice`) أو حسابٌ حُذف بعد فعله. */
-  return PLATFORM_ACTIONS.has(row.action) ? 'فريق المنصّة' : 'حسابٌ أُزيل من الفريق';
+  return PLATFORM_ACTIONS.has(row.action) ? 'فريق المنصّة' : 'حساب أزيل من الفريق';
 }
 
 export const isPlatformEntry = (action: string): boolean => PLATFORM_ACTIONS.has(action);

@@ -77,30 +77,30 @@ function judge(rev: number, cost: number, activity: number): Verdict {
      على كلفةٍ غير مقيسة هو حكمٌ على فراغ. */
   if (cost === 0 && activity > 0) {
     return {
-      tone: 'serious', label: 'كلفةٌ غير مقيسة', measured: false, risk: false,
-      why: 'استهلاكٌ حقيقيّ وكلفةٌ صفريّة: لا صفّ سعرٍ مسجَّلٌ للنموذج الذي يردّ به. '
-        + 'الكلفة تُجمَع صفراً، فهامش هذا العميل — والهامش الإجماليّ معه — أعلى من حقيقته. '
-        + 'أضِف سعر النموذج ليعود الرقم صادقاً.',
+      tone: 'serious', label: 'كلفة غير مقيسة', measured: false, risk: false,
+      why: 'استهلاك حقيقيّ وكلفة صفريّة: لا صفّ سعر مسجّل للنموذج الذي يردّ به. '
+        + 'الكلفة تجمع صفرا، فهامش هذا العميل — والهامش الإجماليّ معه — أعلى من حقيقته. '
+        + 'أضف سعر النموذج ليعود الرقم صادقا.',
     };
   }
   if (rev <= 0) {
     return cost > 0
       ? {
         tone: 'crit', label: 'يستهلك بلا إيراد', measured: false, risk: true,
-        why: 'لا اشتراكَ فعّالاً لهذا العميل، وكلفة نماذجه تجري عليك. '
-          + 'إمّا تجربةٌ متعمَّدة لها موعد انتهاء، أو اشتراكٌ سقط ولم يُلاحَظ.',
+        why: 'لا اشتراك فعّالا لهذا العميل، وكلفة نماذجه تجري عليك. '
+          + 'إمّا تجربة متعمّدة لها موعد انتهاء، أو اشتراك سقط ولم يلاحظ.',
       }
-      : { tone: 'neutral', label: 'بلا اشتراكٍ ولا استهلاك', measured: false, risk: false };
+      : { tone: 'neutral', label: 'بلا اشتراك ولا استهلاك', measured: false, risk: false };
   }
   const margin = (rev - cost) / rev;
   if (margin < TARGET) {
     return {
-      tone: 'warn', label: `هامشٌ دون ${fmt.pct(TARGET)}`, measured: true, risk: true,
-      why: 'راجع التسعير، أو حجم معرفته: الثاني يُعالَج بتحويله إلى وضع الاسترجاع '
-        + '— فتصير كلفة ردّه مستقلّةً عن حجم معرفته.',
+      tone: 'warn', label: `هامش دون ${fmt.pct(TARGET)}`, measured: true, risk: true,
+      why: 'راجع التسعير، أو حجم معرفته: الثاني يعالج بتحويله إلى وضع الاسترجاع '
+        + '— فتصير كلفة ردّه مستقلّة عن حجم معرفته.',
     };
   }
-  return { tone: 'ok', label: 'هامشٌ صحّي', measured: true, risk: false };
+  return { tone: 'ok', label: 'هامش صحّي', measured: true, risk: false };
 }
 
 export default function MarginPage() {
@@ -138,7 +138,7 @@ export default function MarginPage() {
     <Stack gap="lg">
       <PageHead
         title="الهامش"
-        sub="الإيراد مقابل كلفة النماذج، لكلّ عميلٍ ولكلّ شهر. الهدف: أن ترى عميلاً يستهلك أكثر ممّا يدفع في شهره الأوّل لا في السادس."
+        sub="الإيراد مقابل كلفة النماذج، لكلّ عميل ولكلّ شهر. الهدف: أن ترى عميلا يستهلك أكثر ممّا يدفع في شهره الأوّل لا في السادس."
         /* الشهر سلسلةُ آلةٍ («2025-09»): بلا عزلٍ اتجاهيٍّ تُقرأ «09-2025» */
         actions={state.data ? <span className="mg-period num">{state.data.period}</span> : undefined}
       />
@@ -148,8 +148,8 @@ export default function MarginPage() {
         skeletonRows={6}
         empty={{
           when: (d) => !d.items?.length,
-          title: 'لا بيانات هامشٍ لهذا الشهر',
-          hint: 'تظهر هنا صفوفُ العملاء النشطين بعد أوّل اشتراكٍ فعّال — إيرادُ الباقة مقابل كلفة نماذجه في نفس الشهر. وإن كان الشهر قديماً فقد لا يكون فيه استهلاكٌ أصلاً.',
+          title: 'لا بيانات هامش لهذا الشهر',
+          hint: 'تظهر هنا صفوف العملاء النشطين بعد أوّل اشتراك فعّال — إيراد الباقة مقابل كلفة نماذجه في نفس الشهر. وإن كان الشهر قديما فقد لا يكون فيه استهلاك أصلا.',
           action: <a className="btn" href="/console">افتح العملاء ‹</a>,
         }}
       >
@@ -219,7 +219,7 @@ export default function MarginPage() {
             },
             {
               key: 'bars',
-              head: 'إيرادٌ وكلفةٌ على مقياسٍ واحد',
+              head: 'إيراد وكلفة على مقياس واحد',
               cell: ({ rev, cost }) => (
                 <span className="cn-bars-cell">
                   <span className="mg-bars">
@@ -274,18 +274,18 @@ export default function MarginPage() {
                   sev="bad"
                   href="#tbl"
                   value={fmt.num(risky)}
-                  label={`عملاءُ يحتاجون مراجعةً ماليّة — دون هدف ${fmt.pct(TARGET)} أو بلا اشتراك ←`}
+                  label={`عملاء يحتاجون مراجعة ماليّة — دون هدف ${fmt.pct(TARGET)} أو بلا اشتراك ←`}
                   ctx={(
                     <>
-                      من <span className="num">{fmt.num(rows.length)}</span> عميلاً نشطاً في{' '}
+                      من <span className="num">{fmt.num(rows.length)}</span> عميلا نشطا في{' '}
                       {periodLabel}
-                      {worstRisky ? <> · أوّلُهم «<span dir="auto">{worstRisky.r.name}</span>»</> : null}
+                      {worstRisky ? <> · أوّلهم «<span dir="auto">{worstRisky.r.name}</span>»</> : null}
                       {' · '}
                       {gross == null
-                        ? 'ولا إيرادَ في هذا الشهر يُقاس عليه'
-                        : <>والهامشُ الإجماليّ <span className="num">{fmt.pct(gross)}</span></>}
-                      {' · '}والوسمُ يضمّ «دون الهدف» و«يستهلك بلا إيراد»: الثاني ليس هامشاً
-                      منخفضاً بل اشتراكاً ساقطاً.
+                        ? 'ولا إيراد في هذا الشهر يقاس عليه'
+                        : <>والهامش الإجماليّ <span className="num">{fmt.pct(gross)}</span></>}
+                      {' · '}والوسم يضمّ «دون الهدف» و«يستهلك بلا إيراد»: الثاني ليس هامشا
+                      منخفضا بل اشتراكا ساقطا.
                     </>
                   )}
                 />
@@ -293,13 +293,13 @@ export default function MarginPage() {
                 <Hero
                   goal
                   value={gross == null ? '—' : fmt.pct(gross)}
-                  label="الهامشُ الإجماليّ — ولا عميلَ دون الهدف"
+                  label="الهامش الإجماليّ — ولا عميل دون الهدف"
                   meter={gross == null ? undefined : { pct: Math.max(0, gross), tone: 'ok' }}
                   ctx={(
                     <>
-                      إيرادُ <span className="num">{fmt.num(Math.round(totalRev))}</span> د.أ ناقصَ
-                      كلفةِ نماذجَ <span className="num">{totalCost.toFixed(2)}</span> د.أ في{' '}
-                      {periodLabel} · والعلامةُ على المقياس هي هدفُ الهامش{' '}
+                      إيراد <span className="num">{fmt.num(Math.round(totalRev))}</span> د.أ ناقص
+                      كلفة نماذج <span className="num">{totalCost.toFixed(2)}</span> د.أ في{' '}
+                      {periodLabel} · والعلامة على المقياس هي هدف الهامش{' '}
                       <span className="num">{fmt.pct(TARGET)}</span> — فتقرأ أين أنت من الحدّ
                       لا كم أنت فقط.
                     </>
@@ -313,8 +313,8 @@ export default function MarginPage() {
                 <Note tone="warn">
                   <b>الهامش الإجماليّ أعلى من حقيقته.</b>{' '}
                   <span className="num">{fmt.num(unmeasured)}</span>{' '}
-                  {unmeasured === 1 ? 'عميلٌ كلفته' : 'عملاءَ كلفتهم'} غير مقيسة: النموذج الذي يردّ به
-                  لا صفّ سعرٍ مسجَّلاً له، فتُجمَع كلفته صفراً. أضِف الأسعار ثمّ أعِد قراءة هذا الرقم.
+                  {unmeasured === 1 ? 'عميل كلفته' : 'عملاء كلفتهم'} غير مقيسة: النموذج الذي يردّ به
+                  لا صفّ سعر مسجّلا له، فتجمع كلفته صفرا. أضف الأسعار ثمّ أعد قراءة هذا الرقم.
                 </Note>
               )}
 
@@ -323,16 +323,16 @@ export default function MarginPage() {
               <Section title="من أين يأتي الرقم" sub={`عن ${periodLabel}`}>
                 <div className="rows cn-rows">
                   <MetricRow
-                    k="إيرادُ الاشتراكات الفعّالة"
-                    note="من `price_monthly` للباقة المشترَك بها فعلاً — لا من فاتورةٍ صادرة"
+                    k="إيراد الاشتراكات الفعّالة"
+                    note="من `price_monthly` للباقة المشترك بها فعلا — لا من فاتورة صادرة"
                     value={fmt.num(Math.round(totalRev))}
                     unit="د.أ"
-                    mid={<Tag tone="neutral" line label={`${fmt.num(paid.length)} مدفوعاً`} mark={false} />}
+                    mid={<Tag tone="neutral" line label={`${fmt.num(paid.length)} مدفوعا`} mark={false} />}
                   />
 
                   <MetricRow
-                    k="كلفةُ نماذج العملاء"
-                    note={`ما دُفع للنموذج في هذا الشهر، محوَّلاً بسعر ${JOD_PER_USD} — والوحدة الواحدة شرطُ المقياس الواحد`}
+                    k="كلفة نماذج العملاء"
+                    note={`ما دفع للنموذج في هذا الشهر، محوّلا بسعر ${JOD_PER_USD} — والوحدة الواحدة شرط المقياس الواحد`}
                     value={totalCost.toFixed(2)}
                     unit="د.أ"
                     mid={totalRev > 0 ? (
@@ -343,10 +343,10 @@ export default function MarginPage() {
                   />
 
                   <MetricRow
-                    k="أضعفُ هامشٍ بين المدفوعين"
+                    k="أضعف هامش بين المدفوعين"
                     note={worstPaid
                       ? worstPaid.r.name
-                      : 'لا عميلَ مدفوعاً بكلفةٍ مقيسةٍ في هذا الشهر'}
+                      : 'لا عميل مدفوعا بكلفة مقيسة في هذا الشهر'}
                     value={worstPaidMargin == null ? '—' : fmt.pct(worstPaidMargin)}
                     href="#tbl"
                     mid={worstPaidMargin == null ? null : (
@@ -367,18 +367,18 @@ export default function MarginPage() {
                   />
 
                   <MetricRow
-                    k="عملاءُ يستهلكون بلا إيراد"
-                    note="تجربةٌ متعمَّدة لها موعدُ انتهاء، أو اشتراكٌ سقط ولم يُلاحَظ — والفرقُ قرارٌ لا معلومة"
+                    k="عملاء يستهلكون بلا إيراد"
+                    note="تجربة متعمّدة لها موعد انتهاء، أو اشتراك سقط ولم يلاحظ — والفرق قرار لا معلومة"
                     value={fmt.num(noRevenue.length)}
                     mid={noRevenue.length > 0
                       ? (
                         <Pill
                           tone="crit"
-                          label={`كلفتُهم عليك ${noRevenue
+                          label={`كلفتهم عليك ${noRevenue
                             .reduce((a, x) => a + x.cost, 0).toFixed(2)} د.أ`}
                         />
                       )
-                      : <Tag tone="ok" label="كلُّ عميلٍ فعّالٍ له إيراد" />}
+                      : <Tag tone="ok" label="كلّ عميل فعّال له إيراد" />}
                   />
                 </div>
               </Section>
@@ -388,31 +388,31 @@ export default function MarginPage() {
               <Section
                 id="tbl"
                 anchor
-                title="سطراً سطراً"
+                title="سطرا سطرا"
                 sub={(
                   <>
-                    {arCount(rows.length, CLIENTS)} — أسوأُ فرقٍ
-                    (إيراد − كلفة) أوّلاً
+                    {arCount(rows.length, CLIENTS)} — أسوأ فرق
+                    (إيراد − كلفة) أوّلا
                   </>
                 )}
               >
                 {/* ★ المحور مكتوبٌ لا مُستنتَج: مقياسٌ واحدٌ مشتركٌ للسلسلتَين،
                     ومداه معلَنٌ فيصير طول الشريط قابلاً للقراءة بلا تخمين. */}
                 <p className="mg-axis">
-                  السلسلتان على <b>مقياسٍ واحد</b> — من صفر إلى{' '}
-                  <span className="num">{fmt.num(Math.round(scale))}</span> د.أ، فطولُ الشريطَين
-                  يُقارَن مباشرةً. والعلامةُ على شريط الكلفة هي الكلفةُ التي يصير عندها الهامشُ
-                  هدفَه — أي <span className="num">{fmt.pct(TARGET)}</span> من إيراده: ما تجاوزها
-                  فهامشُه دون الهدف. والترتيبُ يجري في هذه الشاشة بالوحدة المرسومة نفسها — لا في الخادم حيث
-                  يُخلط الدينارُ بالدولار.
+                  السلسلتان على <b>مقياس واحد</b> — من صفر إلى{' '}
+                  <span className="num">{fmt.num(Math.round(scale))}</span> د.أ، فطول الشريطين
+                  يقارن مباشرة. والعلامة على شريط الكلفة هي الكلفة التي يصير عندها الهامش
+                  هدفه — أي <span className="num">{fmt.pct(TARGET)}</span> من إيراده: ما تجاوزها
+                  فهامشه دون الهدف. والترتيب يجري في هذه الشاشة بالوحدة المرسومة نفسها — لا في الخادم حيث
+                  يخلط الدينار بالدولار.
                 </p>
 
                 <p className="cn-legend">
-                  <span><i className="cn-sw rev" aria-hidden="true" />إيرادُ اشتراكه</span>
-                  <span><i className="cn-sw cst" aria-hidden="true" />كلفةُ نماذجه</span>
+                  <span><i className="cn-sw rev" aria-hidden="true" />إيراد اشتراكه</span>
+                  <span><i className="cn-sw cst" aria-hidden="true" />كلفة نماذجه</span>
                   <span>
                     <i className="cn-sw-goal" aria-hidden="true" />
-                    هدفُ الهامش <span className="num">{fmt.pct(TARGET)}</span>
+                    هدف الهامش <span className="num">{fmt.pct(TARGET)}</span>
                   </span>
                 </p>
 
@@ -420,9 +420,9 @@ export default function MarginPage() {
               </Section>
 
               <Note tone="warn">
-                <b>راجع هذه الشاشة أسبوعيّاً.</b> عميلٌ هامشه دون <span className="num">{fmt.pct(TARGET)}</span>{' '}
-                يعني أحد أمرين: التسعير خاطئ، أو معرفته أكبر من باقته. والثاني يُعالَج بتحويله
-                إلى وضع الاسترجاع — فتصير كلفة ردّه مستقلّةً عن حجم معرفته.
+                <b>راجع هذه الشاشة أسبوعيّا.</b> عميل هامشه دون <span className="num">{fmt.pct(TARGET)}</span>{' '}
+                يعني أحد أمرين: التسعير خاطئ، أو معرفته أكبر من باقته. والثاني يعالج بتحويله
+                إلى وضع الاسترجاع — فتصير كلفة ردّه مستقلّة عن حجم معرفته.
               </Note>
 
             </Stack>
@@ -432,13 +432,13 @@ export default function MarginPage() {
 
       {/* ★ الرصيف: مرشّحُ الشاشة الوحيد — الشهرُ — في مدى الإبهام. */}
       <div className="cn-dock">
-        <Dock hint="الأرقامُ كلُّها عن الشهر المختار: إيرادُ اشتراكاته وكلفةُ نماذجه ونوافذُه المفوترة فيه.">
+        <Dock hint="الأرقام كلّها عن الشهر المختار: إيراد اشتراكاته وكلفة نماذجه ونوافذه المفوترة فيه.">
           <UiRow gap="sm">
             <Button size="lg" onClick={() => setPicker(true)}>
               الشهر: {periodLabel} ▾
             </Button>
             {period ? (
-              <Button size="lg" onClick={() => setPeriod('')}>عُد إلى الشهر الجاري</Button>
+              <Button size="lg" onClick={() => setPeriod('')}>عد إلى الشهر الجاري</Button>
             ) : null}
           </UiRow>
         </Dock>
@@ -449,7 +449,7 @@ export default function MarginPage() {
         kind="menu"
         title="الشهر"
         onClose={() => setPicker(false)}
-        hint="الشهر المحسوب في الخادم هو ما تراه في رأس الشاشة — وهذه القائمة تطلب شهراً بعينه."
+        hint="الشهر المحسوب في الخادم هو ما تراه في رأس الشاشة — وهذه القائمة تطلب شهرا بعينه."
       >
         <div className="opts">
           {months.map((m, i) => (

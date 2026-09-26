@@ -184,7 +184,7 @@ describe('④ الانتحالُ قراءةٌ فقط — مفروضٌ في ال�
     expect(r.status).toBe(403);
   });
 
-  it('المطالبةُ مُعلَنةٌ في الواجهة أيضاً — `/me` تُرجع `impersonating`', () => {
+  it('المطالبةُ مُعلَنةٌ في الواجهة أيضاً — `/me` ترجع `impersonating`', () => {
     expect(maskComments(readFileSync(join(API_SRC, 'auth.ts'), 'utf8')))
       .toContain('impersonating');
   });

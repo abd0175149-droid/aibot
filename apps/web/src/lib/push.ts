@@ -67,11 +67,11 @@ function urlB64ToBytes(b64: string): ArrayBuffer {
 export async function enablePush(): Promise<void> {
   if (!pushSupported()) {
     throw new Error(
-      'متصفّحك لا يدعم الإشعارات. على الآيفون: أضِف التطبيق إلى الشاشة الرئيسيّة ثمّ افتحه من هناك.',
+      'متصفّحك لا يدعم الإشعارات. على الآيفون: أضف التطبيق إلى الشاشة الرئيسيّة ثمّ افتحه من هناك.',
     );
   }
   if (Notification.permission === 'denied') {
-    throw new Error('الإشعارات محظورةٌ لهذا الموقع في إعدادات متصفّحك — اسمح بها من هناك ثمّ أعِد المحاولة.');
+    throw new Error('الإشعارات محظورة لهذا الموقع في إعدادات متصفّحك — اسمح بها من هناك ثمّ أعد المحاولة.');
   }
 
   const { key } = await api<{ key: string }>('/push/key');
@@ -82,7 +82,7 @@ export async function enablePush(): Promise<void> {
 
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
-    throw new Error('لم تُمنح الإشعارات. اضغط ثانيةً واسمح بها لتصلك التنبيهات الحرجة.');
+    throw new Error('لم تمنح الإشعارات. اضغط ثانية واسمح بها لتصلك التنبيهات الحرجة.');
   }
 
   const sub = await reg.pushManager.subscribe({

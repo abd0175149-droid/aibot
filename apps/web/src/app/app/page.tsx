@@ -84,8 +84,8 @@ const SAMPLE_MIN = 10;
  */
 function SetupSteps({ setup, botEnabled }: { setup: Overview['setup']; botEnabled: boolean }) {
   const steps = [
-    { done: setup.channel, t: 'اربط واتساب', s: 'بلا قناةٍ لا تصل رسالةٌ واحدة إلى بوتك.', href: '/app/channels', cta: 'اربط' },
-    { done: setup.knowledgeChars > 0, t: 'اكتب ما يعرفه بوتك', s: 'الأسعار والدوام والخدمات. بلا معرفةٍ يجيب «لا أعرف» أو يخمّن.', href: '/app/bot?tab=kb', cta: 'اكتب' },
+    { done: setup.channel, t: 'اربط واتساب', s: 'بلا قناة لا تصل رسالة واحدة إلى بوتك.', href: '/app/channels', cta: 'اربط' },
+    { done: setup.knowledgeChars > 0, t: 'اكتب ما يعرفه بوتك', s: 'الأسعار والدوام والخدمات. بلا معرفة يجيب «لا أعرف» أو يخمّن.', href: '/app/bot?tab=kb', cta: 'اكتب' },
     { done: setup.tested, t: 'جرّب بوتك', s: 'اسأله كما يسأل زبون، قبل أن يراه أحد.', href: '/app/playground', cta: 'جرّب' },
     { done: setup.published && botEnabled, t: 'شغّله', s: 'انشر نسختك وشغّل البوت ليردّ على زبائنك.', href: '/app/bot', cta: 'شغّل' },
   ];
@@ -169,13 +169,13 @@ export default function HomePage() {
   const band: { sev: Sev; head: ReactNode; sub: ReactNode } = needs
     ? {
       sev: 'bad',
-      head: <><span className="num">{fmt.num(data.needsAttention)}</span> محادثةً تنتظر ردَّ إنسان</>,
-      sub: 'أوصلها بوتك إلى حدّه وطلب إنساناً. والفعل الأوّل في رصيف الشاشة أسفل.',
+      head: <><span className="num">{fmt.num(data.needsAttention)}</span> محادثة تنتظر ردّ إنسان</>,
+      sub: 'أوصلها بوتك إلى حدّه وطلب إنسانا. والفعل الأوّل في رصيف الشاشة أسفل.',
     }
     : atCap
       ? {
         sev: 'bad',
-        head: 'بلغتَ سقف الباقة لهذا الشهر',
+        head: 'بلغت سقف الباقة لهذا الشهر',
         /* عند السقف الدواءُ يسبق الإيصال: «شاهد الاستهلاك» يشرح ما وقع
            ولا يُنهيه، ورفعُ السقف قرارٌ بشريٌّ عندنا. */
         sub: <>
@@ -187,7 +187,7 @@ export default function HomePage() {
       : pct >= 0.8
         ? {
           sev: pct >= 0.95 ? 'bad' : 'warn',
-          head: <>استهلكتَ <span className="num">{fmt.pct(pct)}</span> من نوافذ الشهر</>,
+          head: <>استهلكت <span className="num">{fmt.pct(pct)}</span> من محادثات الشهر</>,
           /* النصُّ يبدأ بـ«عند بلوغ السقف…» من الخادم — فلا تُسبَق بمثلها هنا. */
           sub: <>
             {pct >= 0.95 && 'بقي أقلّ من 5٪. '}
@@ -201,28 +201,28 @@ export default function HomePage() {
         : !chans.some((c) => c.status === 'connected')
           ? {
             sev: 'warn',
-            head: chans.length ? 'قناتك لا تعمل — لا تصل رسالةٌ واحدة' : 'لم تربط قناةً بعد — لا تصل رسالةٌ واحدة',
-            sub: <>بوتُك لا يسمع زبائنك قبل أن تُربط قناتُك وتعمل. <Link href="/app/channels">اذهب إلى القنوات</Link></>,
+            head: chans.length ? 'قناتك لا تعمل — لا تصل رسالة واحدة' : 'لم تربط قناة بعد — لا تصل رسالة واحدة',
+            sub: <>بوتك لا يسمع زبائنك قبل أن تربط قناتك وتعمل. <Link href="/app/channels">اذهب إلى القنوات</Link></>,
           }
           : !data.botEnabled
             ? {
               sev: 'warn',
-              head: 'بوتُك مطفأ — كلُّ رسالةٍ تنتظر موظّفاً',
-              sub: <>يصلك ما يكتبه زبائنك، ولا يردّ عليهم أحدٌ آليّاً. <Link href="/app/bot">شغّله من شاشة البوت</Link></>,
+              head: 'بوتك مطفأ — كلّ رسالة تنتظر موظّفا',
+              sub: <>يصلك ما يكتبه زبائنك، ولا يردّ عليهم أحد آليّا. <Link href="/app/bot">شغّله من شاشة البوت</Link></>,
             }
             : {
               sev: 'good',
-              head: 'لا شيء ينتظر ردَّك الآن',
+              head: 'لا شيء ينتظر ردّك الآن',
               sub: data.botReplies
-                ? <>بوتك يتكفّل — أرسل <span className="num">{fmt.num(data.botReplies)}</span> ردّاً في آخر 24 ساعة.</>
-                : 'بوتك يعمل، ولم يصل ما يحتاج ردّاً بعد.',
+                ? <>بوتك يتكفّل — أرسل <span className="num">{fmt.num(data.botReplies)}</span> ردّا في آخر 24 ساعة.</>
+                : 'بوتك يعمل، ولم يصل ما يحتاج ردّا بعد.',
             };
 
   return (
     <Stack gap="lg">
       <PageHead
         title="الرئيسيّة"
-        sub="نبض اليوم — والرقم الكبير هو ما يستحقّ انتباهك الآن."
+        sub="ما يحتاج انتباهك اليوم."
         actions={(
           <Row gap="sm">
             <Dot tone={atCap ? 'crit' : data.botEnabled ? 'ok' : 'neutral'} />
@@ -242,14 +242,14 @@ export default function HomePage() {
           الخبرُ مرّتين ولا يُفقد. */}
       {needs && atCap && (
         <Note tone="crit">
-          <b>بلغتَ سقف الباقة لهذا الشهر.</b> {data.capConsequence}{alertedAt}{' '}
+          <b>بلغت سقف الباقة لهذا الشهر.</b> {data.capConsequence}{alertedAt}{' '}
           <SupportLink subject={planSubject} body={planBody}>{planLabel}</SupportLink>{' · '}
           <Link href="/app/usage">شاهد الاستهلاك</Link>
         </Note>
       )}
       {needs && !atCap && pct >= 0.8 && (
         <Note tone={pct >= 0.95 ? 'crit' : 'warn'}>
-          <b>استهلكتَ {fmt.pct(pct)} من نوافذ الشهر.</b>{' '}
+          <b>استهلكت {fmt.pct(pct)} من محادثات الشهر.</b>{' '}
           {pct >= 0.95 && 'بقي أقلّ من 5٪. '}
           {data.capConsequence}{alertedAt}
         </Note>
@@ -260,12 +260,12 @@ export default function HomePage() {
           sev="bad"
           href="/app/inbox"
           value={fmt.num(data.needsAttention)}
-          label="محادثةً عجز عنها بوتك وتنتظر إنساناً"
+          label="محادثة عجز عنها بوتك وتنتظر إنسانا"
           ctx={(
             <>
-              من <span className="num">{fmt.num(data.conversationsToday)}</span> محادثةً بدأت في آخر 24 ساعة
+              من <span className="num">{fmt.num(data.conversationsToday)}</span> محادثة بدأت في آخر 24 ساعة
               {enoughSample && (
-                <> · وأنهى بوتك وحده <span className="num">{fmt.pct(data.selfResolvedRate)}</span> من نوافذ الشهر</>
+                <> · وأنهى بوتك وحده <span className="num">{fmt.pct(data.selfResolvedRate)}</span> من محادثات الشهر</>
               )}
             </>
           )}
@@ -275,11 +275,11 @@ export default function HomePage() {
       {heroKind === 'self' && (
         <Hero
           value={fmt.pct(data.selfResolvedRate)}
-          label="من نوافذ هذا الشهر أنهاها بوتك بلا موظّف"
+          label="من محادثات هذا الشهر أنهاها بوتك وحده"
           ctx={(
             <>
-              العيّنة <span className="num">{fmt.num(data.windowsUsed)}</span> نافذةً مُفوترة ·
-              ولا محادثةَ تنتظر ردَّك الآن
+              العيّنة <span className="num">{fmt.num(data.windowsUsed)}</span> محادثة محسوبة ·
+              ولا محادثة تنتظر ردّك الآن
             </>
           )}
         />
@@ -290,56 +290,56 @@ export default function HomePage() {
           href="/app/inbox"
           value={fmt.num(data.conversationsToday)}
           label={data.conversationsToday
-            ? 'محادثةً بدأت في آخر 24 ساعة — ولا شيء يحتاجك'
-            : 'محادثةً بدأت في آخر 24 ساعة'}
+            ? 'محادثة بدأت في آخر 24 ساعة — ولا شيء يحتاجك'
+            : 'محادثة بدأت في آخر 24 ساعة'}
           ctx={(
             <>
               {/* ★ ما كان فقرةً معلَّقةً تحت الشبكة صار سياقَ الرقم نفسه: النسبةُ
                   الغائبة تُشرَح في موضع غيابها لا في سطرٍ يُقرأ بعد أربع بطاقات. */}
-              نسبةُ «ما أنهاه بوتك بنفسه» تظهر بعد <span className="num">{SAMPLE_MIN}</span> نوافذَ
-              مُفوترةٍ في الشهر — وأنت الآن عند <span className="num">{fmt.num(data.windowsUsed)}</span>.
-              {perConv && <> وردَّ بوتك <span className="num">{perConv}</span> مرّةً وسطيّاً في كلّ محادثة.</>}
+              نسبة «ما أنهاه بوتك بنفسه» تظهر بعد <span className="num">{SAMPLE_MIN}</span> محادثات
+              محسوبة في الشهر — وأنت الآن عند <span className="num">{fmt.num(data.windowsUsed)}</span>.
+              {perConv && <> وردّ بوتك <span className="num">{perConv}</span> مرّة وسطيّا في كلّ محادثة.</>}
             </>
           )}
         />
       )}
 
-      <Section title="معايير اليوم" sub="كلُّ رقمٍ معه مداه أو نسبته — لا رقمَ عارياً">
+      <Section title="معايير اليوم" sub="كلّ رقم معه مداه أو نسبته — لا رقم عاريا">
         <Rows>
           {heroKind !== 'activity' && (
             <MetricRow
               href="/app/inbox"
-              k="محادثاتٌ بدأت اليوم"
+              k="محادثات بدأت اليوم"
               note="آخر 24 ساعة — لا يوم التقويم"
               value={fmt.num(data.conversationsToday)}
               mid={perConv
                 ? (
                   <span className="sc-ctx">
-                    ردَّ بوتك فيها <span className="num">{fmt.num(data.botReplies)}</span> مرّة ·
+                    ردّ بوتك فيها <span className="num">{fmt.num(data.botReplies)}</span> مرّة ·
                     أي <span className="num">{perConv}</span> لكلّ محادثة
                   </span>
                 )
-                : <span className="sc-ctx">لم تصل محادثةٌ بعد</span>}
+                : <span className="sc-ctx">لم تصل محادثة بعد</span>}
             />
           )}
 
           {heroKind !== 'self' && (
             <MetricRow
               k="أغلقها بوتك وحده"
-              note="نوافذُ هذا الشهر التي لم يكتب فيها موظّف"
+              note="محادثات هذا الشهر التي لم يكتب فيها موظّف"
               value={enoughSample ? fmt.pct(data.selfResolvedRate) : '—'}
               mid={enoughSample
                 ? (
                   <>
                     <span className="sc-mw"><Meter pct={data.selfResolvedRate} tone="ok" /></span>
                     <span className="sc-ctx">
-                      العيّنة <span className="num">{fmt.num(data.windowsUsed)}</span> نافذة
+                      العيّنة <span className="num">{fmt.num(data.windowsUsed)}</span> محادثة
                     </span>
                   </>
                 )
                 : (
                   <span className="sc-ctx">
-                    تظهر بعد <span className="num">{SAMPLE_MIN}</span> نوافذَ مُفوترة —
+                    تظهر بعد <span className="num">{SAMPLE_MIN}</span> محادثات محسوبة —
                     وأنت عند <span className="num">{fmt.num(data.windowsUsed)}</span>
                   </span>
                 )}
@@ -351,8 +351,8 @@ export default function HomePage() {
               على رسائل لم يردّ عليها أحد. نقاشُ فاتورةٍ مبنيٌّ في اسم. */}
           <MetricRow
             href="/app/usage"
-            k="نوافذُ مُفوترةٌ هذا الشهر"
-            note="النافذةُ تُفوتَر إذا ردَّ فيها بوتك أو موظّفك"
+            k="محادثات محسوبة هذا الشهر"
+            note="تحسب المحادثة إذا ردّ فيها بوتك أو موظّفك"
             value={fmt.num(data.windowsUsed)}
             unit={`/ ${fmt.num(data.windowsLimit)}`}
             mid={(
@@ -364,11 +364,11 @@ export default function HomePage() {
           />
 
           <MetricRow
-            k="وسيطُ زمن ردّ بوتك"
+            k="وسيط زمن ردّ بوتك"
             note="من وصول السؤال إلى أوّل حرف"
             value={(data.medianLatencyMs / 1000).toFixed(1)}
             unit="ث"
-            mid={<Tag line mark={false} label="وسيطُ سبعة أيّام" />}
+            mid={<Tag line mark={false} label="وسيط سبعة أيّام" />}
           />
         </Rows>
       </Section>
@@ -378,14 +378,14 @@ export default function HomePage() {
         sub={chans.length
           ? (chBad
             ? <><span className="num">{fmt.num(chBad)}</span> من <span className="num">{fmt.num(chans.length)}</span> لا تعمل</>
-            : 'كلُّها تستقبل وتردّ')
-          : 'لم تربط قناةً بعد'}
+            : 'كلّها تستقبل وتردّ')
+          : 'لم تربط قناة بعد'}
       >
         <Rows>
           <MetricRow
             href="/app/bot"
             k="البوت"
-            note="هل يردّ تلقائيّاً على ما يصل"
+            note="هل يردّ تلقائيّا على ما يصل"
             mid={atCap
               ? <Pill tone="crit" label="متوقّف — السقف" />
               : data.botEnabled ? <Pill tone="ok" label="يعمل" /> : <Pill tone="neutral" label="مطفأ" />}
@@ -410,8 +410,8 @@ export default function HomePage() {
           {!chans.length && (
             <MetricRow
               href="/app/channels"
-              k="لم تربط قناةً بعد"
-              note="الربط يجري معك على مكالمة — 30 إلى 60 دقيقة أوّل مرّة"
+              k="لم تربط قناة بعد"
+              note="نساعدك في الربط على مكالمة (30 إلى 60 دقيقة)"
               mid={<Tag line mark={false} label="ابدأ من هنا" />}
             />
           )}
@@ -419,10 +419,10 @@ export default function HomePage() {
       </Section>
 
       <Section
-        title="أسئلةٌ عجز عنها بوتك"
+        title="أسئلة عجز عنها بوتك"
         sub={gaps.data?.length
-          ? <><span className="num">{fmt.num(gaps.data.length)}</span> سؤالاً — أضِفها لمعرفته وترتفع نسبةُ ما يحلّه بنفسه</>
-          : 'فرصةُ تحسين — لا عطل'}
+          ? <><span className="num">{fmt.num(gaps.data.length)}</span> سؤالا — أضفها لمعرفته وترتفع نسبة ما يحلّه بنفسه</>
+          : 'فرصة تحسين — لا عطل'}
         actions={gaps.data?.length
           ? <Link className="btn quiet sm sc-link" href="/app/bot?tab=kb">افتح المعرفة</Link>
           : undefined}
@@ -456,8 +456,8 @@ export default function HomePage() {
                 href="/app/bot?tab=kb"
                 k="وبقيّتها"
                 value={fmt.num(gaps.data.length - 3)}
-                unit="سؤالاً"
-                mid={<span className="sc-ctx">مرتّبةً من الأكثر تكراراً</span>}
+                unit="سؤالا"
+                mid={<span className="sc-ctx">مرتّبة من الأكثر تكرارا</span>}
               />
             )}
           </Rows>
@@ -466,12 +466,12 @@ export default function HomePage() {
 
       {/* ★ الطيُّ التدريجيّ: هذا شرحٌ يُقرأ مرّةً ويُرجَع إليه، ولا يُتّخذ عليه
           قرارٌ في كلّ فتحة. فيُطوى ولا يُحذف — ونصُّه كما هو. */}
-      <Fold summary="لماذا يفرّق بوتك بين «بحث ولم يجد» و«وجد ولم يُجب»">
+      <Fold summary="ما الفرق بين «بحث ولم يجد» و«وجد ولم يجب»؟">
         <Note>
-          <b>تمييزٌ يوفّر عليك أسبوعاً.</b> «بحث ولم يجد» يعني أنّ المعلومة ناقصةٌ من معرفتك —
-          أضِفها. و«وجد ولم يُجب» يعني أنّها موجودةٌ والمشكلة في شخصيّة البوت —{' '}
-          <SupportLink subject="شخصيّةُ البوت: يجد ولا يُجيب">راسلنا</SupportLink>.
-          بلا هذا التمييز تضيف محتوًى لمشكلةٍ ليست فيه.
+          <b>تمييز يوفّر عليك أسبوعا.</b> «بحث ولم يجد» يعني أنّ المعلومة ناقصة من معرفتك —
+          أضفها. و«وجد ولم يجب» يعني أنّها موجودة والمشكلة في شخصيّة البوت —{' '}
+          <SupportLink subject="شخصيّة البوت: يجد ولا يجيب">راسلنا</SupportLink>.
+          بلا هذا التمييز تضيف محتوى لمشكلة ليست فيه.
         </Note>
       </Fold>
 
@@ -479,10 +479,10 @@ export default function HomePage() {
           يتبدّل البطوليّ، فلا زرٌّ أساسٌ يُصرَف على «اطمئنان». */}
       <ScreenDock
         hint={needs
-          ? 'يفتح الإنبوكس — والمرشِّح «يحتاج تدخّلاً» أوّلُ حبّةٍ فيه.'
+          ? 'يفتح الإنبوكس — والمرشّح «يحتاج تدخّلا» أوّل حبّة فيه.'
           : planTalk
-            ? 'سقفُ باقتك هو العائق الآن — ورفعُه قرارٌ بشريّ، نردّ خلال ٢٤ ساعة عمل.'
-            : 'لا شيء عاجل. والرصيف يحمل فعل الشاشة الأوّل دائماً، حتّى لو كان اطمئناناً.'}
+            ? 'سقف باقتك هو العائق الآن — ورفعه قرار بشريّ، نردّ خلال ٢٤ ساعة عمل.'
+            : 'لا شيء عاجل. والرصيف يحمل فعل الشاشة الأوّل دائما، حتّى لو كان اطمئنانا.'}
       >
         {/* وقاعدةُ الأولويّة كما هي: انتظارٌ ← فاتورةٌ ← اطمئنان. فحين لا ينتظر
             شيءٌ والسقفُ مبلوغ، الفعلُ الأوّل هو ما يُزيل العائق لا «افتح الإنبوكس». */}

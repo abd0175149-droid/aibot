@@ -49,8 +49,8 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
   const footer = inc.error
     ? <div className="cl-foot bad">تعذّر جلب الحوادث — العدّاد غير معروف</div>
     : !inc.data
-      ? <div className="cl-foot muted">…يُجلب عدّاد الحوادث</div>
-      : <div className="cl-foot">{n >= FETCH_CAP ? `+${FETCH_CAP} حادثةً مفتوحة` : arCount(n, INCIDENT_OPEN)}</div>;
+      ? <div className="cl-foot muted">…يجلب عدّاد الحوادث</div>
+      : <div className="cl-foot">{n >= FETCH_CAP ? `+${FETCH_CAP} حادثة مفتوحة` : arCount(n, INCIDENT_OPEN)}</div>;
 
   /* والحالتان تُفرَّقان: «سجِّل» لمن لم يُسجّل، و«ادخل من جديد» لمن سجَّل
      وتوكنُه لم يخطُ الخطوةَ الثانية. وجمعُهما يقول لمن سجَّل «سجِّل». */
@@ -64,11 +64,11 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
             <div className="auth-h">
               <h1>سجّل الدخول من جديد</h1>
               <p>
-                حسابك محميٌّ بعاملٍ ثانٍ، وهذه الجلسة لم تمرّ به — فلا تُفتح اللوحة عليها.
+                حسابك محميّ بعامل ثان، وهذه الجلسة لم تمرّ به — فلا تفتح اللوحة عليها.
               </p>
             </div>
           </div>
-          <Dock hint="الخطوةُ الثانية تُثبَت للجلسة لا للتوكن، فجلسةٌ مرّت بها تبقى مفتوحةً حتّى تخرج.">
+          <Dock hint="الخطوة الثانية تثبت للجلسة لا للتوكن، فجلسة مرّت بها تبقى مفتوحة حتّى تخرج.">
             <a className="btn primary lg wide sc-link" href="/login">اذهب إلى الدخول</a>
           </Dock>
         </div>
