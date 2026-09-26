@@ -4,6 +4,7 @@
   "packageManager": "pnpm@9.12.3",
   "engines": { "node": ">=22" },
   "scripts": {
+    "itest": "vitest run --config vitest.itest.config.ts --reporter=basic",
     "build": "turbo run build",
     "typecheck": "turbo run typecheck",
     "typecheck:ops": "tsc -p tsconfig.ops.json",
