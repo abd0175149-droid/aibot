@@ -112,3 +112,18 @@ describe('★ العقدُ المشترك — Me وOverview من موضعٍ وا
     expect(bare('apps/web/src/app/app/page.tsx')).not.toContain('interface Overview {');
   });
 });
+
+describe('★★★ العاملُ الثاني يُطالَب به بعد **التأكيد** لا بعد فتح شاشة التسجيل', () => {
+  /* وقع فعلاً (٢٦ أيلول ٢٠٢٦): السرُّ يُكتب لحظةَ فتح شاشة التسجيل، والدخولُ كان
+     يطلب الرمزَ متى وُجد السرّ — فقُفل مالكُ المنصّة خارجها بتطبيقٍ لم يُسجّل فيه. */
+  const auth = bare('apps/api/src/auth.ts');
+
+  it('الدخولُ والتجديدُ والتحقّقُ و`/me` كلُّها على `mfaEnrolledAt`', () => {
+    expect(auth).toContain("if (user.role === 'platform_owner' && user.mfaEnrolledAt) {");
+    expect(auth).toContain("user.role === 'platform_owner' && !user.mfaEnrolledAt ? {} : { mfa: 'ok' as const }");
+    expect(auth).toContain('!user.mfaSecretEnc || !user.mfaEnrolledAt');
+    expect(auth).toContain("(user.mfaEnrolledAt ? 'stale' : 'pending')");
+    expect(auth).not.toContain("user.role === 'platform_owner' && user.mfaSecretEnc)");
+    expect(auth).not.toContain("!user.mfaSecretEnc ? {} : { mfa: 'ok'");
+  });
+});

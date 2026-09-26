@@ -323,7 +323,10 @@ describe('⑤ اللوحةُ تحتاج عاملاً ثانياً — مفروض
     /* لا استعادةَ ذاتيّةً لكلمة سرٍّ في هذه المنصّة، فمالكٌ قائمٌ بلا سرٍّ
        يجب أن يظلّ قادراً على الدخول وعلى بلوغ مسار التسجيل. */
     const auth = maskComments(readFileSync(join(API_SRC, 'auth.ts'), 'utf8'));
-    expect(auth).toMatch(/user\.role === 'platform_owner' \&& user\.mfaSecretEnc/);
+    /* ★ والشرطُ **التأكيد** لا وجودُ السرّ: السرُّ يُكتب عند فتح شاشة التسجيل،
+       فالشرطُ القديم (`mfaSecretEnc`) أقفل مالكاً لم يُكمل التسجيل (٢٦ أيلول ٢٠٢٦). */
+    expect(auth).toMatch(/user\.role === 'platform_owner' \&& user\.mfaEnrolledAt/);
+    expect(auth).not.toMatch(/user\.role === 'platform_owner' \&& user\.mfaSecretEnc\)/);
     expect(auth, 'التسجيلُ خلف `requireAuth()` وحدها لا خلف صلاحيّة اللوحة')
       .toContain("'/auth/mfa/enroll', { preHandler: requireAuth() }");
     expect(auth).toContain("'/auth/mfa/activate', { preHandler: requireAuth() }");

@@ -372,7 +372,10 @@ export async function registerAuth(app: FastifyInstance) {
     /* ★★★ **مالكُ المنصّة المُسجَّل لا يُعطى جلسةً بكلمة السرّ وحدها.**
        لا صفَّ جلسةٍ ولا كوكيَ تحديثٍ ولا توكنَ وصول — تحدٍّ عمرُه خمسُ دقائق
        وحده. فمن سرق كلمةَ السرّ لا يملك شيئاً يعيش ثلاثين يوماً. */
-    if (user.role === 'platform_owner' && user.mfaSecretEnc) {
+    /* 🔴 `mfaEnrolledAt` لا `mfaSecretEnc`: السرُّ يُكتب لحظةَ **فتح** شاشة التسجيل
+       (قبل مسح الرمز وتأكيده). فكان مالكٌ فتح الشاشة ولم يُكمل يُطالَب برمزٍ من
+       تطبيقٍ لم يُسجّل فيه قطّ — قُفل خارج المنصّة. (وقع فعلاً: ٢٦ أيلول ٢٠٢٦.) */
+    if (user.role === 'platform_owner' && user.mfaEnrolledAt) {
       return reply.send({ mfaRequired: true, challenge: signChallenge(user.id) });
     }
 
@@ -425,7 +428,9 @@ export async function registerAuth(app: FastifyInstance) {
        الدخول بـ٤٠٣ لا تفسيرَ لها. */
     const access = signAccess({
       sub: user.id, tid: user.tenantId, role: user.role, sid: rotated.sessionId,
-      ...(user.role === 'platform_owner' && !user.mfaSecretEnc ? {} : { mfa: 'ok' as const }),
+      /* 🔴 وبنفس السبب: سرٌّ معلَّقٌ لم يُؤكَّد كان يمنح الجلسةَ `mfa: 'ok'` عند
+         التجديد — جلسةٌ بكلمة سرٍّ وحدها تفتح اللوحة. التأكيدُ هو الشرط. */
+      ...(user.role === 'platform_owner' && !user.mfaEnrolledAt ? {} : { mfa: 'ok' as const }),
     });
     /* ★ الخاسرُ لا يُرسل كوكي — انظر `rotateSession`. */
     if (rotated.refresh === null) return reply.send({ access });
@@ -525,7 +530,7 @@ export async function registerAuth(app: FastifyInstance) {
     const rows = await withPlatform(db, 'مصادقة: قراءة سرّ العامل الثاني',
       (tx) => tx.select({ u: users }).from(users).where(eq(users.id, ch.sub)).limit(1));
     const user = rows[0]?.u;
-    if (!user?.isActive || !user.mfaSecretEnc) {
+    if (!user?.isActive || !user.mfaSecretEnc || !user.mfaEnrolledAt) {
       throw new AppError(ErrorCode.UNAUTHORIZED, 'تعذّر إكمالُ الدخول.', 401);
     }
 
@@ -682,7 +687,7 @@ export async function registerAuth(app: FastifyInstance) {
          التسجيل، و`stale` سجَّل وهذا التوكنُ لم يخطُ الخطوةَ الثانية فيُرسَل
          إلى الدخول. وجمعُهما في `false` يقول لمن سجَّل «سجِّل» — وهذه أسرعُ
          طريقٍ إلى إطفاء الميزة. */
-      mfa: req.auth!.mfa === 'ok' ? 'ok' : (user.mfaSecretEnc ? 'stale' : 'pending'),
+      mfa: req.auth!.mfa === 'ok' ? 'ok' : (user.mfaEnrolledAt ? 'stale' : 'pending'),
     };
   });
 }
