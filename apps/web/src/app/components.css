@@ -1373,5 +1373,7 @@ button.row-m:hover, a.row-m:hover { background: var(--surface-2); }
   }
   [dir="ltr"] .sheetwrap:not([data-kind="menu"]) .sheet { transform: translateX(102%); }
   .sheetwrap:not([data-kind="menu"]).on .sheet { transform: none; }
+  /* الدرجُ بطول الشاشة: الجسمُ يأخذ ما بقي فيلتصق الذيلُ بالأسفل. */
+  .sheetwrap:not([data-kind="menu"]) .sheet-b { flex: 1 1 auto; }
   .sheetwrap:not([data-kind="menu"]) .sheet-scrim { background: rgba(10, 16, 15, .28); }
 }

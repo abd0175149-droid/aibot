@@ -460,6 +460,8 @@
    كانت تمرّ مع المحتوى، فيقرأ المنتحِلُ «حسابك للقراءة فقط» على زرٍّ في أسفل
    جدولٍ طويلٍ ولا لافتةَ في مرمى عينه تقول لماذا. */
 .main > .imp-bar { position: sticky; top: 0; z-index: 6; margin-block-end: 12px; }
+/* ★ أرضيّةٌ تحت اللافتة الملتصقة: كان المحتوى المارّ يُرى بجانبها (رُئي على 1680). */
+.main > .imp-bar { background: var(--bg); padding-block-start: 4px; margin-block-start: -4px; }
 .imp-bar .note { margin-block: 0; box-shadow: 0 8px 20px -14px rgb(0 0 0 / .45); }
 /* على الهاتف: سطرُ الحالة والمدّة والزرّ فقط — الشرحُ الكامل على الحاسوب. */
 @media (max-width: 600px) {
