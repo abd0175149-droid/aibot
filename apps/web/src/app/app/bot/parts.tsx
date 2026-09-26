@@ -226,7 +226,8 @@ export function lineDelta(before: string, after: string) {
  * عددٌ بصيغته العربيّة الصحيحة — والرقمُ معزولٌ والكلمةُ خارج العازل.
  * («ملفٌّ واحد» · «ملفّان» · «٣ ملفّات» · «١١ ملفّاً» — والخطأ فيها يُقرأ ترجمةً آليّة.)
  */
-export type Forms = [string, string, string, string];
+/* النوعُ واحدٌ للمنصّة كلّها — في `lib/plural.ts`، وحارسُ «مكوّنٌ من موضعٍ واحد» يمنع نسختين. */
+import type { Forms } from '@/lib/plural';
 
 export function Amount({ n, forms }: { n: number; forms: Forms }) {
   if (n === 1) return <>{forms[0]}</>;
