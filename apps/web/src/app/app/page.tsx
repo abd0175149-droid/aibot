@@ -75,6 +75,48 @@ const SAMPLE_MIN = 10;
  * (للشاشتين) — فلا نسختان تتباعدان.
  */
 
+/**
+ * ★★ قائمةُ التجهيز — أكبرُ ما ينقص العميلَ الجديد.
+ *
+ *   نُسك عمل أيّاماً ببوتٍ بلا سطرِ معرفةٍ واحد، يجيب زبائنه «لا توجد عروض» — ولا
+ *   شيء في الواجهة قال له ذلك. فأربعُ خطواتٍ بحالتها من الخادم (`setup`)، والتاليةُ
+ *   منها مُبرَزةٌ بزرّها، وتختفي القائمةُ كلُّها حين تكتمل.
+ */
+function SetupSteps({ setup, botEnabled }: { setup: Overview['setup']; botEnabled: boolean }) {
+  const steps = [
+    { done: setup.channel, t: 'اربط واتساب', s: 'بلا قناةٍ لا تصل رسالةٌ واحدة إلى بوتك.', href: '/app/channels', cta: 'اربط' },
+    { done: setup.knowledgeChars > 0, t: 'اكتب ما يعرفه بوتك', s: 'الأسعار والدوام والخدمات. بلا معرفةٍ يجيب «لا أعرف» أو يخمّن.', href: '/app/bot?tab=kb', cta: 'اكتب' },
+    { done: setup.tested, t: 'جرّب بوتك', s: 'اسأله كما يسأل زبون، قبل أن يراه أحد.', href: '/app/playground', cta: 'جرّب' },
+    { done: setup.published && botEnabled, t: 'شغّله', s: 'انشر نسختك وشغّل البوت ليردّ على زبائنك.', href: '/app/bot', cta: 'شغّل' },
+  ];
+  const doneN = steps.filter((x) => x.done).length;
+  if (doneN === steps.length) return null;
+  const nextI = steps.findIndex((x) => !x.done);
+  return (
+    <section className="setup" aria-label="تجهيز البوت">
+      <div className="setup-h">
+        <h2>جهّز بوتك</h2>
+        <span className="muted-p"><span className="num">{doneN}</span> من <span className="num">{steps.length}</span> خطوات</span>
+      </div>
+      <Meter pct={doneN / steps.length} tone="ok" />
+      <ol className="setup-steps">
+        {steps.map((x, i) => (
+          <li key={x.t} className={`setup-step${x.done ? ' done' : ''}${i === nextI ? ' next' : ''}`}>
+            <span className="mk" aria-hidden="true">{x.done ? '✓' : i + 1}</span>
+            <span>
+              <span className="t">{x.t}</span>
+              {!x.done && <span className="s">{x.s}</span>}
+            </span>
+            {!x.done && (
+              <Link className={`btn ${i === nextI ? 'primary' : 'quiet'} sm sc-link`} href={x.href}>{x.cta}</Link>
+            )}
+          </li>
+        ))}
+      </ol>
+    </section>
+  );
+}
+
 export default function HomePage() {
   const { me } = useSession();
   const hasTenant = Boolean(me?.tenant);
@@ -192,6 +234,8 @@ export default function HomePage() {
       />
 
       <Band sev={band.sev} head={band.head} sub={band.sub} />
+
+      <SetupSteps setup={data.setup} botEnabled={data.botEnabled} />
 
       {/* ★ العتبات مكتوبةٌ لا مُستنتَجة — فلا يُفاجأ أحدٌ بفاتورة. والملاحظةُ
           تظهر هنا **فقط** حين يكون الشريطُ مشغولاً بما هو أعجل، فلا يُقرأ

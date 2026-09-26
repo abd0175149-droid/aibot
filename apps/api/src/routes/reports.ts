@@ -120,6 +120,17 @@ export async function registerReports(app: FastifyInstance) {
         .from(tenantChannels).where(eq(tenantChannels.tenantId, tenantId));
 
       const cfg = (await tx.select().from(botConfigs).where(eq(botConfigs.tenantId, tenantId)).limit(1))[0];
+
+      /* ★ حالةُ التجهيز لقائمة الخطوات في الرئيسيّة. نُسك عمل أيّاماً ببوتٍ بلا سطرِ
+         معرفةٍ واحد ولم يقل له شيءٌ ذلك — فالخادمُ يُعلن ما ينقص، والواجهةُ تدلّ عليه. */
+      const [setupRow] = await tx.execute(sql`
+        SELECT
+          coalesce((SELECT length(bv.knowledge_base) FROM bot_versions bv
+                     WHERE bv.id = ${cfg?.publishedVersionId ?? null}::uuid), 0)::int
+          + coalesce((SELECT sum(char_count) FROM knowledge_sources
+                     WHERE tenant_id = ${tenantId} AND status = 'ready'), 0)::int AS knowledge_chars,
+          EXISTS (SELECT 1 FROM ai_runs WHERE tenant_id = ${tenantId} AND source = 'playground') AS tested
+      `) as unknown as Array<{ knowledge_chars: number; tested: boolean }>;
       const sub = (await tx.select({ policy: plans.overagePolicy }).from(subscriptions)
         .innerJoin(plans, eq(plans.id, subscriptions.planId))
         .where(and(eq(subscriptions.tenantId, tenantId), eq(subscriptions.status, 'active')))
@@ -153,6 +164,12 @@ export async function registerReports(app: FastifyInstance) {
            تُسقط «ما حذّرني أحد». */
         quotaAlerts: alerts.map((a) => ({ threshold: a.threshold, firedAt: a.firedAt.toISOString() })),
         channels,
+        setup: {
+          channel: channels.some((c) => c.status === 'connected'),
+          knowledgeChars: Number(setupRow?.knowledge_chars ?? 0),
+          tested: Boolean(setupRow?.tested),
+          published: Boolean(cfg?.publishedVersionId),
+        },
       };
     });
   });

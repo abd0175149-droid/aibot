@@ -483,6 +483,22 @@ export function Note({ tone = 'brand', children }: { tone?: 'brand' | 'warn' | '
   return <div className={`note ${tone}`}>{children}</div>;
 }
 
+/**
+ * ★ الشرحُ المؤجَّل — «؟» صغيرةٌ تفتح سطرين عند الحاجة.
+ *
+ *   كان كلُّ رقمٍ في الواجهة تحته فقرةٌ تعلّل وجوده: قيّمةٌ مرّةً ومُتعِبةٌ كلَّ يوم.
+ *   فالشرحُ يبقى — لكن خلف هذه الـ«؟» لا فوق الرقم. و`details` لا حالةَ فيها ولا
+ *   سكربت: تعمل بالنقر وبلوحة المفاتيح، ويقرؤها قارئُ الشاشة.
+ */
+export function Hint({ children, label = 'اشرح لي' }: { children: ReactNode; label?: string }) {
+  return (
+    <details className="hint">
+      <summary aria-label={label} title={label}>؟</summary>
+      <div className="hint-b">{children}</div>
+    </details>
+  );
+}
+
 export function PageHead({ title, sub, actions }: { title: string; sub?: string; actions?: ReactNode }) {
   return (
     <div className="vh">

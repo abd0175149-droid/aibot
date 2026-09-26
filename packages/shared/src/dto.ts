@@ -73,4 +73,17 @@ export interface OverviewDTO {
   /** عتباتٌ أُنذر بها فعلاً في هذه الدورة (من `quota_alerts`)، تصاعديّاً. */
   quotaAlerts: QuotaAlertDTO[];
   channels: ChannelSummaryDTO[];
+  /** حالةُ التجهيز — تقرؤها قائمةُ الخطوات في الرئيسيّة وتختفي حين تكتمل. */
+  setup: SetupDTO;
+}
+
+export interface SetupDTO {
+  /** قناةٌ واحدةٌ على الأقلّ موصولةٌ وتعمل. */
+  channel: boolean;
+  /** نصُّ المعرفة المنشور + الملفّات الجاهزة، بالحروف. صفرٌ = بوتٌ لا يعرف شيئاً عن النشاط. */
+  knowledgeChars: number;
+  /** جُرّب البوتُ في «جرّب بوتك» مرّةً على الأقلّ. */
+  tested: boolean;
+  /** له نسخةٌ منشورة. */
+  published: boolean;
 }
