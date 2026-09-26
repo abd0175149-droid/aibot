@@ -1,5 +1,5 @@
 import {
-  getDb, withTenant, conversations, conversationWindows, messages, tenantChannels,
+  getDb, withTenant, conversations, contacts, conversationWindows, messages, tenantChannels,
   channelIdentities, subscriptions, plans, tenants, eq, and, isNull, sql, desc,
 } from '@aibot/db';
 import { getAdapter, degradeChoices, canRender, type ChannelKind } from '@aibot/channels';
@@ -83,6 +83,26 @@ export class TenantBlockedError extends Error {
 }
 
 /**
+ * ★★★ **الزبونُ عدل أو حُجب — ولا شيءَ يخرج إليه.**
+ *
+ *   هذه البوّابةُ الأخيرة، وهي التي لا التفافَ عليها: البوتُ من الردّ،
+ *   والموظّفُ من الإنبوكس، والقالبُ من أيّ مسارٍ — كلُّها تمرّ من هنا. وكانت
+ *   الحقولُ في المخطَّط ولا يقرؤها موضعٌ واحد، فمن ضُبط له `opted_out_at`
+ *   بيدٍ ما في القاعدة كان يُراسَل كأنّه لم يُضبط.
+ *
+ *   وصنفٌ خاصّ: `safeSend` تُصنّف، وما يقع في الفرع العامّ يُرفَع حادثةً حرجةً
+ *   ويُعاد. والعدولُ ليس فشلاً ولا يُصلحه تكرار.
+ */
+export class ContactOptedOutError extends Error {
+  readonly code = 'CONTACT_OPTED_OUT';
+  constructor(public readonly why: 'blocked' | 'opted_out') {
+    super(why === 'blocked'
+      ? 'هذا الرقمُ محجوبٌ من حسابكم — لا يُرسَل إليه'
+      : 'الزبون طلب إيقاف المراسلة — لا يُرسَل إليه حتّى يعود');
+  }
+}
+
+/**
  * يُعلّم الصفَّ المحجوز فاشلاً ويبثّ الحالة — فيرى الموظّف ما لم يصل.
  * ويُبتلع خطؤه: فشلُ تعليم الفشل لا يجوز أن يُخفي الفشل الأصليّ.
  */
@@ -117,7 +137,9 @@ export async function sendOutbound(job: SendJob): Promise<{ messageId: string; e
         ? new Error('بلغ الحساب سقف الباقة — لم تُرسَل')
         : e instanceof TenantBlockedError
           ? new Error('حسابك موقوف — لم تُرسَل. تواصل معنا لرفع الإيقاف.')
-          : e);
+          : e instanceof ContactOptedOutError
+            ? new Error(e.message)
+            : e);
     throw e;
   }
 }
@@ -130,11 +152,13 @@ async function sendOutboundInner(job: SendJob): Promise<{ messageId: string; ext
       .select({
         conv: conversations, ch: tenantChannels, ident: channelIdentities,
         tenantStatus: tenants.status,
+        optedOutAt: contacts.optedOutAt, blockedAt: contacts.blockedAt,
       })
       .from(conversations)
       .innerJoin(tenantChannels, eq(tenantChannels.id, conversations.channelId))
       .innerJoin(channelIdentities, eq(channelIdentities.id, conversations.identityId))
       .innerJoin(tenants, eq(tenants.id, conversations.tenantId))
+      .leftJoin(contacts, eq(contacts.id, conversations.contactId))
       .where(eq(conversations.id, job.conversationId))
       .limit(1);
     if (!rows[0]) throw new Error('محادثةٌ غير موجودة');
@@ -155,6 +179,10 @@ async function sendOutboundInner(job: SendJob): Promise<{ messageId: string; ext
      ولا استثناءَ لمصدرٍ ولا لدور: بوتٌ نُشر قبل الإيقاف، أو موظّفٌ يكتب من
      الإنبوكس، كلاهما يُرسل باسم عميلٍ أُوقف حسابُه وعلى حساب المنصّة. */
   if (tenantBlocked(ctx.tenantStatus)) throw new TenantBlockedError();
+
+  /* ⓪ب الزبونُ نفسُه — بعد الحساب وقبل النافذة. */
+  if (ctx.blockedAt) throw new ContactOptedOutError('blocked');
+  if (ctx.optedOutAt) throw new ContactOptedOutError('opted_out');
 
   /* ① حارس النافذة — لا التفاف، ولا استثناء لمصدرٍ ولا لدور. */
   const now = Date.now();

@@ -1,7 +1,8 @@
 import {
-  getDb, withTenant, contacts, channelIdentities, conversations, messages,
+  getDb, withTenant, contacts, optouts, channelIdentities, conversations, messages,
   conversationWindows, tenantChannels, eq, and, isNull, sql,
 } from '@aibot/db';
+import { detectOptOut, detectOptIn } from '@aibot/core';
 import { emitToTenant } from './events.js';
 import { capabilitiesFor, type ChannelKind, type ParsedWebhook } from '@aibot/channels';
 import { typeLabel } from '@aibot/shared';
@@ -77,6 +78,39 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
 
       if (inserted.length === 0) continue; // مكرَّرة — لا نافذة تُمدَّد ولا ردّ يُجدوَل
 
+      /* ★★★ ③ب **العدولُ والحجب — وكانت الحقولُ موجودةً ولا يقرؤها أحد.**
+         `opted_out_at` و`blocked_at` في المخطَّط منذ اليوم الأوّل، وصفحةُ
+         الخصوصيّة تَعِد باحترامهما، ولا سطرَ في خطّ الأنابيب كان يسأل عنهما.
+         فزبونٌ كتب «توقف» حصل على ردٍّ ودّيٍّ من النموذج، ثمّ آخر.
+
+         والرسالةُ **تُحفظ** في الحالتَين (أُدرجت أعلاه) وتُبثّ للموظّف أدناه:
+         الكتمُ يمنع الردَّ الآليَّ والنافذةَ، لا الأثرَ. فطلبُ الإيقاف نفسُه
+         دليلٌ يجب أن يبقى. */
+      const [cflags] = await tx
+        .select({ optedOutAt: contacts.optedOutAt, blockedAt: contacts.blockedAt })
+        .from(contacts).where(eq(contacts.id, identity.contactId)).limit(1);
+      let muted = Boolean(cflags?.blockedAt || cflags?.optedOutAt);
+      let optingOut = false;
+
+      if (cflags?.optedOutAt && !cflags?.blockedAt && detectOptIn(m.text)) {
+        /* عودةٌ صريحة: تُرفع وحدَها — الحجبُ قرارُ المالك لا الزبون. */
+        await tx.update(contacts).set({ optedOutAt: null }).where(eq(contacts.id, identity.contactId));
+        await tx.delete(optouts).where(eq(optouts.contactId, identity.contactId));
+        muted = false;
+      } else if (!muted && detectOptOut(m.text)) {
+        /* ⚠️ الحقلُ **وصفُّ `optouts`** معاً: الحقلُ بوّابةٌ سريعةٌ في الإرسال
+           والردّ، والصفُّ سببٌ وتاريخٌ يقرؤهما الدمجُ والتدقيق. والدمجُ ينقل
+           الصفَّ إلى البطاقة الباقية — فبلاه يضيع العدولُ مع أوّل دمج. */
+        await tx.update(contacts).set({ optedOutAt: m.at }).where(eq(contacts.id, identity.contactId));
+        await tx.insert(optouts)
+          .values({ tenantId: job.tenantId, contactId: identity.contactId, reason: `طلبُ الزبون: «${(m.text ?? '').slice(0, 80)}»` })
+          .onConflictDoNothing();
+        /* والموظّفُ يعلم: عدولٌ خبرٌ يُقرأ لا صفٌّ يُكتب. */
+        await tx.update(conversations).set({ needsAttention: true }).where(eq(conversations.id, conv.id));
+        optingOut = true;
+        muted = true;
+      }
+
       /**
        * ★ **التفاعلُ حدثٌ لا رسالة.**
        *
@@ -109,7 +143,8 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
 
       /* ④ النافذة: تُفتح أو تُمدَّد. ولا تُختم هنا —
          الختم عند أوّل صادرٍ داخلها، فرسالةٌ بلا ردٍّ لا تُفوتَر. */
-      await openOrExtendWindow(tx, job, conv.id, identity.contactId, caps.windowHours, m.at);
+      /* ولا نافذةَ لمكتوم: نافذةٌ تُفتح تُفوتَر عند أوّل صادر، ولن يكون صادر. */
+      if (!muted) await openOrExtendWindow(tx, job, conv.id, identity.contactId, caps.windowHours, m.at);
 
       await tx
         .update(conversations)
@@ -144,7 +179,9 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
       emitToTenant(job.tenantId, 'conversation:update', { id: conv.id });
 
       /* ⑤ المحادثةُ تستحقّ ردّاً — والجدولةُ نفسُها بعد الإيداع أدناه. */
-      toReply.add(conv.id);
+      /* ولا ردَّ آليّاً لمكتومٍ ولا لمن عدل للتوّ — والبوّابةُ في `reply.ts`
+         تُعيد الفحصَ بنفسها، فهذه توفيرٌ لا الحارسَ الوحيد. */
+      if (!muted && !optingOut) toReply.add(conv.id);
       sawInbound = true;
     }
 

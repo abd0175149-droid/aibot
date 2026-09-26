@@ -308,6 +308,24 @@ export default function ContactsPage() {
     }
   }, []);
 
+  /* ★ الحجبُ والعدول من البطاقة — كانا موعودَين في صفحة الخصوصيّة بلا زرّ.
+     والفعلُ يُعيد تحميلَ الملفّ والقائمةَ معاً: الحالةُ تظهر في الموضعَين. */
+  const perms = useCan();
+  const [flagBusy, setFlagBusy] = useState<string | null>(null);
+  const setFlag = useCallback(async (id: string, action: 'block' | 'unblock' | 'optout' | 'optin') => {
+    setFlagBusy(action);
+    try {
+      const r = await post<{ message: string }>(`/contacts/${id}/${action}`, {});
+      toast(r.message);
+      await loadDetail(id);
+      reloadAll();
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'تعذّر تنفيذ الطلب.');
+    } finally {
+      setFlagBusy(null);
+    }
+  }, [loadDetail, reloadAll, toast]);
+
   function openDetail(id: string) {
     setOpenId(id);
     setDetail(null);
@@ -663,6 +681,42 @@ export default function ContactsPage() {
           <Stack gap="md">
             <KV>
               <KVRow k="الاسم"><span dir="auto">{nameOf(detail.contact)}</span></KVRow>
+              {/* ★ الحالةُ نصٌّ وشكلٌ لا لونٌ وحده: «محجوب» قرارُ المالك،
+                  و«عدل» قرارُ الزبون — وخلطُهما يجعل موظّفاً يرفع حجباً ظنّه
+                  عدولاً. والزرُّ يقول الفعلَ المعاكس لما هو قائم. */}
+              <KVRow k="المراسلة">
+                <Row gap="sm">
+                  {detail.contact.blockedAt ? (
+                    <Pill tone="crit" label="محجوبٌ من حسابكم" />
+                  ) : detail.contact.optedOutAt ? (
+                    <Pill tone="warn" label="عدل عن المراسلة" />
+                  ) : (
+                    <Pill tone="ok" label="يُراسَل" />
+                  )}
+                  {perms.write && !perms.readOnly && (
+                    <>
+                      {detail.contact.optedOutAt ? (
+                        <Button size="sm" busy={flagBusy === 'optin'} onClick={() => void setFlag(detail.contact.id, 'optin')}>
+                          أعِد الاشتراك
+                        </Button>
+                      ) : !detail.contact.blockedAt && (
+                        <Button size="sm" busy={flagBusy === 'optout'} onClick={() => void setFlag(detail.contact.id, 'optout')}>
+                          سجّل عدولاً
+                        </Button>
+                      )}
+                      {detail.contact.blockedAt ? (
+                        <Button size="sm" busy={flagBusy === 'unblock'} onClick={() => void setFlag(detail.contact.id, 'unblock')}>
+                          ارفع الحجب
+                        </Button>
+                      ) : (
+                        <Button size="sm" variant="danger" busy={flagBusy === 'block'} onClick={() => void setFlag(detail.contact.id, 'block')}>
+                          احجب الرقم
+                        </Button>
+                      )}
+                    </>
+                  )}
+                </Row>
+              </KVRow>
               {detail.contact.phone && (
                 <KVRow k="الرقم"><span className="mono">{detail.contact.phone}</span></KVRow>
               )}

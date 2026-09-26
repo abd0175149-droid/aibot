@@ -4,6 +4,7 @@ import {
   optouts, auditLog, tenantChannels, sql, eq, and, type Tx,
 } from '@aibot/db';
 import { AppError, ErrorCode } from '@aibot/shared';
+import { emitToTenant } from '../realtime.js';
 import { requireAuth, tenantOf, PERMISSIONS } from '../auth.js';
 import { NAME_KEY, TAIL, likePattern, nameMatch, phoneTail } from '../search.js';
 
@@ -1057,6 +1058,85 @@ export async function registerContacts(app: FastifyInstance) {
    * ★ التراجع عن دمج — فعلٌ كاتب، فصلاحيّتُه صلاحيّةُ الدمج نفسها.
    *   (والانتحال قراءةٌ فقط: `requireAuth` يرفضه قبل الوصول هنا.)
    */
+  /**
+   * ★★★ **الحجبُ والعدول — زرّان كانا موعودَين في صفحة الخصوصيّة ولا وجودَ لهما.**
+   *
+   *   المالكُ لم يملك طريقاً لحجب رقمٍ مزعج ولا لتسجيل عدولٍ إلّا حيلةَ الدمج.
+   *   والحقلان في المخطَّط منذ اليوم الأوّل. وهذه الأفعالُ الأربعة تكتبهما،
+   *   ويقرؤهما الواردُ والردُّ والإرسال (`inbound.ts` · `reply.ts` · `outbound.ts`).
+   *
+   *   · **العدول** (`optout`/`optin`) قرارُ **الزبون** يُسجّله الموظّفُ نيابةً — ولذلك
+   *     صفُّ `optouts` بسبب، وتُلغيه العودةُ.
+   *   · **الحجب** (`block`/`unblock`) قرارُ **المالك** — لا يُلغيه زبونٌ بكلمة «اشترك».
+   *
+   * ⚠️ وكلُّ فعلٍ صفٌّ في `audit_log`: «مَن أسكت هذا الرقم ومتى» سؤالٌ يُطرح بعد
+   *    شهرٍ حين يشكو الزبونُ أنّه لا يصله شيء.
+   */
+  const CONTACT_FLAG_ACTIONS = {
+    block:   { patch: () => ({ blockedAt: new Date() }),  action: 'contact.block',   msg: 'حُجب الرقم — لن يخرج إليه شيء' },
+    unblock: { patch: () => ({ blockedAt: null }),        action: 'contact.unblock', msg: 'رُفع الحجب' },
+    optout:  { patch: () => ({ optedOutAt: new Date() }), action: 'contact.optout',  msg: 'سُجّل العدول — لن يخرج إليه شيء' },
+    optin:   { patch: () => ({ optedOutAt: null }),       action: 'contact.optin',   msg: 'أُعيد الاشتراك' },
+  } as const;
+  type FlagAction = keyof typeof CONTACT_FLAG_ACTIONS;
+
+  app.post<{ Params: { id: string; action: string } }>(
+    '/contacts/:id/:action',
+    /* أيُّ مستخدمِ مستأجرٍ مصادَق: الأدوارُ الثلاثة تملك `write` في
+       `PERMISSIONS`، والموظّفُ هو من يقرأ «توقف» في الإنبوكس ويسجّله. */
+    { preHandler: requireAuth() },
+    async (req) => {
+      const tenantId = tenantOf(req);
+      const id = req.params.id;
+      if (!isUuid(id)) throw new AppError(ErrorCode.VALIDATION, 'معرّفٌ غير صالح', 400);
+      /* المعاملُ نصٌّ حرٌّ في وقت التشغيل مهما قال النوع — يُقيَّد صراحةً. */
+      if (!(req.params.action in CONTACT_FLAG_ACTIONS)) {
+        throw new AppError(ErrorCode.VALIDATION, 'فعلٌ غيرُ معروف', 400);
+      }
+      const act = CONTACT_FLAG_ACTIONS[req.params.action as FlagAction];
+
+      const out = await withTenant(getDb(), tenantId, async (tx) => {
+        const [before] = await tx
+          .select({ id: contacts.id, optedOutAt: contacts.optedOutAt, blockedAt: contacts.blockedAt })
+          .from(contacts).where(eq(contacts.id, id)).limit(1);
+        if (!before) throw new AppError(ErrorCode.VALIDATION, 'لا جهةَ بهذا المعرّف', 404);
+
+        await tx.update(contacts).set(act.patch()).where(eq(contacts.id, id));
+
+        if (req.params.action === 'optout') {
+          await tx.insert(optouts)
+            .values({ tenantId, contactId: id, reason: 'سجّله موظّفٌ من بطاقة الجهة' })
+            .onConflictDoNothing();
+        } else if (req.params.action === 'optin') {
+          await tx.delete(optouts).where(eq(optouts.contactId, id));
+        }
+
+        await tx.insert(auditLog).values({
+          tenantId,
+          actorUserId: req.auth!.sub,
+          action: act.action,
+          entity: 'contact',
+          entityId: id,
+          diff: { was: { optedOutAt: before.optedOutAt, blockedAt: before.blockedAt } },
+          ip: req.ip ?? null,
+        });
+
+        const [after] = await tx
+          .select({ optedOutAt: contacts.optedOutAt, blockedAt: contacts.blockedAt })
+          .from(contacts).where(eq(contacts.id, id)).limit(1);
+        return after!;
+      });
+
+      /* بثٌّ **بعد** الإيداع، ولكلّ محادثةٍ للجهة: الإنبوكسُ المفتوح يرى
+         الحالةَ تتبدّل بلا تحديث. */
+      const convs = await withTenant(getDb(), tenantId, (tx) =>
+        tx.select({ id: conversations.id }).from(conversations).where(eq(conversations.contactId, id)));
+      for (const c of convs) emitToTenant(tenantId, 'conversation:update', { id: c.id });
+
+      return { ok: true, message: act.msg, ...out };
+    },
+  );
+
   app.post<{ Body: { auditId?: string } }>(
     '/contacts/merge-undo',
     { preHandler: requireAuth({ settings: true }) },

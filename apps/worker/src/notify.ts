@@ -340,3 +340,49 @@ export async function checkKeyCoverage(): Promise<{
 
   return { ok: false, configured, missing };
 }
+
+/**
+ * ★★★ **إشعارُ التحويل — وكان النظامُ يَعِد الزبونَ ثمّ يسكت.**
+ *
+ *   كلُّ مسارات التحويل (طلبُ موظّف · شكوى · فشلٌ بعد تأكيد · سقفٌ · عجز)
+ *   تنتهي إلى `needsAttention = true` وبثٍّ لحظيٍّ **لمن يفتح الإنبوكس الآن**.
+ *   لا دفعةٌ لأحد، ولا بريد، ولا تجميعة. فالنظام يقول للزبون «حوّلتك لموظّف
+ *   ورح يتواصل معك» ثمّ يُسكت البوتَ نصفَ ساعة — وإن لم يكن موظّفٌ يحدّق في
+ *   الشاشة تلك اللحظة، انتظر الزبونُ من لا يعلم به.
+ *
+ *   ★ ويُبلَّغ فريقُ المستأجر النشِطُ كلُّه (المالكُ والموظّفون) لا واحدٌ: لا
+ *     تعيينَ في هذا النظام، وأوّلُ من يفتح يتولّى. و`handleNotify` بوسمٍ لكلّ
+ *     محادثةٍ تجعل الإشعارَ **واحداً حيّاً** يُحدَّث ولا يتكرّر: ستّةُ أسبابٍ
+ *     متتاليةٍ على المحادثة نفسِها إشعارٌ واحد.
+ *
+ * ⚠️ ويُنادى **بعد الإيداع** وخارج أيّ معاملة: يدفع عبر الشبكة.
+ */
+export async function notifyHandoff(tenantId: string, conversationId: string, reason: string): Promise<number> {
+  const db = getDb();
+  const staff = await withPlatform(db, 'تحويل: فريقُ المستأجر النشِط', (tx) =>
+    tx.select({ id: users.id }).from(users).where(and(
+      eq(users.tenantId, tenantId),
+      eq(users.isActive, true),
+      inArray(users.role, ['tenant_owner', 'tenant_agent']),
+    )));
+  if (!staff.length) {
+    /* مستأجرٌ بلا موظّفٍ نشِط: الخبرُ لمالك المنصّة، وإلّا ضاع في الصمت نفسِه. */
+    console.error(JSON.stringify({
+      level: 'error', svc: 'worker', msg: 'تحويلٌ إلى موظّفٍ في مستأجرٍ بلا فريقٍ نشِط',
+      tenantId, conversationId, reason,
+    }));
+    return 0;
+  }
+  await Promise.all(staff.map((u) => handleNotify({
+    userId: u.id,
+    tenantId,
+    tag: `attention:${conversationId}`,
+    title: 'زبونٌ ينتظر موظّفاً',
+    body: reason,
+    url: `/app/inbox?c=${conversationId}`,
+    severity: 'warn',
+  }).catch((e) => {
+    console.error(JSON.stringify({ level: 'error', svc: 'worker', msg: 'فشل إشعارُ موظّف', userId: u.id, err: String(e) }));
+  })));
+  return staff.length;
+}

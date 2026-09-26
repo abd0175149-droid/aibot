@@ -13,12 +13,14 @@ import { getProvider, computeCost, DEFAULT_CHAT_MODEL, AiError, type ToolCall } 
 import { mediaPlaceholder, QUOTA_BLOCKED_MSG, type OutboundMessage } from '@aibot/shared';
 import {
   sendOutbound, checkQuota, WindowClosedError, QuotaExceededError, TenantBlockedError,
+  ContactOptedOutError,
 } from './outbound.js';
 import { RagKnowledge } from './retrieval.js';
 import { execTenantTool } from './tools.js';
 import { raiseIncident, resolveOpenOfKinds } from './incidents.js';
 import { resolveAiKey, priceAt } from './pricing.js';
 import { acquireConvLock, releaseConvLock, scheduleFollowUp } from './enqueue.js';
+import { notifyHandoff } from './notify.js';
 
 /**
  * عامل الردّ.
@@ -191,6 +193,11 @@ interface ModelCtx {
 }
 
   let plan: SendPlan | null = null;
+  /* ★★★ **التحويلُ إلى موظّفٍ كان صامتاً.** ستّةُ مواضعَ تكتب
+     `needsAttention = true` وتقول للزبون «حوّلتك لموظّف» — ولا واحدٌ منها
+     يُخبر موظّفاً. البثُّ اللحظيُّ يصل من يحدّق في الإنبوكس تلك اللحظة وحده.
+     فالسببُ يُلتقط هنا من أيّ موضعٍ، ويُبلَّغ **مرّةً** بعد الإيداع. */
+  let attention: string | null = null;
   try {
   /* ── ① طورُ القراءة والقرار: معاملةٌ **بلا أيّ نداءِ شبكة** ── */
   const prep: Prep = await withTenant(db, tenantId, async (tx): Promise<Prep> => {
@@ -203,6 +210,14 @@ interface ModelCtx {
     if (!cfg?.enabled) return { step: 'stop' };                                   // البوت مطفأ عامّاً
     if (!conv.botEnabled) return { step: 'stop' };                                 // مطفأ لهذه المحادثة
     if (conv.botPausedUntil && conv.botPausedUntil > new Date()) return { step: 'stop' }; // موظّفٌ تولّاها
+
+    /* ★★ الزبونُ عدل أو المالكُ حجب: لا ردَّ آليّاً ولو فُتحت نافذة. البوّابةُ
+       نفسُها في الوارد (يمنع الجدولة) وفي الإرسال (يرفض الخروج) — ثلاثةُ
+       مواضعَ عمداً: متابعةٌ مؤجَّلة أو مسحٌ دوريّ قد يصل هنا دون الوارد. */
+    const [cflags] = await tx
+      .select({ optedOutAt: contacts.optedOutAt, blockedAt: contacts.blockedAt })
+      .from(contacts).where(eq(contacts.id, conv.contactId)).limit(1);
+    if (cflags?.optedOutAt || cflags?.blockedAt) return { step: 'stop' };
 
     const verRows = cfg.publishedVersionId
       ? await tx.select().from(botVersions).where(eq(botVersions.id, cfg.publishedVersionId)).limit(1)
@@ -387,6 +402,7 @@ interface ModelCtx {
       await tx.update(conversations)
         .set({ needsAttention: true })
         .where(eq(conversations.id, conv.id));
+      attention = 'بلغ الحسابُ سقفَ الباقة — البوت متوقّف';
       return gate.policy === 'handoff_only' && cfg.failMessage
         ? {
           step: 'plan' as const,
@@ -575,6 +591,7 @@ interface ModelCtx {
          نصدُق معه ونحوّله لموظّف — ونوسم المحادثة فلا تضيع. */
       await withTenant(db, tenantId, (tx) => tx.update(conversations)
         .set({ needsAttention: true }).where(eq(conversations.id, X.convId)));
+      attention = `تعذّر تنفيذ «${titleAr}» بعد تأكيد الزبون`;
       plan = {
         conversationId: X.convId,
         sends: [{ source: 'system', message: { kind: 'text', body: `تعذّر تسجيل «${titleAr}» حالياً لخلل تقني. حوّلتك لموظّف ورح يتواصل معك.` } }],
@@ -657,10 +674,12 @@ interface ModelCtx {
       .where(eq(conversationWindows.id, win[0]!.id));
 
     if (result.flags.handoff) {
+      attention = 'طلب الزبونُ موظّفاً';
       await tx.update(conversations)
         .set({ needsAttention: true, botPausedUntil: new Date(Date.now() + cfg.pauseMinutes * 60_000) })
         .where(eq(conversations.id, conv.id));
     } else if (result.flags.usedFallback || result.flags.unknown) {
+      attention = 'البوت لم يعرف الجواب';
       /* ★ **العجزُ يُرفَع إلى الموظّف — والوعدُ كان فارغاً.**
          نصُّ العجز الافتراضيّ يقول للزبون «بحوّلك لموظّف»، ولم يكن يحوّل:
          لا `needsAttention` ولا شيءٌ في أيّ شاشة. فالزبون ينتظر تحويلاً
@@ -748,6 +767,7 @@ interface ModelCtx {
         await tx.update(conversations)
           .set({ needsAttention: true })
           .where(eq(conversations.id, job.conversationId));
+        attention = 'خطأٌ دائمٌ من مزوّد النموذج — البوت لا يجيب';
         const cfgRow = (await tx.select({ msg: botConfigs.failMessage }).from(botConfigs)
           .where(eq(botConfigs.tenantId, tenantId)).limit(1))[0];
         const body = cfgRow?.msg?.trim()
@@ -792,6 +812,16 @@ interface ModelCtx {
       // بصمةٌ بالنموذج: حادثةٌ واحدة لكلّ نموذجٍ لا واحدة لكلّ ردّ
       causeKey: `${u.provider}:${u.model}`,
     }).catch(() => undefined);
+  }
+
+  /* الإبلاغُ **قبل** `if (!plan) return`: سقفٌ بلا رسالةِ فشلٍ يوسم المحادثةَ
+     ويُنهي بلا خطّة — والموظّفُ يجب أن يعلم في هذه الحالة تحديداً. */
+  if (attention) {
+    await notifyHandoff(tenantId, job.conversationId, attention).catch((e) => {
+      console.error(JSON.stringify({
+        level: 'error', svc: 'worker', msg: 'فشل إشعارُ التحويل', conversationId: job.conversationId, err: String(e),
+      }));
+    });
   }
 
   if (!plan) return;
@@ -869,6 +899,8 @@ async function safeSend(job: Parameters<typeof sendOutbound>[0]): Promise<void> 
        ما زال يعمل على نوافذَ مفتوحة، ويُعاد المحاولة أسّيّاً — ضجيجٌ يُغرق
        سيلَ الحوادث في اللحظة التي تكون فيها المنصّةُ قد أوقفت الحسابَ قصداً. */
     if (e instanceof TenantBlockedError) return;
+    /* العدولُ ليس فشلاً ولا يُصلحه تكرارٌ ولا يستحقّ حادثة — الرسالةُ عُلّمت. */
+    if (e instanceof ContactOptedOutError) return;
     if (e instanceof QuotaExceededError) {
       await raiseIncident({
         tenantId: job.tenantId, kind: 'quota_exceeded', severity: 'warn',
