@@ -99,8 +99,8 @@ describe('★★★ دورةُ حياة العميل — انتقالاتٌ مس
 
   it('★ ولوحةُ الهامش تعرض كلَّ من ليس مؤرشَفاً، والجدولُ يُظهر المؤرشَفين عند الطلب', () => {
     const usage = con.indexOf("'/console/usage'");
-    expect(con.slice(usage, usage + 1600)).toContain("WHERE t.status <> 'archived'");
-    expect(con.slice(usage, usage + 1600)).not.toContain("WHERE t.status = 'active'");
+    expect(con.slice(usage, usage + 3200)).toContain("WHERE t.status <> 'archived'");
+    expect(con.slice(usage, usage + 3200)).not.toContain("WHERE t.status = 'active'");
     expect(con).toContain("const includeArchived = req.query.archived === '1';");
     expect(con).toContain("WHERE ${includeArchived ? sql`true` : sql`t.status <> 'archived'`}");
   });

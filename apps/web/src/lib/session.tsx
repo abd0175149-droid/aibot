@@ -12,7 +12,13 @@ export type Me = MeDTO;
 interface Ctx {
   me: Me | null;
   loading: boolean;
-  reload: () => Promise<void>;
+  /**
+   * `keepToken`: اقرأ `/me` بالتوكن الذي في الذاكرة **بلا** استئنافٍ من الكوكي.
+   * ★ بدءُ الانتحال يضع توكنَه ثمّ يُعيد قراءة الجلسة — والاستئنافُ من كوكي
+   *   التحديث يوقّع توكنَ **المالك نفسه** فيمحو توكنَ الانتحال، فتعود القشرةُ
+   *   إلى اللوحة و`/app/*` يردّ ٤٠٣ (رُئي حيّاً في المتصفّح، ٢٦ أيلول).
+   */
+  reload: (opts?: { keepToken?: boolean }) => Promise<void>;
 }
 
 const SessionCtx = createContext<Ctx>({ me: null, loading: true, reload: async () => {} });
@@ -34,10 +40,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   useEffect(() => watchExpired(() => setExpired(true)), []);
   useEffect(() => watchResumed(() => setExpired(false)), []);
 
-  const load = async () => {
+  const load = async (opts?: { keepToken?: boolean }) => {
     try {
       // الجلسة تُستأنف من كوكي التحديث — لا توكن في التخزين المحلّيّ
-      if (await bootstrap()) setMe(await get<Me>('/me'));
+      if (opts?.keepToken || await bootstrap()) setMe(await get<Me>('/me'));
       else setMe(null);
     } catch {
       setMe(null);

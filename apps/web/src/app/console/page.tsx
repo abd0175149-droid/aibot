@@ -301,7 +301,9 @@ export default function TenantsPage() {
       const out = await post<{ access: string; notice: string }>(`/console/tenants/${r.id}/impersonate`);
       setToken(out.access);
       resetSocket();
-      await reloadSession();
+      /* ★ `keepToken`: بلاه يستأنف القارئُ الجلسةَ من الكوكي فيمحو توكنَ الانتحال
+         بتوكن المالك — وتعود الشاشةُ إلى اللوحة (رُئي حيّاً). */
+      await reloadSession({ keepToken: true });
       router.replace('/app/inbox');
     } catch (e) {
       toast(e instanceof ApiError ? e.message : 'تعذّر بدءُ الانتحال. أعِد المحاولة.');

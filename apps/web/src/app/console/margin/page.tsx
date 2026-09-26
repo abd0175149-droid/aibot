@@ -8,6 +8,7 @@ import {
 } from '@/components/ui';
 import { Bar } from '../parts';
 import { Hero, MetricRow, Delta, Section } from '@/components/screen';
+import { arCount, CLIENTS } from '@/lib/plural';
 
 /**
  * لوحة الهامش — إيرادٌ مقابل كلفة، لكلّ عميلٍ ولكلّ شهر.
@@ -390,7 +391,7 @@ export default function MarginPage() {
                 title="سطراً سطراً"
                 sub={(
                   <>
-                    <span className="num">{fmt.num(rows.length)}</span> عميلاً — أسوأُ فرقٍ
+                    {arCount(rows.length, CLIENTS)} — أسوأُ فرقٍ
                     (إيراد − كلفة) أوّلاً
                   </>
                 )}

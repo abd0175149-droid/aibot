@@ -6,6 +6,7 @@ import { Dock } from '@/components/ui';
 import { useApi } from '@/lib/useApi';
 import { useSession } from '@/lib/session';
 import { MfaEnroll } from '@/components/MfaEnroll';
+import { arCount, INCIDENT_OPEN } from '@/lib/plural';
 
 const NAV: NavItem[] = [
   { href: '/console', label: 'العملاء', icon: '▦', needs: 'console' },
@@ -49,7 +50,7 @@ export default function ConsoleLayout({ children }: { children: ReactNode }) {
     ? <div className="cl-foot bad">تعذّر جلب الحوادث — العدّاد غير معروف</div>
     : !inc.data
       ? <div className="cl-foot muted">…يُجلب عدّاد الحوادث</div>
-      : <div className="cl-foot">{n >= FETCH_CAP ? `+${FETCH_CAP}` : n} حادثة مفتوحة</div>;
+      : <div className="cl-foot">{n >= FETCH_CAP ? `+${FETCH_CAP} حادثةً مفتوحة` : arCount(n, INCIDENT_OPEN)}</div>;
 
   /* والحالتان تُفرَّقان: «سجِّل» لمن لم يُسجّل، و«ادخل من جديد» لمن سجَّل
      وتوكنُه لم يخطُ الخطوةَ الثانية. وجمعُهما يقول لمن سجَّل «سجِّل». */

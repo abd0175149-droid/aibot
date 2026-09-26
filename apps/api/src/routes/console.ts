@@ -490,25 +490,37 @@ export async function registerConsole(app: FastifyInstance) {
     const period = asked ?? billingPeriod(new Date(), DEFAULT_TZ);
     return withPlatform(db, 'تقرير الهامش الشهريّ', async (tx) => {
       const rows = await tx.execute(sql`
+        -- ★★ كلُّ جدولٍ في استعلامٍ فرعيٍّ خاصّ لا ضمّان متتاليان: ضمُّ النوافذ ثمّ
+        --   الأشواط في GROUP BY واحدٍ يُكرّر كلَّ نافذةٍ بعدد الأشواط — فكانت كلفةُ
+        --   نُسك ‎$0.03 تُعرض ‎$0.53 (×18 شوطاً) والنوافذُ ×18 كذلك. رُئي حيّاً حين
+        --   خالفت لوحةُ الهامش جدولَ العملاء على الرقم نفسِه (٢٦ أيلول).
         SELECT t.id, t.name,
                p.name                                   AS plan,
                p.price_monthly::float                   AS revenue,
-               coalesce(sum(w.ai_cost_usd), 0)::float   AS "aiCost",
-               count(w.id) FILTER (WHERE w.billed_at IS NOT NULL)::int AS windows,
-               coalesce(avg(r.total_tokens), 0)::int    AS "avgTokensPerReply"
+               coalesce(w.cost, 0)::float               AS "aiCost",
+               coalesce(w.billed, 0)::int               AS windows,
+               coalesce(r.avg_tokens, 0)::int           AS "avgTokensPerReply"
           FROM tenants t
           LEFT JOIN subscriptions s ON s.tenant_id = t.id AND s.status = 'active'
           LEFT JOIN plans p ON p.id = s.plan_id
-          LEFT JOIN conversation_windows w ON w.tenant_id = t.id
-                             AND w.billing_period = coalesce(${asked}::text, to_char(now() AT TIME ZONE t.timezone, 'YYYY-MM'))
-          LEFT JOIN ai_runs r ON r.tenant_id = t.id
-                             AND to_char(r.created_at AT TIME ZONE t.timezone, 'YYYY-MM')
-                               = coalesce(${asked}::text, to_char(now() AT TIME ZONE t.timezone, 'YYYY-MM'))
+          LEFT JOIN LATERAL (
+            SELECT sum(ai_cost_usd) AS cost,
+                   count(*) FILTER (WHERE billed_at IS NOT NULL) AS billed
+              FROM conversation_windows
+             WHERE tenant_id = t.id
+               AND billing_period = coalesce(${asked}::text, to_char(now() AT TIME ZONE t.timezone, 'YYYY-MM'))
+          ) w ON true
+          LEFT JOIN LATERAL (
+            SELECT avg(total_tokens) AS avg_tokens
+              FROM ai_runs
+             WHERE tenant_id = t.id AND source = 'live'
+               AND to_char(created_at AT TIME ZONE t.timezone, 'YYYY-MM')
+                 = coalesce(${asked}::text, to_char(now() AT TIME ZONE t.timezone, 'YYYY-MM'))
+          ) r ON true
          -- ★ كان «= 'active'» — ولا عميلَ يصير active من المعالج، فخلت اللوحةُ من
          --   كلّ من أُنشئ منه. التجريبيُّ والموقوفُ يكلّفان أيضاً؛ المؤرشَفُ وحده خارجها.
          WHERE t.status <> 'archived'
-         GROUP BY t.id, t.name, p.name, p.price_monthly
-         ORDER BY (p.price_monthly::float - coalesce(sum(w.ai_cost_usd), 0)::float) ASC
+         ORDER BY (coalesce(p.price_monthly::float, 0) - coalesce(w.cost, 0)::float) ASC
       `);
       return { period, items: rows };
     });

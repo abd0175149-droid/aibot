@@ -155,7 +155,7 @@ describe('★★ القشرة — زرٌّ يبدأ، عدّادٌ يخرج، ل
     expect(at).toBeGreaterThan(0);
     const body = page.slice(at, at + 900);
     expect(body).toContain('/impersonate`');
-    const order = ['setToken(out.access)', 'resetSocket()', 'await reloadSession()', "router.replace('/app/inbox')"]
+    const order = ['setToken(out.access)', 'resetSocket()', 'await reloadSession({ keepToken: true })', "router.replace('/app/inbox')"]
       .map((k) => body.indexOf(k));
     expect(order.every((x) => x > 0)).toBe(true);
     expect([...order].sort((a, b) => a - b)).toEqual(order);

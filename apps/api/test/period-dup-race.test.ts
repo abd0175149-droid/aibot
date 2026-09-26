@@ -58,7 +58,10 @@ describe('★ دورةُ الفوترة — دالّةٌ واحدةٌ بلا ا�
     const at = con.indexOf("'/console/usage'");
     const body = con.slice(at, at + 2200);
     expect(body).toContain("coalesce(${asked}::text, to_char(now() AT TIME ZONE t.timezone, 'YYYY-MM'))");
-    expect(body).toContain("to_char(r.created_at AT TIME ZONE t.timezone, 'YYYY-MM')");
+    expect(body).toContain("to_char(created_at AT TIME ZONE t.timezone, 'YYYY-MM')");
+    /* ★ ولا ضمّان متتاليان في GROUP BY واحد — كانا يضربان الكلفةَ بعدد الأشواط. */
+    expect(body).toMatch(/LEFT JOIN LATERAL \(\s*SELECT sum\(ai_cost_usd\) AS cost/);
+    expect(body).not.toMatch(/GROUP BY t\.id, t\.name, p\.name, p\.price_monthly/);
     expect(body).not.toContain('toISOString().slice(0, 7)');
   });
 });
