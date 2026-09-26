@@ -648,8 +648,13 @@ export async function registerAuth(app: FastifyInstance) {
     const db = getDb();
     const { user, tenant } = await withPlatform(db, 'قراءة بطاقة المستخدم الحاليّ', async (tx) => {
       const u = (await tx.select().from(users).where(eq(users.id, req.auth!.sub)).limit(1))[0]!;
-      const t = u.tenantId
-        ? (await tx.select().from(tenants).where(eq(tenants.id, u.tenantId)).limit(1))[0]
+      /* ★★★ المستأجرُ من **التوكن** لا من صفّ المستخدم. توكنُ الانتحال يحمل
+         `tid` العميل، وصفُّ مالك المنصّة في `users` بلا `tenant_id` — فكان `/me`
+         يُعيد `tenant: null` لكلّ جلسةِ انتحال، والقشرةُ تقذف من لا مستأجرَ له
+         من `/app` إلى `/console`: الانتحالُ لم يُرسم شاشةَ عميلٍ واحدةً قطّ. */
+      const tid = req.auth!.tid ?? u.tenantId;
+      const t = tid
+        ? (await tx.select().from(tenants).where(eq(tenants.id, tid)).limit(1))[0]
         : null;
       return { user: u, tenant: t };
     });
@@ -666,6 +671,10 @@ export async function registerAuth(app: FastifyInstance) {
       tenant: tenant && { id: tenant.id, name: tenant.name, status: tenant.status, capabilities: tenant.capabilities },
       permissions: PERMISSIONS[user.role],
       impersonating: req.auth!.imp ?? null,
+      /* ★ والأجلُ يُعلَن: القشرةُ تعدّ تنازليّاً وتخرج قبله. وبلاه ينقضي التوكنُ
+         صامتاً، ويُجدَّد من جلسة المالك بلا `imp`، فتصير مساراتُ العميل ٤٠٣
+         تحت لافتةٍ تقول «انتحال نشط». */
+      impersonationExpiresAt: req.auth!.imp ? new Date(req.auth!.exp * 1000).toISOString() : null,
       /* ★ ثلاثُ حالاتٍ لا علَمٌ ثنائيّ: `pending` لم يُسجّل بعد فيُرسَل إلى
          التسجيل، و`stale` سجَّل وهذا التوكنُ لم يخطُ الخطوةَ الثانية فيُرسَل
          إلى الدخول. وجمعُهما في `false` يقول لمن سجَّل «سجِّل» — وهذه أسرعُ

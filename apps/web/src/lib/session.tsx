@@ -14,6 +14,8 @@ export interface Me {
   tenant: { id: string; name: string; status: string; capabilities: Record<string, boolean> } | null;
   permissions: { write: boolean; settings: boolean; billing: boolean; console: boolean };
   impersonating: string | null;
+  /** أجلُ الانتحال (ISO) — القشرةُ تعدّ تنازليّاً وتخرج قبله بقليل. */
+  impersonationExpiresAt: string | null;
   /**
    * ★ حالةُ العامل الثاني — ثلاثٌ لا علَمٌ ثنائيّ.
    *  · `pending` لم يُسجّل بعد ⟶ شاشةُ التسجيل.

@@ -6,6 +6,8 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { useSession } from '@/lib/session';
 import { useVisualViewport } from '@/lib/viewport';
 import { bootstrap, post, setToken } from '@/lib/api';
+import { impRemainingMs, impRemainingLabel, IMP_LEAVE_EARLY_MS, IMP_EXPIRED_QUERY } from '@/lib/imp';
+import { useNow } from '@/lib/useNow';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { PushToggle } from '@/components/PushToggle';
 import { NotifBell } from '@/components/NotifBell';
@@ -68,6 +70,18 @@ export function Shell({
 
   /* ★ مفتاحُ الهروب وإدارةُ التركيز داخل `Sheet` — وهذه كانت النسخةَ الأولى
      من قاعدةٍ نسختها شاشتان ونسيتها ثلاث. */
+
+  /* ★★ العدُّ التنازليُّ للانتحال — وخروجٌ آليٌّ قبل الأجل بقليل.
+     التوكنُ ينقضي بعد ثلاثين دقيقة، وعند أوّل ٤٠١ يُجدَّد من جلستك أنت **بلا
+     `imp`**: فتصير طلباتُ مسارات العميل ٤٠٣ تحت لافتةٍ ما زالت تقول «انتحال
+     نشط». فالقشرةُ تعرف الأجلَ من `/me` وتخرج قبله، ولا ينتظر أحدٌ رسالةَ
+     خطأٍ ليفهم. والساعةُ تدقّ في أثناء الانتحال وحده. */
+  const now = useNow(Boolean(me?.impersonating));
+  const impLeft = impRemainingMs(me?.impersonationExpiresAt, now);
+  useEffect(() => {
+    if (impLeft == null || impLeft > IMP_LEAVE_EARLY_MS) return;
+    void leaveImpersonation(true);
+  }, [impLeft]);
 
   useEffect(() => {
     if (loading) return;
@@ -161,13 +175,15 @@ export function Shell({
    * وإن فشل التجديد فالجلسة نفسها انتهت، والمخرج الصادق هو صفحة الدخول
    * لا شاشةٌ عالقةٌ بزرٍّ لا يفعل شيئاً.
    */
-  async function leaveImpersonation() {
+  async function leaveImpersonation(expired = false) {
     /* ★★ وهذا تغييرُ هويّةٍ أيضاً — وكان تنقّلاً داخل التطبيق وحده.
        فالمقبضُ يبقى منضمّاً إلى غرفة المستأجر المُنتحَل (`t:<id>`) ولا تُشتقّ
        الغرفُ من جديد، وشجرةُ React تحتفظ ببياناته المرسومة. والتحميلُ الكامل
        يمحو الاثنين معاً — وهو نفسُ ما يفعله الخروج سطراً واحداً أعلاه. */
     if (await bootstrap()) {
-      location.replace('/console/tenants');
+      /* ★ `/console` لا `/console/tenants`: الثانية لا وجودَ لها، فكان زرُّ
+         الخروج من الانتحال يهبط على ٤٠٤. والانقضاءُ الآليُّ يُقال في الوِجهة. */
+      location.replace(expired ? `/console?${IMP_EXPIRED_QUERY}` : '/console');
     } else {
       setToken(null);
       location.replace('/login');
@@ -197,9 +213,13 @@ export function Shell({
       {/* ══════ الشاشة: المُمرِّر الوحيد ══════ */}
       <main className={`main${pinned ? ' pinned' : ''}`} ref={mainRef}>
         {me.impersonating && (
+          /* ★ `imp-bar` ملتصقةٌ بأعلى المُمرِّر: كانت تمرّ مع المحتوى، فيقرأ المنتحِلُ
+             «حسابك للقراءة فقط» على زرٍّ في أسفل جدولٍ طويلٍ بلا لافتةٍ في مرمى عينه. */
+          <div className="imp-bar">
           <Note tone="warn">
-            <b>انتحال نشط — قراءةٌ فقط.</b> كلّ فعلٍ كاتبٍ مرفوض، والجلسة 30 دقيقة،
-            والأمر مسجَّلٌ <b>ويراه العميل في سجلّه</b>.
+            <b>انتحال نشط — قراءةٌ فقط.</b> كلّ فعلٍ كاتبٍ مرفوض، والأمر مسجَّلٌ
+            <b> ويراه العميل في سجلّ حسابه</b>. تبقّى{' '}
+            <b><span className="num">{impRemainingLabel(impLeft)}</span></b> ثمّ تعود إلى حسابك من تلقاء نفسك.
             {/* ★ كانت اللافتة تُخبر بالحبس ولا تدلّ على بابٍ للخروج: لا زرّ
                 ولا رابط، فالمخرج الوحيد تسجيل خروجٍ كامل أو انتظار ثلاثين
                 دقيقة. ومن لا يعرف أنّه منتحِل يقرأ «حسابك للقراءة فقط» على
@@ -210,6 +230,7 @@ export function Shell({
               إنهاء الانتحال والعودة لحسابي
             </Button>
           </Note>
+          </div>
         )}
         {children}
       </main>

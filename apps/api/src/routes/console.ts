@@ -7,6 +7,7 @@ import {
 import { AppError, ErrorCode } from '@aibot/shared';
 import { publicId, seal, sha256 } from '@aibot/crypto';
 import { requireAuth, signAccess, hashPassword } from '../auth.js';
+import { isUniqueViolation } from './team.js';
 import { emitToPlatform } from '../realtime.js';
 
 /**
@@ -18,6 +19,18 @@ import { emitToPlatform } from '../realtime.js';
  */
 /** نفسُ حارس `team.ts`: معرّفٌ مشوّهٌ «لا شيءَ بهذا الاسم» لا «عطبٌ عندنا». */
 const UUID_RE = /^[0-9a-f-]{36}$/i;
+
+/**
+ * ★ 23505 على `tenants.slug` أو `users.email` (فريدٌ على المنصّة كلّها) كان
+ *   يُردّ 500 «عطبٌ عندنا» — وهو أكثرُ خطأٍ يقع فيه من يُنشئ عميلاً. والقيدُ
+ *   يُسمّى من `constraint_name` الذي يمرّره postgres.js، فتُقال العلّةُ بعينها.
+ */
+function uniqueMessage(e: unknown): string {
+  const c = String((e as { constraint_name?: unknown }).constraint_name ?? '');
+  if (/slug/.test(c)) return 'هذا المعرّف مستعملٌ لعميلٍ آخر — اختر معرّفاً غيره.';
+  if (/email/.test(c)) return 'بريدُ المالك مستعملٌ على المنصّة سلفاً — لكلّ حسابٍ بريدٌ واحد.';
+  return 'قيمةٌ مكرّرة: المعرّف أو بريد المالك مستعملٌ سلفاً.';
+}
 
 export async function registerConsole(app: FastifyInstance) {
   const owner = requireAuth({ console: true, role: ['platform_owner'] });
@@ -98,21 +111,9 @@ export async function registerConsole(app: FastifyInstance) {
       const ownerHash = await hashPassword(temp);
 
       return withPlatform(db, 'إنشاء مستأجرٍ جديد من لوحة المالك', async (tx) => {
-        const [tenant] = await tx.insert(tenants).values({
-          publicId: publicId(), name: b.name!, slug: b.slug!,
-          status: 'trial', planId: b.planId ?? null,
-        }).returning();
-        /* ولماذا يبقى `planId` على المستأجر رغم الاشتراك: هو ما تقرأه لوحة
-           العملاء في صفٍّ واحدٍ بلا ضمّ. والمصدرُ الحاكم للسقف هو الاشتراك. */
-
-        await tx.insert(users).values({
-          tenantId: tenant!.id, email: b.ownerEmail!.toLowerCase(),
-          passwordHash: ownerHash,
-          name: b.ownerName ?? b.name!, role: 'tenant_owner', mustChangePassword: true,
-        });
-
-        await tx.insert(botConfigs).values({ tenantId: tenant!.id });
-
+        /* ★ الباقةُ تُحلّ **قبل** أيّ إدراج: `planId` مفتاحٌ أجنبيٌّ على صفّ
+           المستأجر، فمعرّفُ باقةٍ خاطئٌ كان يرفع 23503 ويُردّ 500 قبل أن يصل
+           إلى فحص الـ400 الذي كُتب له. */
         /* ★ اشتراكٌ لكلّ عميلٍ يُنشأ — ولا عميلَ بسقفٍ لا نهائيّ.
            العطل الذي وُلد منه هذا: المعالج كان يكتب `planId` على صفّ المستأجر
            ولا يُنشئ صفّ `subscriptions` إطلاقاً، و`checkQuota` ترجع عند غياب
@@ -132,6 +133,27 @@ export async function registerConsole(app: FastifyInstance) {
             400,
           );
         }
+
+        let tenant: typeof tenants.$inferSelect | undefined;
+        try {
+          [tenant] = await tx.insert(tenants).values({
+            publicId: publicId(), name: b.name!, slug: b.slug!,
+            status: 'trial', planId: plan.id,
+          }).returning();
+        /* ولماذا يبقى `planId` على المستأجر رغم الاشتراك: هو ما تقرأه لوحة
+           العملاء في صفٍّ واحدٍ بلا ضمّ. والمصدرُ الحاكم للسقف هو الاشتراك. */
+
+          await tx.insert(users).values({
+            tenantId: tenant!.id, email: b.ownerEmail!.toLowerCase(),
+            passwordHash: ownerHash,
+            name: b.ownerName ?? b.name!, role: 'tenant_owner', mustChangePassword: true,
+          });
+        } catch (e) {
+          if (isUniqueViolation(e)) throw new AppError(ErrorCode.VALIDATION, uniqueMessage(e), 409);
+          throw e;
+        }
+
+        await tx.insert(botConfigs).values({ tenantId: tenant!.id });
 
         /* ⚠️ المدّة سنةٌ لا شهر **عن قصد**: `checkQuota` تختار الاشتراك النشط
            بأبعد `period_end` ولا تقرأ التاريخ إطلاقاً، والتجديد يدويٌّ اليوم
@@ -173,6 +195,7 @@ export async function registerConsole(app: FastifyInstance) {
    * **ويُسجَّل في سجلّ المستأجر نفسه فيراه العميل**. لا انتحالٌ صامت.
    */
   app.post<{ Params: { id: string } }>('/console/tenants/:id/impersonate', { preHandler: owner }, async (req) => {
+    if (!UUID_RE.test(req.params.id)) throw new AppError(ErrorCode.TENANT_NOT_FOUND, 'لا عميلَ بهذا المعرّف', 404);
     const db = getDb();
     return withPlatform(db, 'انتحال قراءةٍ لدعم عميل', async (tx) => {
       const t = (await tx.select().from(tenants).where(eq(tenants.id, req.params.id)).limit(1))[0];
@@ -300,8 +323,14 @@ export async function registerConsole(app: FastifyInstance) {
   /** مفتاح إيقافٍ فوريّ لبوت عميل — الفعل الذي تحتاجه الثالثة فجراً. */
   app.post<{ Params: { id: string } }>('/console/tenants/:id/kill-bot', { preHandler: owner }, async (req) => {
     const db = getDb();
+    if (!UUID_RE.test(req.params.id)) throw new AppError(ErrorCode.TENANT_NOT_FOUND, 'لا عميلَ بهذا المعرّف', 404);
     return withPlatform(db, 'إيقاف بوت عميلٍ فوريّاً', async (tx) => {
-      await tx.update(botConfigs).set({ enabled: false }).where(eq(botConfigs.tenantId, req.params.id));
+      /* ★ `.returning()` لا `void`: معرّفٌ بلا صفٍّ كان يُصيب صفرَ صفوفٍ ويردّ
+         `{ ok: true }` — الشاشةُ تقول «أُوقف» ولا شيء أُوقف، في الفعل الذي
+         يُضغط الثالثةَ فجراً بالذات. */
+      const hit = await tx.update(botConfigs).set({ enabled: false })
+        .where(eq(botConfigs.tenantId, req.params.id)).returning({ tenantId: botConfigs.tenantId });
+      if (!hit.length) throw new AppError(ErrorCode.TENANT_NOT_FOUND, 'لا بوتَ لعميلٍ بهذا المعرّف — ولم يُوقَف شيء', 404);
       await tx.insert(auditLog).values({
         tenantId: req.params.id, actorUserId: req.auth!.sub,
         action: 'tenant.kill_bot', entity: 'tenant', entityId: req.params.id, ip: req.ip,
@@ -325,7 +354,8 @@ export async function registerConsole(app: FastifyInstance) {
           id: incidents.id, kind: incidents.kind, severity: incidents.severity,
           title: incidents.title, status: incidents.status, count: incidents.count,
           firstSeenAt: incidents.firstSeenAt, lastSeenAt: incidents.lastSeenAt,
-          detail: incidents.detail, tenantName: tenants.name,
+          /* ★ المعرّفُ مع الاسم: الاسمُ للعين، والمعرّفُ للطريق إلى ورقة العميل. */
+          detail: incidents.detail, tenantId: incidents.tenantId, tenantName: tenants.name,
         }).from(incidents)
           .leftJoin(tenants, eq(tenants.id, incidents.tenantId))
           .where(and(...where))
@@ -338,6 +368,12 @@ export async function registerConsole(app: FastifyInstance) {
     '/console/incidents/:id/:action',
     { preHandler: owner },
     async (req) => {
+      /* ★ المعاملُ نصٌّ حرٌّ في وقت التشغيل مهما قال النوع: `/incidents/:id/whatever`
+         كان يقع في فرع «غير ack» فيحلّ الحادثةَ بأيّ كلمة. */
+      if (req.params.action !== 'ack' && req.params.action !== 'resolve') {
+        throw new AppError(ErrorCode.VALIDATION, 'فعلٌ غيرُ معروف — ack أو resolve', 400);
+      }
+      if (!UUID_RE.test(req.params.id)) throw new AppError(ErrorCode.VALIDATION, 'لا حادثةَ بهذا المعرّف', 404);
       const db = getDb();
       return withPlatform(db, 'تحديث حالة حادثة', async (tx) => {
         const set = req.params.action === 'ack'

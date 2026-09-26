@@ -5,8 +5,10 @@ import { useApi, useToast, fmt } from '@/lib/useApi';
 /* ★ نفسُ الاسم الذي يراه العميل. ومكالمةُ دعمٍ يقول فيها العميل «يقرأ
    نصّي كاملاً» والموظّفُ أمامه «حقنٌ كامل» تُنتج تشخيصاً لحالةٍ أخرى. */
 import { KB_MODE, kbModeLabel } from '@/lib/terms';
-import { get, post, ApiError } from '@/lib/api';
-import { useCan } from '@/lib/session';
+import { useRouter } from 'next/navigation';
+import { get, post, setToken, ApiError } from '@/lib/api';
+import { useCan, useSession } from '@/lib/session';
+import { resetSocket } from '@/lib/socket';
 import { Onboarding } from '@/components/Onboarding';
 import { ChannelConnectForm } from '@/components/ChannelConnectForm';
 import { BotSeedForm } from '@/components/BotSeedForm';
@@ -81,6 +83,7 @@ interface Incident {
   status: 'open' | 'ack' | 'resolved';
   count: number;
   lastSeenAt: string;
+  tenantId: string | null;
   tenantName: string | null;
 }
 
@@ -167,6 +170,21 @@ export default function TenantsPage() {
   const [resetting, setResetting] = useState(false);
   const [killWord, setKillWord] = useState('');
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
+  const { reload: reloadSession } = useSession();
+  const [impBusy, setImpBusy] = useState(false);
+  /** عدنا من انتحالٍ انقضى أجلُه — يُقال صراحةً، فالعودةُ الصامتة تُقرأ عطلاً. */
+  const [impExpired, setImpExpired] = useState(false);
+
+  /* ★ وِجهةٌ من شاشة الحوادث: `?t=<id>` يفتح ورقةَ العميل مباشرةً. ويُقرأ **بعد**
+     التركيب لا في الرسم — قراءةُ `location` في الرسم تُخالف ما رسمه الخادم
+     فيسقط الترطيب. */
+  useEffect(() => {
+    const qs = new URLSearchParams(window.location.search);
+    const t = qs.get('t');
+    if (t) setOpenId(t);
+    if (qs.get('imp') === 'expired') setImpExpired(true);
+  }, []);
 
   /* ★ مفتاحُ الهروب وإدارةُ التركيز صارا داخل `Sheet` — لا نسخةَ هنا. */
 
@@ -222,6 +240,32 @@ export default function TenantsPage() {
   }
 
   /**
+   * ★★★ **بدءُ الانتحال — المسارُ كان في الـAPI ولا زرَّ له في أيّ شاشة.**
+   *
+   *   ولم يكن الزرُّ وحده الناقص: `/me` كان يشتقّ المستأجرَ من صفّ المستخدم
+   *   (وصفُّ مالك المنصّة بلا tenant_id) لا من التوكن، فكانت القشرةُ تُعيد كلَّ
+   *   جلسةِ انتحالٍ إلى اللوحة قبل أن تُرسم شاشةُ عميلٍ واحدة.
+   *
+   * ⚠️ تنقّلٌ داخل التطبيق لا تحميلٌ كامل — عكسَ الخروج: التوكنُ يعيش في
+   *    الذاكرة وحدها، وتحميلٌ كاملٌ يستأنف من كوكي التحديث توكنَك أنت بلا `imp`.
+   *    فالوصلةُ اللحظيّة تُسقَط بيدنا لتُبنى بالتوكن الجديد (وإلّا بقيت في غرفة
+   *    اللوحة)، وبطاقةُ الجلسة تُعاد قراءتُها قبل الانتقال.
+   */
+  async function impersonate(r: TenantRow) {
+    setImpBusy(true);
+    try {
+      const out = await post<{ access: string; notice: string }>(`/console/tenants/${r.id}/impersonate`);
+      setToken(out.access);
+      resetSocket();
+      await reloadSession();
+      router.replace('/app/inbox');
+    } catch (e) {
+      toast(e instanceof ApiError ? e.message : 'تعذّر بدءُ الانتحال. أعِد المحاولة.');
+      setImpBusy(false);
+    }
+  }
+
+  /**
    * ★ قراءةُ الـCallback URL وتوكن التحقّق لعميلٍ موصولٍ سلفاً.
    *   `verifyToken` مُسقَطٌ عمداً من `GET /channels` ومحجوبٌ في السجلّ، فمعالجٌ
    *   أُغلق قبل خطوته الأخيرة كان يُفقده بلا رجعةٍ إلّا بـ`ssh`.
@@ -242,12 +286,12 @@ export default function TenantsPage() {
     }
   }
 
-  /* الحادثة الأحدث لكلّ عميل. سيل الحوادث يحمل **اسم** المستأجر لا معرّفه،
-     فالوصل بالاسم هو ما يتيحه العقد اليوم — والأحدث أوّلاً فأوّل مطابقةٍ هي
-     الأحدث. وعميلٌ بلا مطابقةٍ يُرسم صراحةً «لا حوادث مفتوحة» لا فراغاً. */
+  /* الحادثة الأحدث لكلّ عميل — بالمعرّف لا بالاسم: عميلان باسمٍ واحد (فرعان)
+     كانا يتقاسمان حادثةً واحدة. والأحدث أوّلاً فأوّل مطابقةٍ هي الأحدث. وعميلٌ
+     بلا مطابقةٍ يُرسم صراحةً «لا حوادث مفتوحة» لا فراغاً. */
   const lastIncident = new Map<string, Incident>();
   for (const inc of incidents.data ?? []) {
-    if (inc.tenantName && !lastIncident.has(inc.tenantName)) lastIncident.set(inc.tenantName, inc);
+    if (inc.tenantId && !lastIncident.has(inc.tenantId)) lastIncident.set(inc.tenantId, inc);
   }
 
   const marginOf = new Map<string, MarginRow>(
@@ -272,6 +316,13 @@ export default function TenantsPage() {
   return (
     <Stack gap="lg">
       {toastNode}
+
+      {impExpired && (
+        <Note tone="warn">
+          <b>انقضت مدّةُ الانتحال (٣٠ دقيقة) وعدتَ إلى حسابك.</b> إن احتجتَ إلى المتابعة فادخل
+          بهويّة العميل من ورقته من جديد — وكلُّ دخولٍ سطرٌ في سجلّ حسابه يراه.
+        </Note>
+      )}
 
       {wizard && (
         <Onboarding
@@ -345,7 +396,7 @@ export default function TenantsPage() {
           const selMargin = sel && selRev != null && selRev > 0 ? (selRev - selCost) / selRev : null;
           const selUsage = sel ? marginOf.get(sel.id) : undefined;
           const selHealth = sel ? HEALTH[sel.channelHealth] ?? HEALTH.none! : null;
-          const selLast = sel ? lastIncident.get(sel.name) : undefined;
+          const selLast = sel ? lastIncident.get(sel.id) : undefined;
           const selLimit = sel ? Number(sel.windowLimit ?? 0) : 0;
           const selUnmeasured = Boolean(
             sel && Number(sel.aiCost ?? 0) === 0 && Number(sel.windowsUsed ?? 0) > 0,
@@ -459,7 +510,7 @@ export default function TenantsPage() {
               head: 'آخر حادثة',
               cell: (r) => {
                 const open = Number(r.openCritical ?? 0);
-                const last = lastIncident.get(r.name);
+                const last = lastIncident.get(r.id);
                 if (incidents.loading && !open) return <span className="tn-dim">جارٍ الجلب…</span>;
                 if (incidents.error && !open) return <Pill tone="warn" label="لم تُحمَّل" />;
                 if (!open && !last) return <span className="tn-dim">لا حوادث مفتوحة</span>;
@@ -717,7 +768,7 @@ export default function TenantsPage() {
                     {Number(sel.openCritical ?? 0) > 0 || selLast ? (
                       <a
                         className="btn primary lg"
-                        href={`/console/incidents?tenant=${encodeURIComponent(sel.name)}`}
+                        href={`/console/incidents?tenant=${sel.id}&name=${encodeURIComponent(sel.name)}`}
                       >
                         حوادثُ هذا العميل ‹
                       </a>
@@ -726,6 +777,10 @@ export default function TenantsPage() {
                         كان مبنيّاً ولا يناديه إلّا معالجُ عميلٍ جديد، فانتهاءُ توكنٍ عند
                         عميلٍ قائم لم يكن له مخرجٌ من اللوحة إطلاقاً. والانتحالُ قراءةٌ فقط
                         عن قصد، فلا يصلح بديلاً. */}
+                    {/* ★ الدخولُ بهويّته — قراءةٌ فقط، ثلاثون دقيقة، وسطرٌ في سجلّ حسابه يراه. */}
+                    <Button size="lg" variant="primary" busy={impBusy} disabled={can.readOnly}
+                      reason="أنت في انتحالٍ نشطٍ أصلاً — أنهِه من اللافتة أوّلاً."
+                      onClick={() => void impersonate(sel)}>ادخل بهويّته — قراءةٌ فقط</Button>
                     <Button size="lg" onClick={() => setConnectFor(sel.id)}>اربط/جدّد القناة…</Button>
                     {/* ★ بذرُ بوتٍ لعميلٍ لم يكتمل معالجُه — `…/bot/seed` كان مبنيّاً
                         ولا يناديه إلّا المعالجُ نفسُه. والشرطُ لا زينة: الخادم يردّ ٤٠٩

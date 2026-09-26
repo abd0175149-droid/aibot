@@ -82,3 +82,21 @@
   line-height: 1.5;
   letter-spacing: .06em;
 }
+
+/* ══ سجلُّ الأفعال: صفٌّ لكلّ فعل — الوقتُ والفاعلُ والفعل، ودخولُ المنصّة موسومٌ بلونه ══ */
+.au-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.au-row {
+  display: grid; grid-template-columns: 9.5em minmax(0, 1fr); gap: 2px 12px; align-items: baseline;
+  padding: 8px 10px; border: 1px solid var(--rule-soft); border-radius: var(--radius);
+  background: var(--surface); font-size: var(--t-body);
+}
+.au-when { color: var(--muted); font-size: var(--t-label); font-variant-numeric: tabular-nums; }
+.au-who { font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.au-what { grid-column: 2; color: var(--ink-2); }
+.au-what.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: var(--t-sm); direction: ltr; text-align: end; }
+.au-row .pill { grid-column: 2; justify-self: start; }
+.au-row.imp { border-color: var(--warn); background: var(--warn-wash); }
+@media (max-width: 560px) {
+  .au-row { grid-template-columns: minmax(0, 1fr); }
+  .au-what, .au-row .pill { grid-column: 1; }
+}

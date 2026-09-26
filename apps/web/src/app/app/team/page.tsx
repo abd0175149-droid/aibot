@@ -6,6 +6,7 @@ import { useApi, useToast, fmt } from '@/lib/useApi';
 import { post, patch, ApiError } from '@/lib/api';
 import { useSession, useCan } from '@/lib/session';
 import { readTeam, daysSince, type TeamRole } from '@/lib/team';
+import { auditLabel, auditActor, auditKnown, isPlatformEntry, type AuditRow } from '@/lib/audit';
 import {
   PageHead, Stack, Row, Pill, Tag, Note, Alert, Meter, Button, Sheet, Table, Empty,
   Skeleton, ErrorBox, KV, KVRow, Field, FormInput, Select, Toggle, CodeBlock,
@@ -109,6 +110,8 @@ export default function TeamPage() {
   const { me } = useSession();
   const { readOnly } = useCan();
   const { data, loading, error, reload } = useApi<Team>('/team');
+  /* ★ سجلُّ الحساب — وعدُ لافتة الانتحال («يراه العميل في سجلّه») يُوفى هنا. */
+  const audit = useApi<{ items: AuditRow[] }>('/audit');
   const { toast, node: toastNode } = useToast();
 
   const [filt, setFilt] = useState<Filt>('all');
@@ -524,6 +527,39 @@ export default function TeamPage() {
         )}
       </Section>
 
+      {/* ★★ سجلُّ الأفعال — الوعدُ الذي كتبته لافتةُ الانتحال وصفحةُ الخصوصيّة
+          («مسجَّلٌ ويراه العميل في سجلّه») ولم يكن له شاشة. وأوّلُ ما يُبحث عنه
+          فيه: هل دخل أحدٌ من فريق المنصّة بهويّتنا ومتى — فتلك الصفوفُ موسومةٌ
+          لا مدفونة. والفاعلُ من المنصّة يُسمّى بفعله لا باسمه: صفُّه لا يُرى هنا. */}
+      <Section
+        title="سجلُّ الأفعال"
+        sub="آخرُ مئةِ فعلٍ على حسابكم بفاعله ووقته — ودخولُ فريق المنصّة بهويّتكم موسومٌ"
+      >
+        {audit.error ? (
+          <Note tone="crit">تعذّر جلبُ السجلّ — {audit.error}</Note>
+        ) : !audit.data ? (
+          <Skeleton rows={4} />
+        ) : !audit.data.items.length ? (
+          <Empty
+            title="لا أفعالَ مسجَّلةً بعد"
+            hint="كلُّ دعوةٍ وتغييرِ دورٍ وتعطيلٍ ونشرِ نسخةٍ — وكلُّ دخولٍ من فريق المنصّة — يظهر هنا لحظةَ وقوعه."
+          />
+        ) : (
+          <ul className="au-list">
+            {audit.data.items.map((r) => (
+              <li key={r.id} className={`au-row${r.action === 'tenant.impersonate' ? ' imp' : ''}`}>
+                <span className="au-when">{fmt.when(r.createdAt)}</span>
+                <span className="au-who" dir="auto">{auditActor(r)}</span>
+                <span className={`au-what${auditKnown(r.action) ? '' : ' mono'}`} dir="auto">{auditLabel(r.action)}</span>
+                {r.action === 'tenant.impersonate'
+                  ? <Pill tone="warn" label="فريق المنصّة — قراءةٌ فقط" />
+                  : isPlatformEntry(r.action) && <Pill tone="neutral" label="فريق المنصّة" />}
+              </li>
+            ))}
+          </ul>
+        )}
+      </Section>
+
       <Fold summary="لماذا لا نرسل بريد الدعوة، وماذا يُسجَّل في سجلّ الأفعال">
         <Note>
           <b>الكلمةُ المؤقّتة تُملى ولا تُرسَل.</b> لا مُرسِلَ بريدٍ في المنصّة، وزرٌّ يقول
@@ -531,7 +567,7 @@ export default function TeamPage() {
           فالكلمةُ تظهر لك مرّةً واحدةً، وتُمليها عليها، ويُجبرها النظام على تغييرها عند أوّل دخول.
         </Note>
         <Note>
-          <b>وكلُّ فعلٍ هنا يُسجَّل باسم فاعله</b> في سجلّ الأفعال: الدعوة وتغييرُ الدور والتعطيل
+          <b>وكلُّ فعلٍ هنا يُسجَّل باسم فاعله</b> في سجلّ الأفعال أعلاه: الدعوة وتغييرُ الدور والتعطيل
           وإعادةُ التعيين. وهذا هو المكسبُ الحقيقيّ من الحسابات المنفصلة — حسابٌ واحدٌ مشترك
           يجعل السجلَّ كلَّه باسمٍ واحدٍ فلا يُجيب عن سؤالٍ واحد.
         </Note>

@@ -136,7 +136,11 @@ describe('تغييرُ الهويّة يبقى تحميلاً صلباً', () =>
     /* `router.replace` يُبقي شجرةَ React وفيها بياناتُ المستأجر، ويُبقي
        المقبضَ منضمّاً إلى غرفته (`t:<id>`) ولا تُشتقّ الغرفُ من جديد.
        وإنهاءُ الانتحال تغييرُ مستأجرٍ في نفس التبويب — أي نفسُ التسريب. */
-    for (const fn of ['async function logout()', 'async function leaveImpersonation()']) {
+    /* والتوقيعُ يحمل `expired` منذ صار الخروجُ من الانتحال آليّاً عند الأجل —
+       والحكمُ نفسُه: تحميلٌ صلبٌ لا تنقّل. (أمّا **بدءُ** الانتحال فتنقّلٌ عن قصد:
+       التوكنُ في الذاكرة يضيع بالتحميل، والوصلةُ تُسقَط بيدنا — يحرسه
+       `impersonation-console.test.ts`.) */
+    for (const fn of ['async function logout()', 'async function leaveImpersonation(expired = false)']) {
       const at = SHELL.indexOf(fn);
       expect(at, fn).toBeGreaterThan(0);
       const body = SHELL.slice(at, SHELL.indexOf('\n  }', at));

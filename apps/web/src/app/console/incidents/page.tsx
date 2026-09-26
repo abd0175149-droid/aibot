@@ -50,6 +50,7 @@ interface Incident {
   firstSeenAt: string;
   lastSeenAt: string;
   detail: Record<string, unknown> | null;
+  tenantId: string | null;
   tenantName: string | null;
 }
 
@@ -179,6 +180,8 @@ export default function IncidentsPage() {
   const [scope, setScope] = useState<Scope>('live');
   const [sev, setSev] = useState<'all' | Incident['severity']>('all');
   const [tenant, setTenant] = useState('all');
+  /** اسمُ العميل القادم في `?name=` — ليُسمّى المرشِّحُ ولو لم تكن له حادثةٌ هنا. */
+  const [tenantHint, setTenantHint] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [picker, setPicker] = useState(false);
   const [shownPer, setShownPer] = useState<Record<string, number>>({});
@@ -196,8 +199,10 @@ export default function IncidentsPage() {
      `location` في الرسم تُخالف ما رسمه الخادم فيسقط الترطيب. ولا علاقةَ لهذا
      بعرض الشاشة: لا `matchMedia` ولا `innerWidth` في الملفّ. */
   useEffect(() => {
-    const t = new URLSearchParams(window.location.search).get('tenant');
+    const qs = new URLSearchParams(window.location.search);
+    const t = qs.get('tenant');
     if (t) setTenant(t);
+    setTenantHint(qs.get('name'));
   }, []);
 
   const all = state.data ?? [];
@@ -209,7 +214,7 @@ export default function IncidentsPage() {
   const byTenant = all.filter((i) => (
     tenant === 'all' ? true
       : tenant === PLATFORM ? !i.tenantName
-        : i.tenantName === tenant
+        : i.tenantId === tenant
   ));
 
   const needle = q.trim().toLowerCase();
@@ -239,26 +244,31 @@ export default function IncidentsPage() {
 
   /** قائمةُ العملاء في المجلوب — ومعها عدُّ حوادث كلٍّ منهم. */
   const tenantOpts = useMemo(() => {
+    /* ★ القيمةُ معرّفٌ والعنوانُ اسم: عميلان باسمٍ واحدٍ كانا مرشِّحاً واحداً،
+       والوِجهةُ من ورقة العميل تحمل معرّفَه لا اسمَه. */
     const counts = new Map<string, number>();
+    const names = new Map<string, string>();
     let platform = 0;
     for (const i of all) {
-      if (i.tenantName) counts.set(i.tenantName, (counts.get(i.tenantName) ?? 0) + 1);
-      else platform += 1;
+      if (i.tenantId) {
+        counts.set(i.tenantId, (counts.get(i.tenantId) ?? 0) + 1);
+        if (i.tenantName) names.set(i.tenantId, i.tenantName);
+      } else platform += 1;
     }
     const opts: Array<{ value: string; label: string; n: number }> = [
       { value: 'all', label: 'كلّ العملاء', n: all.length },
       ...(platform ? [{ value: PLATFORM, label: 'عطل منصّة — بلا عميل', n: platform }] : []),
       ...[...counts.entries()]
-        .sort((a, b) => a[0].localeCompare(b[0], 'ar'))
-        .map(([name, n]) => ({ value: name, label: name, n })),
+        .map(([id, n]) => ({ value: id, label: names.get(id) ?? id, n }))
+        .sort((a, b) => a.label.localeCompare(b.label, 'ar')),
     ];
     /* ★ وِجهةٌ من الخارج قد تسمّي عميلاً لا حادثةَ له في هذه الحالة. فلو غاب
        من القائمة لقُرئ المرشّحُ «كلّ العملاء» وهو ليس كذلك — والمعروضُ صفر. */
     if (tenant !== 'all' && tenant !== PLATFORM && !counts.has(tenant)) {
-      opts.push({ value: tenant, label: tenant, n: 0 });
+      opts.push({ value: tenant, label: tenantHint ?? 'العميلُ المطلوب', n: 0 });
     }
     return opts;
-  }, [all, tenant]);
+  }, [all, tenant, tenantHint]);
 
   const tenantLabel = tenantOpts.find((o) => o.value === tenant)?.label ?? 'كلّ العملاء';
 
@@ -311,7 +321,13 @@ export default function IncidentsPage() {
             {/* اسم العميل يكتبه هو، فيلزمه `dir="auto"` — و`Pill` لا تمرّر
                 اتّجاهاً، فنستعمل صنفها نفسه بلا صنفٍ جديد. */}
             {i.tenantName
-              ? <span className="pill neutral" dir="auto">{i.tenantName}</span>
+              ? (
+                /* ★ من الحادثة إلى العميل طريق: كانت تحمل اسمَه بلا معرّف، وورقتُه
+                   حالةٌ داخليّةٌ بلا رابط — فمن رأى «عطل» لم يملك طريقاً إلى صاحبه. */
+                <a className="pill neutral" dir="auto" href={`/console?t=${i.tenantId ?? ''}`}>
+                  {i.tenantName} ‹
+                </a>
+              )
               : <Pill tone="violet" label="عطل منصّة — بلا عميل" mark={false} />}
             {!done && (
               <Tag

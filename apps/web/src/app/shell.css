@@ -451,3 +451,9 @@
 /* ⚠️ النصُّ يلتفّ ولا يُقصّ: عنوانُ حادثةٍ مقطوعٌ في منتصفه ليس خبراً. */
 .nb-b { font-size: 12.5px; color: var(--ink-2); line-height: 1.5; }
 .nb-w { font-size: 11.5px; color: var(--muted); }
+
+/* ★ لافتةُ الانتحال تلتصق بأعلى المُمرِّر (`.main` هو المُمرِّر لا النافذة):
+   كانت تمرّ مع المحتوى، فيقرأ المنتحِلُ «حسابك للقراءة فقط» على زرٍّ في أسفل
+   جدولٍ طويلٍ ولا لافتةَ في مرمى عينه تقول لماذا. */
+.main > .imp-bar { position: sticky; top: 0; z-index: 6; margin-block-end: 12px; }
+.imp-bar .note { margin-block: 0; box-shadow: 0 8px 20px -14px rgb(0 0 0 / .45); }
