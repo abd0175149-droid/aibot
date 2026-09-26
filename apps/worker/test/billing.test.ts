@@ -7,12 +7,12 @@ import { fingerprintOf } from '../src/incidents.js';
 describe('دورة الفوترة — بتوقيت المستأجر لا UTC', () => {
   it('آخر يومٍ في الشهر بتوقيت عمّان يبقى في شهره', () => {
     // 2026-09-30 23:00 بعمّان = 2026-09-30 20:00Z — نفس الشهر
-    expect(billingPeriod(new Date('2026-09-30T20:00:00Z'))).toBe('2026-09');
+    expect(billingPeriod(new Date('2026-09-30T20:00:00Z'), 'Asia/Amman')).toBe('2026-09');
   });
 
   it('منتصف ليل عمّان يعبر الشهر قبل UTC بثلاث ساعات', () => {
     // 2026-09-30 21:00Z = 2026-10-01 00:00 بعمّان ⟵ الشهر التالي
-    expect(billingPeriod(new Date('2026-09-30T21:00:00Z'))).toBe('2026-10');
+    expect(billingPeriod(new Date('2026-09-30T21:00:00Z'), 'Asia/Amman')).toBe('2026-10');
     // وبـUTC ما زال أيلول — وهذا بالضبط الخطأ الذي يُفوتِر نافذةً على شهرٍ خاطئ
     expect(billingPeriod(new Date('2026-09-30T21:00:00Z'), 'UTC')).toBe('2026-09');
   });

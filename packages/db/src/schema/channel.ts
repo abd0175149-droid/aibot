@@ -137,6 +137,8 @@ export const conversations = pgTable('conversations', {
   uniqueIndex('conv_identity_uq').on(t.tenantId, t.identityId),
   index('conv_recent_idx').on(t.tenantId, t.lastMessageAt),
   index('conv_attn_idx').on(t.tenantId, t.needsAttention),
+  /* ★ كلُّ ما يخصّ جهةً (ورقتُها، دمجُها، حجبُها) يبحث بالجهة — وكان مسحاً كاملاً. */
+  index('conv_contact_idx').on(t.tenantId, t.contactId),
 ]);
 
 export const messages = pgTable('messages', {
@@ -191,6 +193,8 @@ export const conversationWindows = pgTable('conversation_windows', {
 }, (t) => [
   index('windows_period_idx').on(t.tenantId, t.billingPeriod),
   index('windows_expiry_idx').on(t.conversationId, t.expiresAt),
+  /* الدمجُ ينقل نوافذَ الجهة المُمتصّة — بالجهة لا بالمحادثة. */
+  index('windows_contact_idx').on(t.tenantId, t.contactId),
   /**
    * ★ نافذةٌ مفتوحةٌ واحدةٌ لكلّ محادثة — وهو **قيدُ فوترة** لا فهرسُ أداء.
    *   `openOrExtendWindow` تقرأ ثمّ تكتب بلا قفل، فرسالتان متزامنتان على

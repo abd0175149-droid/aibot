@@ -421,6 +421,53 @@ function dupPairs(tenantId: string): Frag {
 }
 
 /**
+ * ★★ مرشَّحو **جهةٍ واحدة** — خطّيٌّ في حجم القاعدة لا تربيعيّ.
+ *
+ *   كانت ورقةُ الجهة تنادي `dupPairs` (كلُّ الأزواج في المستأجر، ضمُّ n×n على
+ *   `similarity`) ثمّ ترشّح بـ`where a = id or b = id`: عملُ الجدول كلِّه يُعاد
+ *   عند فتح كلّ بطاقة. يعمل على مئة جهةٍ ويسقط على عشرة آلاف — وهو أسوأُ
+ *   شكلٍ للعطل: لا يظهر في التجربة ويظهر عند العميل. هنا طرفٌ واحدٌ ثابت،
+ *   ونفسُ السببَين ونفسُ العتبة (0.62) فلا يختلف الاقتراحُ بين القائمة والورقة.
+ */
+function dupPairsFor(tenantId: string, contactId: string): Frag {
+  return sql`(
+    with me_n as (
+      select nullif(${NAME_KEY(sql`c.display_name`)}, '') as nk
+        from contacts c where c.tenant_id = ${tenantId} and c.id = ${contactId}::uuid
+    ),
+    me_t as (
+      select ${TAIL(sql`c.phone`)} as tail
+        from contacts c where c.tenant_id = ${tenantId} and c.id = ${contactId}::uuid
+      union
+      select ${TAIL(sql`i.external_id`)}
+        from channel_identities i where i.tenant_id = ${tenantId} and i.contact_id = ${contactId}::uuid
+    ),
+    n as (
+      select c.id, nullif(${NAME_KEY(sql`c.display_name`)}, '') as nk
+        from contacts c where c.tenant_id = ${tenantId} and c.id <> ${contactId}::uuid
+    ),
+    t as (
+      select c.id as contact_id, ${TAIL(sql`c.phone`)} as tail
+        from contacts c where c.tenant_id = ${tenantId} and c.id <> ${contactId}::uuid
+      union
+      select i.contact_id, ${TAIL(sql`i.external_id`)}
+        from channel_identities i where i.tenant_id = ${tenantId} and i.contact_id <> ${contactId}::uuid
+    ),
+    cand as (
+      select ${contactId}::uuid as a, t.contact_id as b, 'phone'::text as why, 1::float as score
+        from t join me_t on me_t.tail = t.tail
+       where t.tail is not null and length(t.tail) >= 7
+      union all
+      select ${contactId}::uuid, n.id, 'name'::text, similarity(n.nk, me_n.nk)::float
+        from n cross join me_n
+       where n.nk is not null and me_n.nk is not null
+         and (n.nk = me_n.nk or similarity(n.nk, me_n.nk) >= 0.62)
+    )
+    select distinct on (b) a, b, why, score from cand order by b, score desc
+  )`;
+}
+
+/**
  * معرّفاتُ كلّ من له مرشَّحٌ — تُقرأ **مرّةً** ثمّ تُمرَّر مرشِّحاً للقائمة.
  *
  * ★ والبديلُ الذي تُرك: `exists (…)` مرتبطٌ بكلّ صفّ، فيُعاد حسابُ الأزواج
@@ -989,8 +1036,7 @@ export async function registerContacts(app: FastifyInstance) {
 
         const pairs = await tx.execute(sql`
           select p.a::text as "a", p.b::text as "b", p.why as "why", p.score::float as "score"
-            from ${dupPairs(tenantId)} p
-           where p.a = ${id}::uuid or p.b = ${id}::uuid
+            from ${dupPairsFor(tenantId, id)} p
            order by p.score desc
            limit 10
         `) as unknown as Array<Record<string, unknown>>;

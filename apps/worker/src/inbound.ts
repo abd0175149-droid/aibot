@@ -250,6 +250,13 @@ async function upsertIdentity(
   handle: string | null,
   identityKind: 'phone' | 'scoped_id',
 ) {
+  /* ★★ **زبونٌ جديدٌ يرسل رسالتين متقاربتين كان يصير جهتَي اتّصال.**
+     عاملان يقرآن «لا هويّة» معاً، فيُدرج كلٌّ منهما جهةً، ثمّ يفوز أحدُهما
+     بقيد الهويّة الفريد ويجد الآخرُ الهويّةَ في `again` — وتبقى جهتُه يتيمةً
+     بلا هويّةٍ ولا محادثة، تظهر «مكرّرةً» في القائمة إلى الأبد. (قِيس في تمرين
+     الحِمل: `docs/plan/21-load-test.md`.) فقفلٌ استشاريٌّ على (القناة، المعرّف)
+     يجعل أوّلَ لقاءٍ بزبونٍ متسلسلاً، ويُفكّ مع المعاملة نفسِها. */
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${job.channelId} || ':' || ${externalId}))`);
   const found = await tx
     .select()
     .from(channelIdentities)
@@ -286,6 +293,9 @@ async function upsertIdentity(
     .returning();
 
   if (identity) return identity;
+  /* وصلنا هنا فقد سبقنا غيرُنا رغم كلّ شيء: الجهةُ التي أدرجناها للتوّ يتيمةٌ —
+     تُمحى قبل أن تصير صفّاً «مكرّراً» لا يشرحه أحد. */
+  await tx.delete(contacts).where(eq(contacts.id, contact!.id));
   const again = await tx
     .select()
     .from(channelIdentities)

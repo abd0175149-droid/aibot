@@ -86,7 +86,7 @@ interface PolicyRun {
 
 async function main(): Promise<void> {
   const db = getDb();
-  const period = billingPeriod(new Date());
+  const period = billingPeriod(new Date(), 'Asia/Amman');
 
   console.log(`\n▶ تمرين السقف — سقف ${LIMIT} نافذة، و${CONVS} محادثة، مدّة الفوترة ${period}\n`);
 

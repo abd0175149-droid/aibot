@@ -2,6 +2,7 @@ import {
   getDb, withTenant, conversations, contacts, conversationWindows, messages, tenantChannels,
   channelIdentities, subscriptions, plans, tenants, eq, and, isNull, sql, desc,
 } from '@aibot/db';
+import { billingPeriod, DEFAULT_TZ } from '@aibot/shared';
 import { getAdapter, degradeChoices, canRender, type ChannelKind } from '@aibot/channels';
 import { tenantBlocked, QUOTA_BLOCKED_MSG, type OutboundMessage } from '@aibot/shared';
 import { open as decrypt } from '@aibot/crypto';
@@ -152,6 +153,8 @@ async function sendOutboundInner(job: SendJob): Promise<{ messageId: string; ext
       .select({
         conv: conversations, ch: tenantChannels, ident: channelIdentities,
         tenantStatus: tenants.status,
+        /* ★ منطقةُ المستأجر تُقرأ مع سياقه: الدورةُ تُحسم بها لا بافتراض. */
+        tenantTz: tenants.timezone,
         optedOutAt: contacts.optedOutAt, blockedAt: contacts.blockedAt,
       })
       .from(conversations)
@@ -233,7 +236,7 @@ async function sendOutboundInner(job: SendJob): Promise<{ messageId: string; ext
   );
 
   /* ⑥ التخزين والختم — في معاملةٍ واحدة. */
-  const period = billingPeriod(new Date());
+  const period = billingPeriod(new Date(), ctx.tenantTz);
   const result = await withTenant(db, job.tenantId, async (tx) => {
     /* ★ صفٌّ محجوز ⟹ **تحديث** لا إدراج: الرسالة موجودةٌ في الحوار منذ لحظة
        القبول بحالة `queued`، وهنا تصير `sent` ويُختم عليها معرّفُ ميتا. */
@@ -384,7 +387,11 @@ export async function checkQuota(
 
     const limits = { ...(sub[0].limits as Record<string, number>), ...(sub[0].override as Record<string, number> ?? {}) };
     const limit = Number(limits.windows ?? Infinity);
-    const period = billingPeriod(new Date());
+    /* ★ الدورةُ بمنطقة المستأجر: كانت «عمّان» لكلّ عميل، فعميلٌ في الرياض
+       يُعدّ له الشهرُ قبل منتصف ليله بساعة. */
+    const [tzRow] = await tx.select({ tz: tenants.timezone }).from(tenants)
+      .where(eq(tenants.id, tenantId)).limit(1);
+    const period = billingPeriod(new Date(), tzRow?.tz ?? DEFAULT_TZ);
 
     const counted = await tx
       .select({ n: sql<number>`count(*)::int` })
@@ -401,11 +408,7 @@ export async function checkQuota(
   });
 }
 
-/** الشهر بتوقيت المستأجر — نافذةٌ تُفتح آخر الشهر تُفوتَر على شهر فتحها فقط. */
-export function billingPeriod(d: Date, timeZone = 'Asia/Amman'): string {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit' })
-    .formatToParts(d);
-  const y = parts.find((p) => p.type === 'year')!.value;
-  const m = parts.find((p) => p.type === 'month')!.value;
-  return `${y}-${m}`;
-}
+/* ★ `billingPeriod` صارت في `@aibot/shared` **بلا افتراضِ منطقة** — وكانت هنا
+   وفي `reports.ts` نسختان بافتراض «عمّان». تُعاد من هذا الملفّ للتمارين
+   والاختبارات التي تستوردها منه. */
+export { billingPeriod };

@@ -8,9 +8,9 @@ import {
 import { capabilitiesFor, getAdapter, type ChannelKind } from '@aibot/channels';
 import { open as decrypt, seal, fingerprint, publicId } from '@aibot/crypto';
 import { requireAuth, tenantOf } from '../auth.js';
-import { AppError, ErrorCode, capConsequence } from '@aibot/shared';
+import { AppError, ErrorCode, capConsequence, billingPeriod, DEFAULT_TZ } from '@aibot/shared';
 import {
-  REPORT_TZ, MIN_FOR_TREND, PRESET_DAYS, parseRange, shiftDay, fillDays,
+  MIN_FOR_TREND, PRESET_DAYS, parseRange, shiftDay, fillDays,
   type Range,
 } from './reports-range.js';
 
@@ -35,11 +35,15 @@ const SOLO = sql`(
                            AND m.created_at >= conversation_windows.opened_at)
       )`;
 
-/** الشهر بتوقيت المستأجر — نافذةٌ تُفتح آخر الشهر تُفوتَر على شهر فتحها. */
-function period(tz = 'Asia/Amman'): string {
-  const p = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year: 'numeric', month: '2-digit' })
-    .formatToParts(new Date());
-  return `${p.find((x) => x.type === 'year')!.value}-${p.find((x) => x.type === 'month')!.value}`;
+/**
+ * ★ منطقةُ **هذا** المستأجر من صفّه — لا من افتراض. كان هنا `period(tz = 'Asia/Amman')`
+ *   ولم يمرّر أحدٌ منطقةً قطّ في أربعة نداءات، و`REPORT_TZ` ثابتٌ خامسٌ للاتّجاهات.
+ *   والدالّةُ نفسُها في `@aibot/shared` بلا مُعامِلٍ اختياريّ يتسلّل منه «عمّان».
+ */
+async function tenantTz(tx: never, tenantId: string): Promise<string> {
+  const [t] = await (tx as unknown as ReturnType<typeof getDb>)
+    .select({ tz: tenants.timezone }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
+  return t?.tz ?? DEFAULT_TZ;
 }
 
 /**
@@ -77,7 +81,7 @@ export async function registerReports(app: FastifyInstance) {
     const tenantId = tenantOf(req);
     return withTenant(getDb(), tenantId, async (tx) => {
       const lim = await limitsOf(tx as never, tenantId);
-      const p = period();
+      const p = billingPeriod(new Date(), await tenantTz(tx as never, tenantId));
 
       const [today] = await tx.execute<{
         conversations: number; bot_replies: number; needs_attention: number; median_latency: number;
@@ -202,12 +206,13 @@ export async function registerReports(app: FastifyInstance) {
    *   لا ليقرأ رقماً ثانياً. فالمصدرُ واحدٌ والمخرجان صيغتان له.
    */
   async function trend(tenantId: string, r: Range) {
-    const tz = REPORT_TZ;
-    /* حدُّ اليوم يتحوّل لحظةً **في Postgres** لا عندنا: هو من يملك جدول
-       المناطق الحقيقيّ، ونحن نملك نصّ التاريخ وحده. */
-    const at = (day: string) => sql`(${day}::timestamp AT TIME ZONE ${tz})`;
-
     return withTenant(getDb(), tenantId, async (tx) => {
+      /* ★ المنطقةُ من صفّ المستأجر: `REPORT_TZ` كان «عمّان» لكلّ عميل. */
+      const tz = await tenantTz(tx as never, tenantId);
+      /* حدُّ اليوم يتحوّل لحظةً **في Postgres** لا عندنا: هو من يملك جدول
+         المناطق الحقيقيّ، ونحن نملك نصّ التاريخ وحده. */
+      const at = (day: string) => sql`(${day}::timestamp AT TIME ZONE ${tz})`;
+
       /* ① الرسائل يوماً بيوم — المدى والسابق معاً. والدلوُ يومٌ **عند
             المستأجر**: بلا `AT TIME ZONE` يُقسَم «أمس» بين دلوَين عند
             الساعة الثالثة صباحاً، فيُقرأ هبوطٌ لم يحدث. */
@@ -477,7 +482,7 @@ export async function registerReports(app: FastifyInstance) {
     const tenantId = tenantOf(req);
     return withTenant(getDb(), tenantId, async (tx) => {
       const lim = await limitsOf(tx as never, tenantId);
-      const p = period();
+      const p = billingPeriod(new Date(), await tenantTz(tx as never, tenantId));
 
       const items = await tx
         .select({
@@ -547,8 +552,9 @@ export async function registerReports(app: FastifyInstance) {
   /** تصديرٌ يستطيع العميل مطابقته بنفسه — عدّادٌ لا يُراجَع يُنتج نزاعاً. */
   app.get('/usage/windows.csv', { preHandler: requireAuth({ billing: true }) }, async (req, reply) => {
     const tenantId = tenantOf(req);
-    const rows = await withTenant(getDb(), tenantId, async (tx) =>
-      tx.select({
+    const { rows, p } = await withTenant(getDb(), tenantId, async (tx) => {
+      const p = billingPeriod(new Date(), await tenantTz(tx as never, tenantId));
+      const rows = await tx.select({
         handle: channelIdentities.externalId,
         kind: tenantChannels.kind,
         openedAt: conversationWindows.openedAt,
@@ -561,8 +567,10 @@ export async function registerReports(app: FastifyInstance) {
         .innerJoin(tenantChannels, eq(tenantChannels.id, conversationWindows.channelId))
         .innerJoin(conversations, eq(conversations.id, conversationWindows.conversationId))
         .innerJoin(channelIdentities, eq(channelIdentities.id, conversations.identityId))
-        .where(eq(conversationWindows.billingPeriod, period()))
-        .orderBy(desc(conversationWindows.openedAt)));
+        .where(eq(conversationWindows.billingPeriod, p))
+        .orderBy(desc(conversationWindows.openedAt));
+      return { rows, p };
+    });
 
     const head = 'الزبون,القناة,فُتحت,فُوتِرت,واردة,صادرة,كلفة الذكاء';
     const body = rows.map((r) => [
@@ -573,7 +581,7 @@ export async function registerReports(app: FastifyInstance) {
     // BOM ليفتح إكسل العربيّة سليمةً — بدونه يعرض محارف مشوّهة
     return reply
       .header('content-type', 'text/csv; charset=utf-8')
-      .header('content-disposition', `attachment; filename="windows-${period()}.csv"`)
+      .header('content-disposition', `attachment; filename="windows-${p}.csv"`)
       .send('﻿' + head + '\n' + body);
   });
 

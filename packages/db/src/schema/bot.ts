@@ -139,6 +139,9 @@ export const kbChunks = pgTable('kb_chunks', {
 }, (t) => [
   uniqueIndex('kb_chunks_uq').on(t.tenantId, t.versionId, t.sourceId, t.ord, t.kind),
   index('kb_chunks_version_idx').on(t.tenantId, t.versionId),
+  /* ★ حذفُ ملفٍّ يتعاقب إلى مقاطعه: بلا فهرسٍ على source_id يُمسح أكبرُ جدولٍ
+     عند العميل لكلّ حذف — و`kb_chunks_uq` يبدأ بـtenant_id ثمّ version_id. */
+  index('kb_chunks_source_idx').on(t.sourceId),
 ]);
 
 /* ★ `kb_chunks.tsv` عمودٌ **مولَّدٌ مخزَّن** يُنشأ في `0007_kb_chunks_tsv.sql`
@@ -163,7 +166,11 @@ export const kbRetrievals = pgTable('kb_retrievals', {
   toolFallbackUsed: boolean('tool_fallback_used').notNull().default(false),
   latencyMs: integer('latency_ms'),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(now),
-}, (t) => [index('kb_retr_tenant_idx').on(t.tenantId, t.createdAt)]);
+}, (t) => [
+  index('kb_retr_tenant_idx').on(t.tenantId, t.createdAt),
+  /* أثرُ الاسترجاع يُقرأ لكلّ محادثةٍ على حدة. */
+  index('kb_retr_conv_idx').on(t.conversationId),
+]);
 
 /** بوّابة التبديل: لا يُحوَّل مستأجرٌ إلى hybrid إلّا بـrecall@6 ≥ 0.95 على مجموعته. */
 export const kbEvals = pgTable('kb_evals', {

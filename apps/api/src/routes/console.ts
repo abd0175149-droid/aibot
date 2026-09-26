@@ -4,7 +4,7 @@ import {
   conversationWindows, aiRuns, incidents, auditLog, botConfigs,
   eq, and, isNull, desc, asc, sql,
 } from '@aibot/db';
-import { AppError, ErrorCode } from '@aibot/shared';
+import { AppError, ErrorCode, billingPeriod, DEFAULT_TZ } from '@aibot/shared';
 import { publicId, seal, sha256 } from '@aibot/crypto';
 import { requireAuth, signAccess, hashPassword } from '../auth.js';
 import { isUniqueViolation } from './team.js';
@@ -483,7 +483,11 @@ export async function registerConsole(app: FastifyInstance) {
   /** ★ لوحة الهامش — أهمّ تقاريرك: ترى من يستهلك أكثر ممّا يدفع في شهره الأوّل. */
   app.get<{ Querystring: { period?: string } }>('/console/usage', { preHandler: owner }, async (req) => {
     const db = getDb();
-    const period = req.query.period ?? new Date().toISOString().slice(0, 7);
+    /* ★ حين لا يُطلب شهرٌ بعينه فالشهرُ **لكلّ عميلٍ بمنطقته** — كان شهرَ UTC
+       للجميع، فعدّادُ النوافذ (مختومٌ بمنطقة العميل) وعدّادُ التوكنز اختلفا
+       ثلاثَ ساعاتٍ عند رأس كلّ شهر. والمطلوبُ صراحةً يُطبَّق كما هو. */
+    const asked = req.query.period ?? null;
+    const period = asked ?? billingPeriod(new Date(), DEFAULT_TZ);
     return withPlatform(db, 'تقرير الهامش الشهريّ', async (tx) => {
       const rows = await tx.execute(sql`
         SELECT t.id, t.name,
@@ -495,9 +499,11 @@ export async function registerConsole(app: FastifyInstance) {
           FROM tenants t
           LEFT JOIN subscriptions s ON s.tenant_id = t.id AND s.status = 'active'
           LEFT JOIN plans p ON p.id = s.plan_id
-          LEFT JOIN conversation_windows w ON w.tenant_id = t.id AND w.billing_period = ${period}
+          LEFT JOIN conversation_windows w ON w.tenant_id = t.id
+                             AND w.billing_period = coalesce(${asked}::text, to_char(now() AT TIME ZONE t.timezone, 'YYYY-MM'))
           LEFT JOIN ai_runs r ON r.tenant_id = t.id
-                             AND to_char(r.created_at, 'YYYY-MM') = ${period}
+                             AND to_char(r.created_at AT TIME ZONE t.timezone, 'YYYY-MM')
+                               = coalesce(${asked}::text, to_char(now() AT TIME ZONE t.timezone, 'YYYY-MM'))
          -- ★ كان «= 'active'» — ولا عميلَ يصير active من المعالج، فخلت اللوحةُ من
          --   كلّ من أُنشئ منه. التجريبيُّ والموقوفُ يكلّفان أيضاً؛ المؤرشَفُ وحده خارجها.
          WHERE t.status <> 'archived'

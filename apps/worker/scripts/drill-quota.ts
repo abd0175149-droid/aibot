@@ -51,7 +51,7 @@ function log(msg: string, extra?: unknown): void {
 
 async function main(): Promise<void> {
   const db = getDb();
-  const period = billingPeriod(new Date());
+  const period = billingPeriod(new Date(), 'Asia/Amman');
 
   console.log(`\n▶ تمرين إنذار السقف — سقفٌ ${LIMIT} نافذة، و${COUNT} نافذةً تُختم، دورة ${period}\n`);
 
