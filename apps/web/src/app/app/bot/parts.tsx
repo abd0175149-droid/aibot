@@ -232,7 +232,8 @@ import type { Forms } from '@/lib/plural';
 export function Amount({ n, forms }: { n: number; forms: Forms }) {
   if (n === 1) return <>{forms[0]}</>;
   if (n === 2) return <>{forms[1]}</>;
-  const w = n % 100 >= 3 && n % 100 <= 10 ? forms[2] : forms[3];
+  /* والصفرُ يأخذ الجمع («0 أقسامٍ») لا المفردَ المنصوب («0 قسماً») — نفسُ `arCount`. */
+  const w = n === 0 || (n % 100 >= 3 && n % 100 <= 10) ? forms[2] : forms[3];
   return <><span className="num">{fmt.num(n)}</span> {w}</>;
 }
 
@@ -244,7 +245,7 @@ export function Amount({ n, forms }: { n: number; forms: Forms }) {
 export function amountText(n: number, forms: Forms): string {
   if (n === 1) return forms[0];
   if (n === 2) return forms[1];
-  return `${fmt.num(n)} ${n % 100 >= 3 && n % 100 <= 10 ? forms[2] : forms[3]}`;
+  return `${fmt.num(n)} ${n === 0 || (n % 100 >= 3 && n % 100 <= 10) ? forms[2] : forms[3]}`;
 }
 
 export const TOOL_FORMS: Forms = ['أداةٌ واحدة', 'أداتان', 'أدواتٍ', 'أداةً'];

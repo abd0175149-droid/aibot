@@ -422,8 +422,11 @@ function InboxScreen() {
   const open = useCallback((id: string | null) => {
     // العنوان يحمل المحادثة: زرّ الرجوع وحركة الحافّة يُغلقان الحوار
     router.push(id ? `/app/inbox?c=${id}` : '/app/inbox');
-    if (id) void post(`/conversations/${id}/read`).catch(() => undefined);
-  }, [router]);
+    /* ★ والانتحالُ لا يُعلِّم «قُرئت»: قراءةُ فريق المنصّة ليست قراءةَ العميل، ولو
+       مرّت لأطفأت عدّادَ ما لم يرَه صاحبُه. والخادمُ يرفضها ٤٠٣ على كلّ حال —
+       فالنداءُ كان خطأً في الكونسول مع كلّ محادثةٍ تُفتح (رُئي حيّاً). */
+    if (id && !can.readOnly) void post(`/conversations/${id}/read`).catch(() => undefined);
+  }, [router, can.readOnly]);
 
   useSocket({
     'message:new': (p: { conversationId: string; message: Msg }) => {

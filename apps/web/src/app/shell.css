@@ -461,3 +461,9 @@
    جدولٍ طويلٍ ولا لافتةَ في مرمى عينه تقول لماذا. */
 .main > .imp-bar { position: sticky; top: 0; z-index: 6; margin-block-end: 12px; }
 .imp-bar .note { margin-block: 0; box-shadow: 0 8px 20px -14px rgb(0 0 0 / .45); }
+/* على الهاتف: سطرُ الحالة والمدّة والزرّ فقط — الشرحُ الكامل على الحاسوب. */
+@media (max-width: 600px) {
+  .imp-bar .imp-long { display: none; }
+  .imp-bar .note { padding-block: 8px; font-size: var(--t-sm); }
+  .imp-bar .note > .btn, .imp-bar .note > .btn-wrap { margin-block-start: 6px; }
+}
