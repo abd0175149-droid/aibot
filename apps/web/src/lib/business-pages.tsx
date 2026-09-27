@@ -182,7 +182,7 @@ export function PrivacyBody({ b, l }: { b: PublicBusinessDTO; l: Lang }) {
       <p>
         You can ask to access, correct or delete your data, or object to its processing
         {isJo ? <>, under Jordan&apos;s Personal Data Protection Law No. 24 of 2023</> : null}.
-        Reply «إلغاء» or «stop» at any time and we will stop messaging you.
+        Reply <bdi lang="ar">«إلغاء»</bdi> or «stop» at any time and we will stop messaging you.
         To delete your data, see <Link href={`/b/${b.slug}/data-deletion?lang=en`}>Data deletion</Link>.
       </p>
       <h2>Contact</h2>
@@ -232,7 +232,7 @@ export function TermsBody({ b, l }: { b: PublicBusinessDTO; l: Lang }) {
       <h2>Acceptable use</h2>
       <p>Do not send unlawful, abusive or harmful content. We may stop replying to accounts that do.</p>
       <h2>Messages from us</h2>
-      <p>We message you only about requests you started, or after your consent. Reply «إلغاء» or «stop» to stop.</p>
+      <p>We message you only about requests you started, or after your consent. Reply <bdi lang="ar">«إلغاء»</bdi> or «stop» to stop.</p>
       <h2>Your data</h2>
       <p>How we handle your data is described in our <Link href={`/b/${b.slug}/privacy?lang=en`}>Privacy policy</Link>.</p>
       <h2>Governing law</h2>
@@ -267,7 +267,7 @@ export function DeletionBody({ b, l }: { b: PublicBusinessDTO; l: Lang }) {
       <p>You can ask {brand(b, l)} to delete your data at any time.</p>
       <h2>Option 1: message us</h2>
       <p>
-        Send «احذف بياناتي» or «delete my data» to us on {ch}
+        Send <bdi lang="ar">«احذف بياناتي»</bdi> or «delete my data» to us on {ch}
         {b.channels.whatsapp && <> (WhatsApp <Ltr>{b.profile.phone}</Ltr>)</>}.
         The request is recorded immediately and we stop messaging you.
       </p>
