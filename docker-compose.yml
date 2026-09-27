@@ -163,6 +163,14 @@ services:
       #    له بالسبب. وكان مقبضاً غيرَ موثَّقٍ يُقرأ من البيئة ولا يُمرَّر.
       PG_POOL_MAX: ${PG_POOL_MAX:-10}
       REDIS_PING_TIMEOUT_MS: ${REDIS_PING_TIMEOUT_MS:-2000}
+      # ★ تطبيقُ ميتا للمنصّة — لربط إنستجرام عبر «تسجيل الدخول بفيسبوك» وحده.
+      #   اختياريّةٌ كلُّها (‏`:-` فارغ): غيابُها يُعلن في الشاشة «غيرُ متاح بعد»
+      #   ولا يُسقط الإقلاع — فواتساب لا يحتاجها (تطبيقُ كلّ عميلٍ عنده).
+      META_APP_ID: ${META_APP_ID:-}
+      META_APP_SECRET: ${META_APP_SECRET:-}
+      META_LOGIN_CONFIG_ID: ${META_LOGIN_CONFIG_ID:-}
+      META_WEBHOOK_VERIFY_TOKEN: ${META_WEBHOOK_VERIFY_TOKEN:-}
+      META_GRAPH_VERSION: ${META_GRAPH_VERSION:-v21.0}
     ports:
       - "127.0.0.1:${API_PORT:-4100}:${API_PORT:-4100}"
     depends_on:

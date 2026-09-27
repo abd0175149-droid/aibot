@@ -1377,3 +1377,47 @@ button.row-m:hover, a.row-m:hover { background: var(--surface-2); }
   .sheetwrap:not([data-kind="menu"]) .sheet-b { flex: 1 1 auto; }
   .sheetwrap:not([data-kind="menu"]) .sheet-scrim { background: rgba(10, 16, 15, .28); }
 }
+
+/* ══════ ملفُّ النشاط وحزمةُ ميتا (‏BusinessProfile.tsx) ══════ */
+.bp-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 4px 16px; }
+.bp-wide { grid-column: 1 / -1; }
+.bp-logo { width: 56px; height: 56px; border-radius: 12px; border: 1px solid var(--rule); object-fit: contain; background: #fff; }
+.kit-sec { display: flex; flex-direction: column; gap: 10px; }
+.kit-sec h3 { margin: 0; font-size: var(--t-body); font-weight: 700; }
+.kit { border: 1px solid var(--rule); border-radius: var(--radius); overflow: hidden; }
+.kit-r {
+  display: grid; grid-template-columns: minmax(120px, 190px) minmax(0, 1fr) auto;
+  gap: 10px; align-items: center; padding: 8px 12px; border-block-end: 1px solid var(--rule-soft);
+}
+.kit-r:last-child { border-block-end: 0; }
+.kit-k { font-size: var(--t-sm); font-weight: 600; }
+.kit-k small { display: block; font-weight: 400; color: var(--muted); font-size: var(--t-label); }
+.kit-v { overflow-wrap: anywhere; font-size: var(--t-sm); text-align: start; }
+.kit-v a { color: inherit; }
+.kit-icon { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.kit-icon canvas { width: 96px; height: 96px; border-radius: 20px; border: 1px solid var(--rule); flex: none; }
+.kit-icon .muted-p { margin: 2px 0 8px; }
+.kit-chk { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: var(--t-sm); }
+.kit-chk li { display: flex; gap: 8px; align-items: baseline; }
+.kit-steps { margin: 0; padding-inline-start: 20px; font-size: var(--t-sm); display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 640px) {
+  .kit-r { grid-template-columns: minmax(0, 1fr) auto; }
+  .kit-k { grid-column: 1 / -1; }
+}
+
+/* ══════ صفحاتُ العميل العامّة (‏/b/<slug>) — على أساس `.legal` ══════ */
+.biz .legal-bar { flex-wrap: wrap; row-gap: 8px; }
+.biz-brand { display: inline-flex; gap: 10px; align-items: center; }
+.biz-brand img { width: 32px; height: 32px; border-radius: 8px; object-fit: contain; background: #fff; border: 1px solid var(--rule); }
+.biz-mark {
+  display: inline-grid; place-items: center; width: 32px; height: 32px; border-radius: 8px;
+  background: var(--brand); color: var(--on-fill, #fff); font-weight: 700;
+}
+.biz-doc h2 { margin: 26px 0 8px; font-size: var(--t-h2); font-weight: 700; }
+.biz-doc h2:first-child { margin-top: 0; }
+.biz-f { display: flex; flex-direction: column; gap: 6px; font-size: var(--t-sm); color: var(--muted); }
+.biz-f p { margin: 0; max-width: 70ch; }
+
+/* طلبُ حذف بيانات في شاشة الزبائن */
+.del-req { display: flex; flex-direction: column; gap: 8px; padding: 12px 14px; border: 1px solid var(--rule); border-radius: var(--radius); }
+.del-req .muted-p { margin: 0; }

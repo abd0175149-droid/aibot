@@ -21,7 +21,7 @@ export const TENANT_SCOPED = [
   'bot_configs', 'bot_versions', 'bot_tools', 'knowledge_sources',
   'kb_chunks', 'kb_retrievals', 'kb_evals', 'ai_runs', 'ai_keys',
   'incidents', 'health_checks', 'notifications', 'push_subscriptions',
-  'quota_alerts',
+  'quota_alerts', 'deletion_requests',
 ] as const;
 
 /**

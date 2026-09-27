@@ -296,3 +296,18 @@ export async function enqueueEmbed(job: { tenantId: string; versionId: string })
     removeOnFail: 500,
   });
 }
+
+/**
+ * ★ قيمةٌ قصيرةُ العمر في ريدِس — لخطوةٍ تعبر تحويلاً في المتصفّح.
+ *   ربطُ إنستجرام يعود من فيسبوك إلى عنوانٍ بلا توكن الجلسة، فما جُلب هناك
+ *   (صفحاتُ المستخدم وتوكناتُها) يُحفظ دقائقَ **مختوماً** حتّى يختار المالكُ صفحته.
+ */
+export async function kvSet(key: string, value: string, ttlSec: number): Promise<void> {
+  await connection().set(key, value, 'EX', ttlSec);
+}
+export async function kvGet(key: string): Promise<string | null> {
+  return connection().get(key);
+}
+export async function kvDel(key: string): Promise<void> {
+  await connection().del(key);
+}

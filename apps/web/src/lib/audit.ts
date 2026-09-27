@@ -60,6 +60,10 @@ const LABELS: Record<string, string> = {
   'contact.export': 'صدّر ملفّ جهة اتّصال',
   'contact.delete': 'حذفت جهة اتّصال وكلّ بياناتها نهائيّا',
   'tenant.export': 'صدّرت بيانات الحساب كاملة',
+  'tenant.profile': 'عدّل ملفّ النشاط وصفحاته العامّة',
+  'deletion_request.done': 'أغلق طلب حذف بيانات زبون — نفّذ',
+  'deletion_request.refused': 'رفض طلب حذف بيانات زبون مع ذكر السبب',
+  'channel.meta_revoked': 'سحب صاحب الحساب إذن إنستجرام من فيسبوك',
 };
 
 export function auditLabel(action: string): string {

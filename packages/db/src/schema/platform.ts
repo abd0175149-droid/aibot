@@ -20,6 +20,16 @@ export const tenants = pgTable('tenants', {
   trialEndsAt: timestamp('trial_ends_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(now),
   archivedAt: timestamp('archived_at', { withTimezone: true }),
+  /**
+   * ★ ملفُّ النشاط (‏`BusinessProfile` في `@aibot/shared`) — منه تُبنى صفحاتُ
+   *   العميل العامّة (‏`/b/<slug>`) وحزمةُ ميتا. على صفّ المستأجر لا جدولٍ
+   *   مستقلّ: الصفحاتُ العامّة تقرؤه بلا سياق مستأجر (الزائرُ لا حسابَ له)،
+   *   و`tenants` جدولٌ عامٌّ أصلاً — وجدولٌ تحت RLS كان سيُقرأ بالدور المتجاوز
+   *   في كلّ زيارةٍ لصفحةٍ عامّة.
+   * ⚠️ لا شيءَ فيه سرّيّ: كلُّ حقلٍ منه منشورٌ على الصفحة نفسها.
+   */
+  profile: jsonb('profile').notNull().default(sql`'{}'::jsonb`),
+  profileUpdatedAt: timestamp('profile_updated_at', { withTimezone: true }),
 });
 
 export const users = pgTable('users', {

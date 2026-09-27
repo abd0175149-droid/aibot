@@ -5,13 +5,20 @@ import { post, ApiError } from '@/lib/api';
 /* ★ نموذجُ البذر مشتركٌ مع ورقة العميل في اللوحة: المسارُ نفسُه يُنادى من
    موضعَين، ونسختان من نفس الحدود تتباعدان عند أوّل تعديل. */
 import { BotSeedForm } from '@/components/BotSeedForm';
+import { ProfileForm, MetaKitPanel } from '@/components/BusinessProfile';
+import type { BusinessProfile, MetaKitDTO } from '@aibot/shared';
 import {
   Modal, Button, Field, Input, Stack, Row,
   Pill, Note, CodeBlock, KV, KVRow, Iso,
 } from '@/components/ui';
 
 /**
- * معالج تهيئة العميل — خمس خطوات.
+ * معالج تهيئة العميل — ستّ خطوات: النشاط · ملفّ النشاط · حزمة ميتا · القنوات · البوت · تمّ.
+ *
+ * ★★ «ملفّ النشاط» و«حزمة ميتا» أُضيفتا لأنّ تطبيق ميتا لواتساب ملكُ العميل،
+ *   وتفعيلُه يطلب روابطَ خصوصيّةٍ وشروطٍ وحذفِ بيانات **باسمه**. فالملفُّ يبني
+ *   صفحاتِه على `/b/<slug>`، والحزمةُ تجمع كلَّ ما يُلصق عند ميتا — وكلاهما
+ *   **قبل** القناة: التوكنُ الدائمُ يُنشأ في تطبيقٍ فُعِّل، والتفعيلُ يطلب الروابط.
  *
  * ★ هذا المعالج هو **معيار قبول المرحلة السادسة** حرفيّاً: «تُنشئ عميلاً
  *   وتُنهي تهيئته وبوته يردّ **بلا لمس الخادم ولا الكود**». وحتّى اليوم كانت
@@ -25,7 +32,7 @@ import {
  * قيمة له، وقناةٌ سليمة بردودٍ بسيطة منتَجٌ يُعرض.
  */
 
-type Step = 1 | 2 | 3 | 4;
+type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 interface Created {
   tenant: { id: string; name: string; slug: string; publicId: string };
@@ -60,6 +67,13 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
   const [slug, setSlug] = useState('');
   const [email, setEmail] = useState('');
   const [created, setCreated] = useState<Created | null>(null);
+  /* القنوات: واتساب على تطبيق العميل، وإنستجرام على تطبيق المنصّة (يربطه العميل بنفسه). */
+  const [wantWa, setWantWa] = useState(true);
+  const [wantIg, setWantIg] = useState(false);
+
+  // ② ملفّ النشاط · ③ حزمة ميتا
+  const [profile, setProfile] = useState<BusinessProfile | null>(null);
+  const [kit, setKit] = useState<MetaKitDTO | null>(null);
 
   // ② القناة
   const [phoneId, setPhoneId] = useState('');
@@ -109,7 +123,7 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
       });
       setConn(r);
       setIssues(r.issues);
-      setStep(3);
+      setStep(5);
     } catch (e) {
       if (e instanceof ApiError) {
         /* ★ السببُ والتلميحُ من جسم الردّ — كانا يُقرآن من حقلٍ لا يملؤه أحد. */
@@ -122,9 +136,11 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
 
   const STEPS: Array<{ n: Step; label: string }> = [
     { n: 1, label: 'النشاط' },
-    { n: 2, label: 'القناة' },
-    { n: 3, label: 'البوت' },
-    { n: 4, label: 'تمّ' },
+    { n: 2, label: 'ملفّ النشاط' },
+    { n: 3, label: 'حزمة ميتا' },
+    { n: 4, label: 'القنوات' },
+    { n: 5, label: 'البوت' },
+    { n: 6, label: 'تمّ' },
   ];
 
   return (
@@ -136,14 +152,18 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
         <>
           {step === 1 && (
             <Button variant="primary" busy={busy} onClick={createTenant}
-              disabled={!name.trim() || !SLUG_RE.test(slug) || !EMAIL_RE.test(email)}
+              disabled={!name.trim() || !SLUG_RE.test(slug) || !EMAIL_RE.test(email) || (!wantWa && !wantIg)}
               reason={!name.trim() ? 'اكتب اسم النشاط.'
                 : !SLUG_RE.test(slug) ? 'المعرّف ٣–٣٠ حرفا لاتينيّا أو رقما، يبدأ وينتهي بحرف أو رقم.'
-                  : !EMAIL_RE.test(email) ? 'بريد المالك غير مكتمل.' : undefined}>
+                  : !EMAIL_RE.test(email) ? 'بريد المالك غير مكتمل.'
+                    : (!wantWa && !wantIg) ? 'اختر قناة واحدة على الأقلّ.' : undefined}>
               أنشئ العميل
             </Button>
           )}
-          {step === 2 && (
+          {/* الخطوةُ الثانية فعلُها «احفظ الملفّ» داخل النموذج نفسِه. */}
+          {step === 3 && <Button variant="primary" onClick={() => setStep(4)}>التالي — القنوات</Button>}
+          {step === 4 && !wantWa && <Button variant="primary" onClick={() => setStep(5)}>التالي — البوت</Button>}
+          {step === 4 && wantWa && (
             <>
               <Button variant="primary" busy={busy} onClick={connectChannel}
                 disabled={!phoneId.trim() || !token.trim() || !appSecret.trim()}
@@ -151,13 +171,13 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
                 افحص واربط
               </Button>
               {/* والتخطّي يمسح خطأَ الربط: كان يتبع المالكَ إلى خطوة البوت (رُئي حيّاً). */}
-              <Button onClick={() => { setErr(null); setIssues([]); setStep(3); }}>أكمل بلا ربط</Button>
+              <Button onClick={() => { setErr(null); setIssues([]); setStep(5); }}>أكمل بلا ربط</Button>
             </>
           )}
           {/* الخطوةُ الثالثة لا فعلَ لها في الرصيف: زرُّ «انشر وابدأ» داخل
               النموذج نفسِه، فلا يُقسَّم فعلٌ واحدٌ على موضعَين. */}
-          {step === 4 && <Button variant="primary" onClick={onDone}>أنه</Button>}
-          {step > 1 && step < 4 && <Button onClick={() => setStep((s) => (s - 1) as Step)}>السابق</Button>}
+          {step === 6 && <Button variant="primary" onClick={onDone}>أنه</Button>}
+          {step > 2 && step < 6 && <Button onClick={() => setStep((s) => (s - 1) as Step)}>السابق</Button>}
         </>
       )}
     >
@@ -173,7 +193,7 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
           <Note tone="warn">
             <b>تهيئة لم تكتمل.</b> أنشئ العميل «{created.tenant.name}» ومالكه بالفعل
             {!conn && <>، ولم تربط قناته بعد</>}
-            {step < 4 && <>، ولا نسخة بوت منشورة له — فلن يردّ على أحد</>}.
+            {step < 6 && <>، ولا نسخة بوت منشورة له — فلن يردّ على أحد</>}.
             <p className="muted-p">
               وهذه <b>آخر مرّة</b> تظهر فيها كلمته المؤقّتة — لا تخزّن نصّا في أيّ مكان.
               وما بقي يكمل من ورقة العميل في اللوحة: ربط القناة، وبذر بوته، وتوليد كلمة
@@ -220,18 +240,55 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
             <Field id="o-mail" label="بريد المالك" hint="ننشئ له حسابا بكلمة مرور مؤقّتة يجب تغييرها.">
               <Input id="o-mail" type="email" value={email} dir="ltr" onChange={setEmail} />
             </Field>
+            <Field id="o-ch" label="القنوات" labelless>
+              <Row gap="sm">
+                <Button variant={wantWa ? 'primary' : 'quiet'} onClick={() => setWantWa((x) => !x)}>
+                  {wantWa ? '✓ ' : ''}واتساب — تطبيق ميتا عند العميل
+                </Button>
+                <Button variant={wantIg ? 'primary' : 'quiet'} onClick={() => setWantIg((x) => !x)}>
+                  {wantIg ? '✓ ' : ''}إنستجرام — على تطبيق AiBot
+                </Button>
+              </Row>
+            </Field>
           </Stack>
         )}
 
-        {step === 2 && (
+        {step === 2 && created && (
           <Stack gap="sm">
-            {created && (
-              <Note>
-                <b>أنشئ «{created.tenant.name}».</b> كلمة المرور المؤقّتة تعرض
-                <b> مرّة واحدة</b> ولا تخزّن نصّا في أيّ مكان — انسخها الآن.
-                <CodeBlock label="كلمة المرور المؤقّتة" text={created.tempPassword} />
-              </Note>
-            )}
+            <Note>
+              <b>أنشئ «{created.tenant.name}».</b> كلمة المرور المؤقّتة تعرض
+              <b> مرّة واحدة</b> ولا تخزّن نصّا في أيّ مكان — انسخها الآن.
+              <CodeBlock label="كلمة المرور المؤقّتة" text={created.tempPassword} />
+            </Note>
+            <ProfileForm
+              initial={profile ?? { tradeAr: created.tenant.name }}
+              endpoint={`/console/tenants/${created.tenant.id}/profile`}
+              submitLabel="احفظ وانشر الصفحات"
+              onSaved={(r) => { setProfile(r.profile); setKit(r.kit); setStep(3); }}
+            />
+          </Stack>
+        )}
+
+        {step === 3 && created && kit && (
+          <MetaKitPanel
+            kit={kit}
+            checkEndpoint={`/console/tenants/${created.tenant.id}/check-links`}
+            name={profile?.tradeEn || created.tenant.name}
+            logo={profile?.logo || undefined}
+            whatsapp={wantWa}
+          />
+        )}
+
+        {step === 4 && wantIg && (
+          <Note>
+            <b>إنستجرام يربطه العميل بنفسه</b> من شاشة القنوات بعد دخوله: موافقة من فيسبوك ويختار صفحته،
+            بلا توكن يلصق. وقبل ذلك يتأكّد من أنّ حسابه احترافيّ ومربوط بصفحة فيسبوك، وأنّ «السماح
+            بالوصول إلى الرسائل» مفعّل في إعدادات إنستجرام.
+          </Note>
+        )}
+
+        {step === 4 && wantWa && (
+          <Stack gap="sm">
             <p className="muted-p">
               أربع قيم من لوحة العميل عند ميتا. ولا نحفظ شيئا قبل أن نفحصها
               <b> فعلا عند ميتا</b> — فتوكن مكسور محفوظ ينتج بوتا صامتا لا عطلا ظاهرا.
@@ -257,7 +314,7 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
           </Stack>
         )}
 
-        {step === 3 && created && (
+        {step === 5 && created && (
           <Stack gap="sm">
             {conn && (
               <KV>
@@ -279,12 +336,12 @@ export function Onboarding({ onClose, onDone }: { onClose: () => void; onDone: (
             )}
             <BotSeedForm
               endpoint={`/console/tenants/${created.tenant.id}/bot/seed`}
-              onDone={() => setStep(4)}
+              onDone={() => setStep(6)}
             />
           </Stack>
         )}
 
-        {step === 4 && created && (
+        {step === 6 && created && (
           <Stack gap="md">
             <Note>
               {/* ★ «منشورٌ ويستقبل» كانت تُقال والبوتُ قد يكون مطفأً ولا قناةَ

@@ -104,3 +104,33 @@ export const quotaAlerts = pgTable('quota_alerts', {
   policy: text('policy').notNull(),
   firedAt: timestamp('fired_at', { withTimezone: true }).notNull().default(now),
 }, (t) => [uniqueIndex('quota_alerts_uq').on(t.tenantId, t.billingPeriod, t.threshold)]);
+
+/**
+ * ★★ **طلبُ حذف البيانات من الزبون — كان يُكتشف عدولاً ويضيع.**
+ *
+ *   «احذفوا رقمي» كانت في قائمة العدول (‏`optout.ts`): يُكتم الزبونُ ويُعلَّم
+ *   للموظّف، ولا أثرَ يقول إنّه طلب **الحذف** لا الإيقاف. وصفحةُ حذف البيانات
+ *   التي تطلبها ميتا لكلّ تطبيق تَعِد بطريقٍ عبر واتساب — فالطلبُ يحتاج صفّاً
+ *   يُرى ويُنفَّذ ويُغلق، لا علَماً على بطاقة.
+ *
+ *   والتنفيذُ قرارُ المالك: الحذفُ لا رجعةَ فيه، وقد يُلزمه القانونُ بإبقاء شيء.
+ *   فالصفُّ يبقى بعد الحذف (‏`contact_id` يصير فارغاً) دليلاً على أنّه نُفِّذ.
+ */
+export const deletionRequests = pgTable('deletion_requests', {
+  id: uuid('id').primaryKey().default(uuid7),
+  tenantId: uuid('tenant_id').notNull().references(() => tenants.id, { onDelete: 'cascade' }),
+  contactId: uuid('contact_id'),
+  channelId: uuid('channel_id'),
+  /** من أين جاء: رسالةٌ على القناة، أو أدخله الموظّف (بريدٌ أو مكالمة). */
+  source: text('source', { enum: ['message', 'staff'] }).notNull(),
+  /** ما يُعرِّف الطالبَ بعد حذف بطاقته: المقبضُ كما ظهر (رقمٌ أو اسم). */
+  handle: text('handle'),
+  detail: text('detail'),
+  status: text('status', { enum: ['pending', 'done', 'refused'] }).notNull().default('pending'),
+  note: text('note'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(now),
+  resolvedAt: timestamp('resolved_at', { withTimezone: true }),
+  resolvedBy: uuid('resolved_by').references(() => users.id, { onDelete: 'set null' }),
+}, (t) => [
+  index('deletion_requests_tenant_idx').on(t.tenantId, t.status, t.createdAt),
+]);

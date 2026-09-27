@@ -670,3 +670,31 @@ END $$;--> statement-breakpoint
 --    بـON CONFLICT DO NOTHING … RETURNING يُرجع صفّاً للفائز وحده، فلا
 --    إنذارَ مكرّرٌ ولو تسابق عاملان. والدورةُ في المفتاح ⟵ شهرٌ جديد يُنذر.
 CREATE UNIQUE INDEX IF NOT EXISTS "quota_alerts_uq" ON "quota_alerts" USING btree ("tenant_id","billing_period","threshold");
+--> statement-breakpoint
+-- ★ طلبُ الزبون حذفَ بياناته — صفٌّ يُرى ويُنفَّذ ويُغلق (راجع `deletionRequests` في ops.ts).
+--   هنا لا في ترحيلٍ لاحق: `0002_rls.sql` يسمّي كلَّ جدولٍ مستأجَرٍ بالاسم، والنشرُ
+--   يطبّق الملفّات بترتيبها — فجدولٌ يُنشأ بعد 0002 يُسقط النشرَ على `regclass`.
+CREATE TABLE IF NOT EXISTS "deletion_requests" (
+	"id" uuid PRIMARY KEY DEFAULT gen_uuid_v7() NOT NULL,
+	"tenant_id" uuid NOT NULL,
+	"contact_id" uuid,
+	"channel_id" uuid,
+	"source" text NOT NULL,
+	"handle" text,
+	"detail" text,
+	"status" text DEFAULT 'pending' NOT NULL,
+	"note" text,
+	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
+	"resolved_at" timestamp with time zone,
+	"resolved_by" uuid
+);
+--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "deletion_requests" ADD CONSTRAINT "deletion_requests_tenant_id_tenants_id_fk" FOREIGN KEY ("tenant_id") REFERENCES "public"."tenants"("id") ON DELETE cascade ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+  ALTER TABLE "deletion_requests" ADD CONSTRAINT "deletion_requests_resolved_by_users_id_fk" FOREIGN KEY ("resolved_by") REFERENCES "public"."users"("id") ON DELETE set null ON UPDATE no action;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "deletion_requests_tenant_idx" ON "deletion_requests" USING btree ("tenant_id","status","created_at");

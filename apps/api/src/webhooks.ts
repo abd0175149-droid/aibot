@@ -104,9 +104,13 @@ export async function registerWebhooks(app: FastifyInstance) {
     if (found.status === 'suspended' || found.status === 'archived') return;
 
     const adapter = getAdapter(kind);
-    const secret = found.ch.appSecretEnc
-      ? decrypt(found.ch.appSecretEnc, found.ch.keyVersion)
-      : '';
+    /* ★ إنستجرام على تطبيق **المنصّة**: سرُّه سرُّ تطبيقنا من البيئة، لا سرٌّ
+       مخزَّنٌ على القناة. وغيابُه = الحمولةُ مرفوضة (القاعدة ① أعلاه). */
+    const secret = kind === 'instagram'
+      ? (process.env.META_APP_SECRET ?? '')
+      : found.ch.appSecretEnc
+        ? decrypt(found.ch.appSecretEnc, found.ch.keyVersion)
+        : '';
     if (!adapter.verifySignature(raw.rawBody, req.headers['x-hub-signature-256'] as string, secret)) {
       req.log.error({ tenantId: found.tenantId, kind }, 'توقيع ويبهوك غير صالح — رُفضت الحمولة');
       return;
@@ -148,6 +152,26 @@ export async function registerWebhooks(app: FastifyInstance) {
       } catch (e) {
         req.log.error({ err: e }, 'فشل معالجة الويبهوك — ابتُلع عمداً');
       }
+    },
+  );
+
+  /**
+   * ★ تحدّي ويبهوك تطبيق المنصّة — مسارٌ بلا معرّف مستأجر، وتوكنُه من البيئة.
+   *   كان المسارُ الكاتبُ موجوداً ولا تحدّيَ له، فلا يمكن ضبطُ الويبهوك عند
+   *   ميتا أصلاً: الحفظُ هناك يبدأ بطلب GET هذا.
+   */
+  app.get<{ Params: { channel: string }; Querystring: Record<string, string> }>(
+    '/webhooks/:channel',
+    async (req, reply) => {
+      const expected = process.env.META_WEBHOOK_VERIFY_TOKEN ?? '';
+      const q = req.query;
+      if (
+        req.params.channel === 'instagram' && expected &&
+        q['hub.mode'] === 'subscribe' && safeEqual(q['hub.verify_token'] ?? '', expected)
+      ) {
+        return reply.code(200).type('text/plain').send(q['hub.challenge'] ?? '');
+      }
+      return reply.code(403).send();
     },
   );
 

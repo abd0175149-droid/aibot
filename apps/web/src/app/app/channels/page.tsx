@@ -12,6 +12,8 @@ import {
 import { Band, Hero, Vital, Fold, ScreenDock, MARK, SEV, type Sev } from '@/components/screen';
 import { ChannelConnectForm } from '@/components/ChannelConnectForm';
 import { SupportLink } from '@/components/support';
+import { InstagramConnect } from '@/components/InstagramConnect';
+import { ProfileKitEditor } from '@/components/BusinessProfile';
 
 /**
  * القنوات.
@@ -141,6 +143,8 @@ export default function ChannelsPage() {
   const [stepsOpen, setStepsOpen] = useState(false);
   /* ورقةُ الربط/التجديد — الباب الذي كانت ثلاثةُ نصوصٍ تُحيل إليه ولا وجود له. */
   const [connectOpen, setConnectOpen] = useState(false);
+  /** ملفُّ النشاط وصفحاتُه العامّة وحزمةُ ميتا — ما يطلبه تطبيقُ واتساب عند التفعيل. */
+  const [pagesOpen, setPagesOpen] = useState(false);
 
   function openSteps(k: 'wa' | 'ig') {
     setSteps(k);
@@ -472,12 +476,21 @@ export default function ChannelsPage() {
                   افحص الاتّصال
                 </Button>
               ) : (
-                <Button size="md" onClick={() => openSteps('ig')}>أرني خطوات الربط</Button>
+                <>
+                  <InstagramConnect readOnly={can.readOnly}
+                    onConnected={() => { toast('ربط إنستجرام — والرسائل تصل عبر صفحتك.'); void reload(); }} />
+                  <Button size="md" onClick={() => openSteps('ig')}>ما يلزم قبل الربط</Button>
+                </>
               )}
             </Row>
           </Stack>
         </Card>
       </Grid>
+
+      <Row gap="sm">
+        <Button onClick={() => setPagesOpen(true)}>صفحاتك العامّة وحزمة ميتا…</Button>
+        <span className="muted-p">الخصوصيّة والشروط وحذف البيانات باسم نشاطك — روابطها تطلبها ميتا لتفعيل تطبيق واتساب.</span>
+      </Row>
 
       <Fold summary="لماذا يختلف الربط بين القناتين؟">
         <Note>
@@ -535,10 +548,16 @@ export default function ChannelsPage() {
         />
       </Sheet>
 
+      <Sheet open={pagesOpen} title="صفحاتك العامّة وحزمة ميتا" onClose={() => setPagesOpen(false)}>
+        {pagesOpen && (
+          <ProfileKitEditor loadPath="/business" savePath="/business" checkPath="/business/check-links" name="" />
+        )}
+      </Sheet>
+
       <Sheet
         open={stepsOpen}
         onClose={() => setStepsOpen(false)}
-        title={steps === 'wa' ? 'ما يحتاجه ربط واتساب' : 'ثلاث خطوات عند إنستجرام'}
+        title={steps === 'wa' ? 'ما يحتاجه ربط واتساب' : 'ما يلزم قبل ربط إنستجرام'}
         hint={steps === 'wa'
           ? 'نقوم بها معك على مكالمة — ولا تلصق شيئا في هذه الشاشة.'
           : 'ولا رقم تكتبه ولا سرّ تنسخه — الموافقة تجري عند ميتا.'}
@@ -565,7 +584,8 @@ export default function ChannelsPage() {
             <ol className="sc-steps">
               <li><span>من تطبيق إنستجرام: الإعدادات ← نوع الحساب ← حوّله إلى «حساب أعمال».</span></li>
               <li><span>اربط الحساب بصفحة فيسبوك تملكها — وهذا أشيع ما يفشل في المحاولة الأولى.</span></li>
-              <li><span><SupportLink subject="ربط إنستجرام: صفحة الموافقة">راسلنا</SupportLink> لنفتح لك صفحة الموافقة.</span></li>
+              <li><span>في إنستجرام: الإعدادات ← الرسائل والردود على القصص ← الأدوات المتّصلة ← فعّل «السماح بالوصول إلى الرسائل».</span></li>
+              <li><span>اضغط «اربط عبر فيسبوك»، ووافق، واختر صفحتك. ومن يضغط يحتاج صلاحيّة على الصفحة.</span></li>
             </ol>
           </>
         )}

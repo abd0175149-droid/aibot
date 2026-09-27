@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { useApi, useToast, fmt } from '@/lib/useApi';
 import { get, post, del, download, ApiError } from '@/lib/api';
 import { useCan } from '@/lib/session';
+import { DeletionRequests } from '@/components/DeletionRequests';
 import { readDuplicates, sidesOf } from '@/lib/contacts';
 import {
   PageHead, Stack, Row, Pill, Tag, Note, Button, Sheet, Table, Empty, Input, Field,
@@ -531,6 +532,9 @@ export default function ContactsPage() {
       />
 
       <Band sev={band.sev} head={band.head} sub={band.sub} />
+
+      {/* ★ طلباتُ حذف البيانات — للمالك وحده، ولا تظهر إلّا إن وُجد معلَّق. */}
+      {can.settings && <DeletionRequests readOnly={can.readOnly} onChanged={() => void list.reload()} />}
 
       {/* ★ سطرُ التراجع: يظهر لحظةَ الدمج لا في شاشةٍ أخرى — فالندمُ يقع بعد
           ثانيتين، ومن يبحث عن «تراجَع» في ملفٍّ لا يجده في ثانيتين. */}

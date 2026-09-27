@@ -136,7 +136,7 @@ export class InstagramAdapter implements ChannelAdapter {
 
   async send(creds: DecryptedCreds, to: string, msg: OutboundMessage): Promise<SendResult> {
     const payload = renderOutbound(to, msg);
-    const json = await graph(`${GRAPH}/${creds.externalAccountId}/messages`, creds.token, {
+    const json = await graph(sendUrl(creds), creds.token, {
       method: 'POST',
       body: JSON.stringify(payload),
     });
@@ -146,7 +146,7 @@ export class InstagramAdapter implements ChannelAdapter {
   }
 
   async markRead(creds: DecryptedCreds, externalId: string): Promise<void> {
-    await graph(`${GRAPH}/${creds.externalAccountId}/messages`, creds.token, {
+    await graph(sendUrl(creds), creds.token, {
       method: 'POST',
       body: JSON.stringify({ recipient: { id: externalId }, sender_action: 'mark_seen' }),
     }).catch(() => undefined);
@@ -195,6 +195,19 @@ export class InstagramAdapter implements ChannelAdapter {
 }
 
 /* ───────────────────────── مساعدات ───────────────────────── */
+
+/**
+ * ★★ الإرسالُ عبر **الصفحة** لا عبر حساب إنستجرام.
+ *   في طريقة «تسجيل الدخول بفيسبوك» التوكنُ توكنُ صفحة، وتوثيقُ ميتا يرسل إلى
+ *   `/{PAGE_ID}/messages` (أو `/me/messages` بنفس التوكن). وكان المحوّلُ يرسل
+ *   إلى `/{IG_ID}/messages` — مسارُ طريقةٍ أخرى بتوكنٍ آخر، فيُرفض كلُّ إرسال.
+ *   و`me` احتياطٌ لقناةٍ بلا معرّف صفحة: توكنُ الصفحة يعرّفها وحده.
+ */
+export function sendUrl(creds: Pick<DecryptedCreds, 'config'>): string {
+  const raw = creds.config?.pageId;
+  const pageId = typeof raw === 'string' && /^[0-9]+$/.test(raw) ? raw : 'me';
+  return `${GRAPH}/${pageId}/messages`;
+}
 
 function mapMessage(m: any): Pick<NormalizedInbound, 'type' | 'text' | 'buttonPayload' | 'mediaId'> {
   if (m.quick_reply) {

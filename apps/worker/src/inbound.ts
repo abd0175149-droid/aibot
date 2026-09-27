@@ -1,8 +1,8 @@
 import {
   getDb, withTenant, contacts, optouts, channelIdentities, conversations, messages,
-  conversationWindows, tenantChannels, eq, and, isNull, sql,
+  conversationWindows, tenantChannels, deletionRequests, eq, and, isNull, sql,
 } from '@aibot/db';
-import { detectOptOut, detectOptIn } from '@aibot/core';
+import { detectOptOut, detectOptIn, detectDeletionRequest } from '@aibot/core';
 import { emitToTenant } from './events.js';
 import { capabilitiesFor, type ChannelKind, type ParsedWebhook } from '@aibot/channels';
 import { typeLabel } from '@aibot/shared';
@@ -92,18 +92,37 @@ export async function handleInbound(raw: InboundJob): Promise<void> {
       let muted = Boolean(cflags?.blockedAt || cflags?.optedOutAt);
       let optingOut = false;
 
+      /* ★★ طلبُ حذف البيانات — الوعدُ المنشور في صفحة «حذف البيانات» عند العميل.
+         صفٌّ يراه المالك وينفّذه، وطلبٌ معلَّقٌ واحدٌ لكلّ جهة (تكرارُ العبارة لا
+         يُكثّر الطلبات). ويُكتم الزبونُ أدناه كالعادل: من يطلب المحوَ لا يريد
+         رسالةً أخرى. ويُسجَّل ولو كان مكتوماً سلفاً — الطلبُ غيرُ العدول. */
+      const wantsDeletion = detectDeletionRequest(m.text);
+      if (wantsDeletion) {
+        const open = await tx.select({ id: deletionRequests.id }).from(deletionRequests)
+          .where(and(eq(deletionRequests.contactId, identity.contactId), eq(deletionRequests.status, 'pending')))
+          .limit(1);
+        if (!open.length) {
+          await tx.insert(deletionRequests).values({
+            tenantId: job.tenantId, contactId: identity.contactId, channelId: job.channelId,
+            source: 'message', handle: m.fromHandle ?? m.from,
+            detail: (m.text ?? '').slice(0, 200),
+          });
+        }
+        await tx.update(conversations).set({ needsAttention: true }).where(eq(conversations.id, conv.id));
+      }
+
       if (cflags?.optedOutAt && !cflags?.blockedAt && detectOptIn(m.text)) {
         /* عودةٌ صريحة: تُرفع وحدَها — الحجبُ قرارُ المالك لا الزبون. */
         await tx.update(contacts).set({ optedOutAt: null }).where(eq(contacts.id, identity.contactId));
         await tx.delete(optouts).where(eq(optouts.contactId, identity.contactId));
         muted = false;
-      } else if (!muted && detectOptOut(m.text)) {
+      } else if (!muted && (wantsDeletion || detectOptOut(m.text))) {
         /* ⚠️ الحقلُ **وصفُّ `optouts`** معاً: الحقلُ بوّابةٌ سريعةٌ في الإرسال
            والردّ، والصفُّ سببٌ وتاريخٌ يقرؤهما الدمجُ والتدقيق. والدمجُ ينقل
            الصفَّ إلى البطاقة الباقية — فبلاه يضيع العدولُ مع أوّل دمج. */
         await tx.update(contacts).set({ optedOutAt: m.at }).where(eq(contacts.id, identity.contactId));
         await tx.insert(optouts)
-          .values({ tenantId: job.tenantId, contactId: identity.contactId, reason: `طلبُ الزبون: «${(m.text ?? '').slice(0, 80)}»` })
+          .values({ tenantId: job.tenantId, contactId: identity.contactId, reason: `${wantsDeletion ? 'طلبُ حذف البيانات' : 'طلبُ الزبون'}: «${(m.text ?? '').slice(0, 80)}»` })
           .onConflictDoNothing();
         /* والموظّفُ يعلم: عدولٌ خبرٌ يُقرأ لا صفٌّ يُكتب. */
         await tx.update(conversations).set({ needsAttention: true }).where(eq(conversations.id, conv.id));

@@ -16,6 +16,8 @@ import { registerAudit } from './routes/audit.js';
 import { registerPrivacy } from './routes/privacy.js';
 import { registerPush } from './routes/push.js';
 import { registerNotifications, alertingReachable } from './routes/notifications.js';
+import { registerBusiness } from './routes/business.js';
+import { registerInstagram } from './routes/instagram.js';
 import { configuredKeyVersions, currentKeyVersion } from '@aibot/crypto';
 import { attachRealtime, closeRealtime } from './realtime.js';
 import { pingRedis, closeQueues, queueDepths, workerBeat } from './queues.js';
@@ -70,6 +72,19 @@ app.addContentTypeParser('application/json', { parseAs: 'buffer' }, (req, body, 
   (req as unknown as { rawBody: Buffer }).rawBody = raw;
   try {
     done(null, parseJsonBody(req.url, raw));
+  } catch (e) {
+    done(e as Error, undefined);
+  }
+});
+
+/**
+ * ★ نداءاتُ ميتا (سحبُ الإذن وحذفُ البيانات) تصل نموذجاً مرمَّزاً لا JSON:
+ *   `signed_request=<…>`. وبلا محلّلٍ لها يردّ Fastify بـ٤١٥ فتظنّ ميتا أنّ
+ *   النقطة معطوبة. حقولٌ نصّيّةٌ مسطّحةٌ لا غير — لا مصفوفاتٍ ولا تداخل.
+ */
+app.addContentTypeParser('application/x-www-form-urlencoded', { parseAs: 'string' }, (_req, body, done) => {
+  try {
+    done(null, Object.fromEntries(new URLSearchParams(String(body))));
   } catch (e) {
     done(e as Error, undefined);
   }
@@ -162,6 +177,8 @@ await app.register(async (api) => {
   await registerPrivacy(api);
   await registerPush(api);
   await registerNotifications(api);
+  await registerBusiness(api);
+  await registerInstagram(api);
 }, { prefix: '/api' });
 
 /** إغلاقٌ لطيف: مهمّةٌ نصف منفَّذة عند إعادة النشر تضيع بلا هذا. */

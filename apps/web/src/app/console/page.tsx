@@ -10,6 +10,7 @@ import { get, post, setToken, ApiError } from '@/lib/api';
 import { useCan, useSession } from '@/lib/session';
 import { resetSocket } from '@/lib/socket';
 import { Onboarding } from '@/components/Onboarding';
+import { ProfileKitEditor } from '@/components/BusinessProfile';
 import { ChannelConnectForm } from '@/components/ChannelConnectForm';
 import { BotSeedForm } from '@/components/BotSeedForm';
 import {
@@ -167,6 +168,8 @@ export default function TenantsPage() {
   const [sheetTab, setSheetTab] = useState<'over' | 'setup' | 'risk'>('over');
   /* ربطُ/تجديدُ قناةٍ لعميلٍ قائم — الفعل الذي كان يمرّ بـssh وسكربت. */
   const [connectFor, setConnectFor] = useState<string | null>(null);
+  /** ورقةُ ملفّ النشاط وحزمة ميتا لعميلٍ قائم — تُفتح من تبويب «الإعداد». */
+  const [profileFor, setProfileFor] = useState<{ id: string; name: string } | null>(null);
   /* بذرُ بوتٍ لعميلٍ بقي بلا نسخةٍ منشورة — الفعل الثاني الذي كان بلا بابٍ في اللوحة. */
   const [seedFor, setSeedFor] = useState<string | null>(null);
   /** كلمةٌ مؤقّتةٌ مولَّدةٌ للتوّ — تُعرض مرّةً واحدةً ثمّ تُنسى كما في المعالج. */
@@ -892,6 +895,7 @@ export default function TenantsPage() {
                       )}
 
                         <Row gap="sm">
+                          <Button onClick={() => setProfileFor({ id: sel.id, name: sel.name })}>ملفّ النشاط وحزمة ميتا…</Button>
                           <Button onClick={() => setConnectFor(sel.id)}>اربط/جدّد القناة…</Button>
                           {/* ★ بذرُ بوتٍ لعميلٍ لم يكتمل معالجُه — والشرطُ لا زينة: الخادم يردّ ٤٠٩
                               على عميلٍ له نسخةٌ منشورة، وزرٌّ يفشل دائماً يكسر الثقة. */}
@@ -1039,6 +1043,19 @@ export default function TenantsPage() {
               {/* ★ ورقتا الربط والبذر **بعد** ورقة العميل في الشجرة: تُفتحان من أزرارها،
                   وكانتا قبلها فتُرسمان تحتها — الزرُّ يبدو أنّه لا يفعل شيئاً (رُئي حيّاً).
                   والإغلاقُ يُعيد إلى ورقة العميل كما هي. */}
+              {/* ★ ملفُّ النشاط وحزمةُ ميتا لعميلٍ قائم — بعد ورقة العميل في الشجرة كأختيها. */}
+              <Sheet open={Boolean(profileFor)} title={profileFor ? `ملفّ النشاط — ${profileFor.name}` : 'ملفّ النشاط'}
+                onClose={() => setProfileFor(null)}>
+                {profileFor && (
+                  <ProfileKitEditor
+                    loadPath={`/console/tenants/${profileFor.id}/profile`}
+                    savePath={`/console/tenants/${profileFor.id}/profile`}
+                    checkPath={`/console/tenants/${profileFor.id}/check-links`}
+                    name={profileFor.name}
+                  />
+                )}
+              </Sheet>
+
               {/* ورقةُ ربط القناة لعميلٍ يُسمّى صراحةً — لا بالانتحال. */}
               <Sheet
                 open={Boolean(connectFor)}

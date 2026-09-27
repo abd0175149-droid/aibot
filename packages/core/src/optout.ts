@@ -93,3 +93,31 @@ export function detectOptIn(text: string | null | undefined): boolean {
   const q = normalizeArabic(text).toLowerCase();
   return Boolean(q) && q.split(' ').filter(Boolean).length <= 3 && OPTIN.test(q);
 }
+
+/**
+ * ★★ **طلبُ حذف البيانات — أضيقُ من العدول وأثقل.**
+ *
+ *   صفحةُ «تعليمات حذف البيانات» التي تطلبها ميتا لتطبيق كلّ عميل تقول للزبون:
+ *   أرسل «احذف بياناتي». فالعبارةُ وعدٌ منشور، وكشفُها يُنشئ طلباً يراه المالك
+ *   ويُنفّذه — لا علَماً يضيع. وكلُّ طلب حذفٍ عدولٌ أيضاً: من يطلب محوَ بياناته
+ *   لا يريد رسالةً أخرى، فالمنادي يكتمه كما يكتم العادل.
+ *
+ * ⚠️ «احذفوني» و«احذفوا رقمي» كانتا عدولاً وحده، وهما في الحقيقة طلبُ محو —
+ *    فصارتا هنا، وتبقيان في قائمة العدول فلا يتغيّر سلوكُ الكتم.
+ * ⚠️ ولا «احذف» مجرّدة: «احذف الطلب» و«احذف الحجز» طلباتُ خدمة.
+ */
+const DEL_AR = [
+  'احذف بياناتي', 'احذفوا بياناتي', 'احذف معلوماتي', 'احذفوا معلوماتي',
+  'امسح بياناتي', 'امسحوا بياناتي', 'امسح معلوماتي', 'امسحوا معلوماتي',
+  'حذف بياناتي', 'مسح بياناتي', 'اريد حذف بياناتي', 'بدي احذف بياناتي',
+  'احذفوا رقمي', 'امسحوا رقمي', 'احذفوني', 'احذفني', 'امسحوني', 'امسحني',
+];
+const DEL_EN = ['delete my data', 'erase my data', 'remove my data', 'delete my information', 'delete me', 'erase me'];
+const DEL_RE = new RegExp(`^(${longestFirst([...DEL_AR, ...DEL_EN])})(\\s|$)`, 'i');
+
+export function detectDeletionRequest(text: string | null | undefined): boolean {
+  if (!text) return false;
+  const q = normalizeArabic(text).toLowerCase();
+  if (!q || q.split(' ').filter(Boolean).length > 10) return false;
+  return DEL_RE.test(q);
+}
